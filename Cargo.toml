@@ -1,0 +1,26 @@
+[package]
+name = "rss-reader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+duckdb = { version = "1", features = ["bundled", "chrono"] }
+anyhow = "1"
+thiserror = "2"
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+tower = "0.5"
+feed-rs = "2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "stream"] }
+futures-util = "0.3"
+bytes = "1"
+url = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+lindera = { version = "3", features = ["embed-ipadic"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rss-reader",
+      "runtimeExecutable": "cargo",
+      "runtimeArgs": ["run", "--quiet"],
+      "port": 3000
+    }
+  ]
+}

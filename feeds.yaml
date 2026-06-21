@@ -1,0 +1,16 @@
+folders:
+- name: AR/VR
+- name: テック
+feeds:
+- title: Road to VR
+  url: https://www.roadtovr.com/feed/
+  folder: AR/VR
+- title: UploadVR
+  url: https://www.uploadvr.com/rss/
+  folder: AR/VR
+- title: Publickey
+  url: https://www.publickey1.jp/atom.xml
+  folder: テック
+- title: Zenn Trending
+  url: https://zenn.dev/feed
+  folder: テック

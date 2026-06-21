@@ -1,0 +1,9 @@
+/target
+/data/*.duckdb
+/data/*.duckdb.wal
+/web/dist
+/web/node_modules
+node_modules
+.env
+*.duckdb
+.DS_Store
