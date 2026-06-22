@@ -83,9 +83,22 @@ export const api = {
     });
   },
 
+  // フォルダ削除（フォルダ内のフィードは未分類になる）
+  deleteFolder(id: number): Promise<void> {
+    return request(`/api/folders/${id}`, { method: 'DELETE' });
+  },
+
   // フィード削除
   deleteFeed(id: number): Promise<void> {
     return request(`/api/feeds/${id}`, { method: 'DELETE' });
+  },
+
+  // フィードURL自動検出
+  discoverFeed(url: string): Promise<{ feedUrl: string; title?: string | null }> {
+    return request('/api/feeds/discover', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
   },
 
   // 記事一覧

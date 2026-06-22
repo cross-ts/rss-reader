@@ -8,8 +8,8 @@ interface Props {
 export function ArticleView({ article }: Props) {
   if (!article) {
     return (
-      <section className="article-view empty">
-        <p>記事を選択してください</p>
+      <section className="bg-bg flex items-center justify-center h-screen overflow-y-auto">
+        <p className="text-xs text-text-sub">記事を選択してください</p>
       </section>
     );
   }
@@ -27,28 +27,34 @@ export function ArticleView({ article }: Props) {
   };
 
   return (
-    <section className="article-view">
-      <div className="article-view-header">
-        <h1 className="article-view-title">{article.title}</h1>
-        <div className="article-view-meta">
-          <span className="feed-title">{article.feedTitle}</span>
-          {article.author && <span className="author">著者: {article.author}</span>}
-          <span className="pub-date">{formatDate(article.publishedAt)}</span>
+    <section className="bg-bg overflow-y-auto h-screen px-8 py-8 max-w-none">
+      {/* ヘッダー */}
+      <div className="mb-6 pb-5 border-b border-border max-w-3xl mx-auto">
+        <h1 className="text-lg font-bold text-text-primary leading-snug mb-3">
+          {article.title}
+        </h1>
+        <div className="flex flex-wrap gap-3 mb-3">
+          <span className="font-mono text-xs text-accent font-semibold">{article.feedTitle}</span>
+          {article.author && (
+            <span className="font-mono text-xs text-text-sub">著者: {article.author}</span>
+          )}
+          <span className="font-mono text-xs text-text-sub">{formatDate(article.publishedAt)}</span>
         </div>
         {/^https?:\/\//.test(article.url) ? (
           <a
             href={article.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="original-link"
+            className="inline-flex items-center gap-1 px-3 py-1.5 bg-surface-2 border border-border rounded text-xs font-mono text-accent hover:border-accent hover:bg-surface-3 transition-colors"
           >
             元記事を開く ↗
           </a>
         ) : null}
       </div>
 
+      {/* 本文 */}
       <div
-        className="article-view-body"
+        className="article-view-body text-text-primary max-w-3xl mx-auto"
         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content) }}
       />
     </section>

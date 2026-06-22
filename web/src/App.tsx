@@ -37,7 +37,7 @@ function AppInner() {
   };
 
   return (
-    <div className="app-layout">
+    <div className="grid h-screen overflow-hidden" style={{ gridTemplateColumns: '260px 340px 1fr' }}>
       <Sidebar
         selectedFolderId={selectedFolderId}
         selectedFeedId={selectedFeedId}
@@ -58,7 +58,9 @@ function AppInner() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppInner />
+      <div className="bg-bg text-text-primary min-h-screen">
+        <AppInner />
+      </div>
     </QueryClientProvider>
   );
 }

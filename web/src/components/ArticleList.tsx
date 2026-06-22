@@ -58,24 +58,35 @@ export function ArticleList({ folderId, feedId, selectedArticleId, onSelectArtic
   const articles = data?.items ?? [];
 
   return (
-    <section className="article-list">
-      <div className="article-list-toolbar">
-        <form onSubmit={handleSearch} className="search-form">
+    <section className="bg-surface border-r border-border flex flex-col overflow-hidden h-screen">
+      {/* ツールバー */}
+      <div className="px-3 py-3 border-b border-border flex-shrink-0 flex flex-col gap-2">
+        <form onSubmit={handleSearch} className="flex gap-1.5">
           <input
             type="search"
             placeholder="キーワード検索…"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
+            className="flex-1 min-w-0 px-2 py-1.5 bg-surface-2 border border-border rounded text-xs font-mono text-text-primary placeholder-text-sub focus:outline-none focus:border-accent"
           />
-          <button type="submit">検索</button>
+          <button
+            type="submit"
+            className="px-2.5 py-1.5 bg-surface-3 border border-border rounded text-xs text-text-sub hover:text-text-primary hover:border-accent transition-colors"
+          >
+            検索
+          </button>
           {committedQ && (
-            <button type="button" onClick={() => { setSearchText(''); setCommittedQ(''); }}>
+            <button
+              type="button"
+              onClick={() => { setSearchText(''); setCommittedQ(''); }}
+              className="px-2.5 py-1.5 bg-surface-3 border border-border rounded text-xs text-text-sub hover:text-danger hover:border-danger transition-colors"
+            >
               クリア
             </button>
           )}
         </form>
         <button
-          className="refresh-btn"
+          className="w-full px-3 py-1.5 bg-surface-2 border border-border rounded text-xs text-text-sub hover:border-accent hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           onClick={() => refresh.mutate()}
           disabled={refresh.isPending}
         >
@@ -84,34 +95,55 @@ export function ArticleList({ folderId, feedId, selectedArticleId, onSelectArtic
       </div>
 
       {refresh.isSuccess && (
-        <p className="refresh-result">{refresh.data.refreshed} 件更新しました</p>
+        <p className="px-3 py-1.5 text-xs text-accent flex-shrink-0">
+          {refresh.data.refreshed} 件更新しました
+        </p>
       )}
 
-      {isLoading && <p className="status-msg">読み込み中…</p>}
-      {isError && <p className="status-msg error">記事の取得に失敗しました</p>}
-
+      {/* 状態表示 */}
+      {isLoading && (
+        <p className="px-4 py-8 text-xs text-text-sub text-center">読み込み中…</p>
+      )}
+      {isError && (
+        <p className="px-4 py-8 text-xs text-danger text-center">記事の取得に失敗しました</p>
+      )}
       {!isLoading && !isError && articles.length === 0 && (
-        <p className="status-msg">記事がありません</p>
+        <p className="px-4 py-8 text-xs text-text-sub text-center">記事がありません</p>
       )}
 
-      <ul className="article-cards">
-        {articles.map((article) => (
-          <li
-            key={article.id}
-            className={`article-card${selectedArticleId === article.id ? ' selected' : ''}`}
-            onClick={() => onSelectArticle(article)}
-          >
-            <div className="article-card-title">{article.title}</div>
-            <div className="article-card-meta">
-              <span className="feed-title">{article.feedTitle}</span>
-              <span className="pub-date">{formatDate(article.publishedAt)}</span>
-            </div>
-            <p className="article-card-excerpt">
-              {stripHtml(article.content).slice(0, 120)}
-              {stripHtml(article.content).length > 120 ? '…' : ''}
-            </p>
-          </li>
-        ))}
+      {/* 記事カード一覧 */}
+      <ul className="flex-1 overflow-y-auto">
+        {articles.map((article) => {
+          const excerpt = stripHtml(article.content);
+          const isSelected = selectedArticleId === article.id;
+          return (
+            <li
+              key={article.id}
+              className={[
+                'px-3 py-3 border-b border-border cursor-pointer transition-colors',
+                isSelected
+                  ? 'bg-surface-3 border-l-2 border-l-accent pl-[10px]'
+                  : 'hover:bg-surface-2',
+              ].join(' ')}
+              onClick={() => onSelectArticle(article)}
+            >
+              <div className="text-xs font-semibold text-text-primary leading-snug mb-1 line-clamp-2">
+                {article.title}
+              </div>
+              <div className="flex gap-2 mb-1">
+                <span className="font-mono text-[10px] text-accent truncate max-w-[60%]">
+                  {article.feedTitle}
+                </span>
+                <span className="font-mono text-[10px] text-text-sub ml-auto whitespace-nowrap">
+                  {formatDate(article.publishedAt)}
+                </span>
+              </div>
+              <p className="text-[11px] text-text-sub leading-relaxed line-clamp-2">
+                {excerpt.slice(0, 120)}{excerpt.length > 120 ? '…' : ''}
+              </p>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
