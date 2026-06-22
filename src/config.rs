@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use std::env;
 
 #[derive(Debug, Clone)]
@@ -14,8 +15,19 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> Self {
-        Config {
+    pub fn from_env() -> Result<Self> {
+        let frontend_url = env::var("FRONTEND_URL")
+            .unwrap_or_else(|_| "https://cross-ts.github.io/rss-reader/".to_string());
+
+        // FRONTEND_URL のバリデーション
+        let parsed = url::Url::parse(&frontend_url)
+            .map_err(|e| anyhow::anyhow!("FRONTEND_URL のパースに失敗: {}: {}", frontend_url, e))?;
+        match parsed.scheme() {
+            "http" | "https" => {}
+            s => bail!("FRONTEND_URL は http/https のみ許可されています (got: {}): {}", s, frontend_url),
+        }
+
+        Ok(Config {
             db_path: env::var("DB_PATH").unwrap_or_else(|_| "data/rss.duckdb".to_string()),
             feeds_path: env::var("FEEDS_PATH").unwrap_or_else(|_| "feeds.opml".to_string()),
             poll_interval_minutes: env::var("POLL_INTERVAL_MINUTES")
@@ -27,9 +39,8 @@ impl Config {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(3000),
-            frontend_url: env::var("FRONTEND_URL")
-                .unwrap_or_else(|_| "https://cross-ts.github.io/rss-reader/".to_string()),
+            frontend_url,
             static_dir: env::var("STATIC_DIR").ok().filter(|s| !s.is_empty()),
-        }
+        })
     }
 }

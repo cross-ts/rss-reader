@@ -23,8 +23,13 @@ use tower_http::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use futures_util::StreamExt;
+
 use crate::config::Config;
 use crate::db::DbConn;
+
+/// プロキシ応答ボディの最大サイズ（50 MB）。
+const MAX_PROXY_BYTES: usize = 50 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -49,7 +54,7 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let config = Config::from_env();
+    let config = Config::from_env()?;
 
     let cwd = std::env::current_dir()?;
     let abs_db = cwd
@@ -252,8 +257,41 @@ async fn proxy_fetch(
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
-    let body = resp.bytes().await.ok()?;
-    Some((status, content_type, body))
+
+    // Content-Length が既知なら事前チェック
+    if let Some(content_length) = resp.content_length() {
+        if content_length as usize > MAX_PROXY_BYTES {
+            tracing::warn!(
+                "proxy_fetch: Content-Length ({} bytes) が上限 {} bytes を超えています: {}",
+                content_length,
+                MAX_PROXY_BYTES,
+                url
+            );
+            return None;
+        }
+    }
+
+    // ストリーミングで読み込み、上限を超えたら打ち切る
+    let mut stream = resp.bytes_stream();
+    let mut buf = Vec::with_capacity(MAX_PROXY_BYTES.min(1024 * 64));
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = match chunk {
+            Ok(c) => c,
+            Err(_) => return None,
+        };
+        if buf.len() + chunk.len() > MAX_PROXY_BYTES {
+            tracing::warn!(
+                "proxy_fetch: レスポンスボディが上限 {} bytes を超えました: {}",
+                MAX_PROXY_BYTES,
+                url
+            );
+            return None;
+        }
+        buf.extend_from_slice(&chunk);
+    }
+
+    Some((status, content_type, bytes::Bytes::from(buf)))
 }
 
 fn build_response(parts: (reqwest::StatusCode, Option<String>, bytes::Bytes)) -> Response {
