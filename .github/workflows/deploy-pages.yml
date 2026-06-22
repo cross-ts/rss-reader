@@ -32,10 +32,7 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
-      # Pages を Actions ソースとして自動有効化（初回デプロイ時）
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - run: pnpm -C web install --frozen-lockfile
       - run: pnpm -C web build
       - uses: actions/upload-pages-artifact@v3
