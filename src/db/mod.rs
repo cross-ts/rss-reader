@@ -19,8 +19,6 @@ pub fn open(path: &str) -> Result<DbConn> {
     // 拡張機能インストール（各文を個別実行）
     conn.execute_batch("INSTALL fts;")?;
     conn.execute_batch("LOAD fts;")?;
-    conn.execute_batch("INSTALL vss;")?;
-    conn.execute_batch("LOAD vss;")?;
 
     // シーケンス作成（各文を個別実行）
     conn.execute_batch("CREATE SEQUENCE IF NOT EXISTS seq_folders;")?;

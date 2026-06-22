@@ -6,7 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
-use crate::feeds::{read_feeds_yaml, reconcile_from_yaml, save_yaml, FolderYamlEntry};
+use crate::feeds::{read_feeds_opml, reconcile_subscriptions, save_opml, FolderEntry};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,25 +62,29 @@ pub async fn create_folder(
     State(state): State<AppState>,
     Json(body): Json<FolderBody>,
 ) -> Result<(StatusCode, Json<FolderResponse>), (StatusCode, String)> {
-    let folder_name = body.name.clone();
+    // 空・空白のみのフォルダ名は拒否
+    let folder_name = body.name.trim().to_string();
+    if folder_name.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "フォルダ名を入力してください".to_string()));
+    }
 
-    // Fix 2: feeds.yaml の read-modify-write を直列化
+    // feeds.opml の read-modify-write を直列化
     let _guard = state.feeds_lock.lock().await;
 
     // 1. yaml 取得
     let feeds_path = state.config.feeds_path.clone();
-    let mut yaml = read_feeds_yaml(&feeds_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.yaml読み込み失敗: {e}")))?
+    let mut yaml = read_feeds_opml(&feeds_path)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.opml読み込み失敗: {e}")))?
         .unwrap_or_default();
 
     // 2. yaml に変更を適用
     if !yaml.folders.iter().any(|f| f.name == folder_name) {
-        yaml.folders.push(FolderYamlEntry { name: folder_name.clone() });
+        yaml.folders.push(FolderEntry { name: folder_name.clone() });
     }
 
     // 3. yaml 保存（エラーを伝播）
-    save_yaml(&feeds_path, &yaml)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.yaml保存失敗: {e}")))?;
+    save_opml(&feeds_path, &yaml)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.opml保存失敗: {e}")))?;
 
     // 4. reconcile → 結果を DB から取得
     let fname = folder_name.clone();
@@ -89,7 +93,7 @@ pub async fn create_folder(
         let db = state.db.clone();
         move || {
             let conn = db.lock().unwrap();
-            reconcile_from_yaml(&conn, &yaml_clone)?;
+            reconcile_subscriptions(&conn, &yaml_clone)?;
 
             let folder: FolderResponse = conn
                 .query_row(
@@ -124,7 +128,16 @@ pub async fn update_folder(
     Path(id): Path<i32>,
     Json(body): Json<FolderBody>,
 ) -> Result<Json<FolderResponse>, (StatusCode, String)> {
-    // 旧名取得
+    // 空・空白のみのフォルダ名は拒否
+    let new_name = body.name.trim().to_string();
+    if new_name.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "フォルダ名を入力してください".to_string()));
+    }
+
+    // TOCTOU 防止：feeds_lock を先に取得してからDB読取・OPML read-modify-write を行う
+    let _guard = state.feeds_lock.lock().await;
+
+    // 旧名取得（ロック取得後に実施）
     let db_old = state.db.clone();
     let old_name: String = tokio::task::spawn_blocking(move || {
         let conn = db_old.lock().unwrap();
@@ -139,16 +152,16 @@ pub async fn update_folder(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .map_err(|e| (StatusCode::NOT_FOUND, e))?;
 
-    let new_name = body.name.clone();
-
-    // Fix 2: feeds.yaml の read-modify-write を直列化
-    let _guard = state.feeds_lock.lock().await;
-
     // 1. yaml 取得
     let feeds_path = state.config.feeds_path.clone();
-    let mut yaml = read_feeds_yaml(&feeds_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.yaml読み込み失敗: {e}")))?
+    let mut yaml = read_feeds_opml(&feeds_path)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.opml読み込み失敗: {e}")))?
         .unwrap_or_default();
+
+    // 同名衝突チェック：リネーム先の新名が自分以外の既存フォルダ名と一致する場合は 409
+    if new_name != old_name && yaml.folders.iter().any(|f| f.name == new_name) {
+        return Err((StatusCode::CONFLICT, "同名のフォルダが既に存在します".to_string()));
+    }
 
     // 2. yaml に変更を適用（folder 名変更 & feeds の folder 参照も更新）
     for f in yaml.folders.iter_mut() {
@@ -163,8 +176,8 @@ pub async fn update_folder(
     }
 
     // 3. yaml 保存（エラーを伝播）
-    save_yaml(&feeds_path, &yaml)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.yaml保存失敗: {e}")))?;
+    save_opml(&feeds_path, &yaml)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.opml保存失敗: {e}")))?;
 
     // 4. reconcile → 結果を DB から取得
     let fname = new_name.clone();
@@ -173,7 +186,7 @@ pub async fn update_folder(
         let db = state.db.clone();
         move || {
             let conn = db.lock().unwrap();
-            reconcile_from_yaml(&conn, &yaml_clone)?;
+            reconcile_subscriptions(&conn, &yaml_clone)?;
 
             let folder: FolderResponse = conn
                 .query_row(
@@ -203,11 +216,15 @@ pub async fn update_folder(
     Ok(Json(folder))
 }
 
+
 pub async fn delete_folder(
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    // 対象 folder 名取得
+    // TOCTOU 防止：feeds_lock を先に取得してからDB読取・OPML read-modify-write を行う
+    let _guard = state.feeds_lock.lock().await;
+
+    // 対象 folder 名取得（ロック取得後に実施）
     let db_old = state.db.clone();
     let folder_name: String = tokio::task::spawn_blocking(move || {
         let conn = db_old.lock().unwrap();
@@ -222,13 +239,10 @@ pub async fn delete_folder(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .map_err(|e| (StatusCode::NOT_FOUND, e))?;
 
-    // Fix 2: feeds.yaml の read-modify-write を直列化
-    let _guard = state.feeds_lock.lock().await;
-
     // 1. yaml 取得
     let feeds_path = state.config.feeds_path.clone();
-    let mut yaml = read_feeds_yaml(&feeds_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.yaml読み込み失敗: {e}")))?
+    let mut yaml = read_feeds_opml(&feeds_path)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.opml読み込み失敗: {e}")))?
         .unwrap_or_default();
 
     // 2. yaml に変更を適用（folder 削除、feeds の folder 参照を None に）
@@ -240,8 +254,8 @@ pub async fn delete_folder(
     }
 
     // 3. yaml 保存（エラーを伝播）
-    save_yaml(&feeds_path, &yaml)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.yaml保存失敗: {e}")))?;
+    save_opml(&feeds_path, &yaml)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("feeds.opml保存失敗: {e}")))?;
 
     // 4. reconcile
     let yaml_clone = yaml.clone();
@@ -249,7 +263,7 @@ pub async fn delete_folder(
         let db = state.db.clone();
         move || {
             let conn = db.lock().unwrap();
-            reconcile_from_yaml(&conn, &yaml_clone)
+            reconcile_subscriptions(&conn, &yaml_clone)
         }
     })
     .await

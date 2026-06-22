@@ -8,6 +8,8 @@ mod tokenize;
 
 use anyhow::{bail, Result};
 use axum::{
+    extract::{Request, State},
+    response::{IntoResponse, Response},
     routing::{delete, get, post, put},
     Router,
 };
@@ -29,18 +31,16 @@ pub struct AppState {
     pub db: DbConn,
     pub config: Arc<Config>,
     pub client: Client,
-    /// Fix 2: feeds.yaml の read-modify-write を直列化するためのミューテックス。
-    /// feed/folder の create/update/delete ハンドラはこのロックを取得してから
-    /// yaml読込→変更→保存→reconcile を実行する。
+    /// feeds.opml の read-modify-write を直列化するためのミューテックス。
     pub feeds_lock: Arc<tokio::sync::Mutex<()>>,
+    /// フロント配信のリバースプロキシ用クライアント（リダイレクト追従）。
+    pub proxy_client: Client,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // .env読み込み
     let _ = dotenvy::dotenv();
 
-    // トレーシング初期化
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -51,45 +51,51 @@ async fn main() -> Result<()> {
 
     let config = Config::from_env();
 
-    // 起動時に絶対パスと host:port をログ出力
     let cwd = std::env::current_dir()?;
-    let abs_db = cwd.join(&config.db_path).canonicalize().unwrap_or_else(|_| cwd.join(&config.db_path));
+    let abs_db = cwd
+        .join(&config.db_path)
+        .canonicalize()
+        .unwrap_or_else(|_| cwd.join(&config.db_path));
     let abs_feeds = {
         let p = cwd.join(&config.feeds_path);
-        if p.exists() { p.canonicalize().unwrap_or(p.clone()) } else { p }
+        if p.exists() {
+            p.canonicalize().unwrap_or(p.clone())
+        } else {
+            p
+        }
     };
-    let abs_static = cwd.join("web/dist").canonicalize().unwrap_or_else(|_| cwd.join("web/dist"));
     let bind_addr = format!("{}:{}", config.host, config.port);
 
     tracing::info!("Starting rss-reader");
-    tracing::info!("  bind   = {}", bind_addr);
-    tracing::info!("  db     = {}", abs_db.display());
-    tracing::info!("  feeds  = {}", abs_feeds.display());
-    tracing::info!("  static = {}", abs_static.display());
+    tracing::info!("  bind     = {}", bind_addr);
+    tracing::info!("  db       = {}", abs_db.display());
+    tracing::info!("  feeds    = {}", abs_feeds.display());
+    match &config.static_dir {
+        Some(dir) => tracing::info!("  frontend = static dir {}", dir),
+        None => tracing::info!("  frontend = reverse-proxy {}", config.frontend_url),
+    }
 
-    // DB初期化
     let db = db::open(&config.db_path)?;
 
-    // feeds.yaml フェイルセーフ起動
+    // feeds.opml フェイルセーフ起動
     {
         let feeds_path = config.feeds_path.clone();
         let db_clone = db.clone();
-        match feeds::read_feeds_yaml(&feeds_path)? {
-            Some(yaml) => {
+        match feeds::read_feeds_opml(&feeds_path)? {
+            Some(subs) => {
                 tracing::info!(
-                    "feeds.yaml found: {} folders, {} feeds — reconciling",
-                    yaml.folders.len(),
-                    yaml.feeds.len()
+                    "feeds.opml found: {} folders, {} feeds — reconciling",
+                    subs.folders.len(),
+                    subs.feeds.len()
                 );
-                let yaml_clone = yaml.clone();
+                let subs_clone = subs.clone();
                 tokio::task::spawn_blocking(move || {
                     let conn = db_clone.lock().unwrap();
-                    feeds::reconcile_from_yaml(&conn, &yaml_clone)
+                    feeds::reconcile_subscriptions(&conn, &subs_clone)
                 })
                 .await??;
             }
             None => {
-                // feeds.yaml が不在 → DB の購読件数を確認
                 let db_clone2 = db.clone();
                 let feed_count: i64 = tokio::task::spawn_blocking(move || {
                     let conn = db_clone2.lock().unwrap();
@@ -100,32 +106,36 @@ async fn main() -> Result<()> {
 
                 if feed_count > 0 {
                     bail!(
-                        "feeds.yaml が見つかりません（パス: {}）が、DB には {} 件の購読があります。\
+                        "feeds.opml が見つかりません（パス: {}）が、DB には {} 件の購読があります。\
                         CWD またはファイル権限を確認してください。誤って全削除しないよう起動を中止します。",
                         abs_feeds.display(),
                         feed_count
                     );
                 }
 
-                // 0件なら空の feeds.yaml を新規作成して空 reconcile
-                tracing::info!("feeds.yaml 不在・DB 購読0件 → 空の feeds.yaml を作成します");
-                let empty = feeds::FeedsYaml::default();
-                feeds::save_yaml(&feeds_path, &empty)?;
+                tracing::info!("feeds.opml 不在・DB 購読0件 → 空の feeds.opml を作成します");
+                let empty = feeds::Subscriptions::default();
+                feeds::save_opml(&feeds_path, &empty)?;
                 tokio::task::spawn_blocking(move || {
                     let conn = db_clone.lock().unwrap();
-                    feeds::reconcile_from_yaml(&conn, &empty)
+                    feeds::reconcile_subscriptions(&conn, &empty)
                 })
                 .await??;
             }
         }
     }
 
-    // HTTPクライアント（timeout付き、自動リダイレクト無効）
-    // Fix 1: リダイレクト追跡は fetch_with_guard で手動実施し、各ホップで SSRF 検証を行う
+    // フィード取得用クライアント（timeout付き、自動リダイレクト無効＝SSRF手動検証のため）
     let client = Client::builder()
         .user_agent("rss-reader/0.1")
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
+        .build()?;
+
+    // フロント配信プロキシ用クライアント（リダイレクト追従）
+    let proxy_client = Client::builder()
+        .user_agent("rss-reader/0.1")
+        .timeout(Duration::from_secs(15))
         .build()?;
 
     let config_arc = Arc::new(config.clone());
@@ -134,42 +144,128 @@ async fn main() -> Result<()> {
         config: config_arc.clone(),
         client: client.clone(),
         feeds_lock: Arc::new(tokio::sync::Mutex::new(())),
+        proxy_client,
     };
 
-    // ポーラー起動
     poller::start_poller(db.clone(), client.clone(), config.poll_interval_minutes).await;
 
-    // APIルーター
     let api_router = Router::new()
-        // folders
         .route("/folders", get(routes::folders::list_folders))
         .route("/folders", post(routes::folders::create_folder))
         .route("/folders/{id}", put(routes::folders::update_folder))
         .route("/folders/{id}", delete(routes::folders::delete_folder))
-        // feeds
         .route("/feeds", get(routes::feeds::list_feeds))
         .route("/feeds", post(routes::feeds::create_feed))
+        .route("/feeds/discover", post(routes::feeds::discover_feed))
         .route("/feeds/{id}", put(routes::feeds::update_feed))
         .route("/feeds/{id}", delete(routes::feeds::delete_feed))
-        // articles
         .route("/articles", get(routes::articles::list_articles))
-        // refresh
-        .route("/refresh", post(routes::refresh::refresh))
-        .with_state(state);
+        .route("/refresh", post(routes::refresh::refresh));
 
-    // 静的配信（SPA フォールバック）
-    let static_service = ServeDir::new("web/dist")
-        .not_found_service(ServeFile::new("web/dist/index.html"));
-
-    let app = Router::new()
-        .nest("/api", api_router)
-        .fallback_service(static_service)
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http());
+    // フロント配信: STATIC_DIR ありはローカル配信、なしは FRONTEND_URL へリバースプロキシ
+    let app = if let Some(static_dir) = config.static_dir.clone() {
+        let static_service = ServeDir::new(&static_dir)
+            .not_found_service(ServeFile::new(format!("{static_dir}/index.html")));
+        Router::new()
+            .nest("/api", api_router)
+            .fallback_service(static_service)
+            .with_state(state)
+            .layer(CorsLayer::permissive())
+            .layer(TraceLayer::new_for_http())
+    } else {
+        Router::new()
+            .nest("/api", api_router)
+            .fallback(proxy_handler)
+            .with_state(state)
+            .layer(CorsLayer::permissive())
+            .layer(TraceLayer::new_for_http())
+    };
 
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     tracing::info!("Listening on http://{}", bind_addr);
 
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+/// 非 /api リクエストを FRONTEND_URL へリバースプロキシする（DuckDB UI 方式）。
+/// 拡張子の無いパスは SPA とみなし index.html にフォールバック。
+/// アセットらしいパス（拡張子あり）で上流が 404 を返した場合はその 404 をそのまま伝播する。
+async fn proxy_handler(State(state): State<AppState>, req: Request) -> Response {
+    let path = req.uri().path().to_string();
+    let query = req.uri().query().map(|q| q.to_string());
+    let base = state.config.frontend_url.trim_end_matches('/').to_string();
+
+    let mut target = format!("{}{}", base, path);
+    if let Some(q) = &query {
+        target.push('?');
+        target.push_str(q);
+    }
+
+    // アセットらしいパスかどうかを先に判定する
+    let looks_like_asset = path
+        .rsplit('/')
+        .next()
+        .map(|seg| seg.contains('.'))
+        .unwrap_or(false);
+
+    let upstream = proxy_fetch(&state.proxy_client, &target).await;
+
+    if let Some(ref parts) = upstream {
+        if parts.0 != reqwest::StatusCode::NOT_FOUND {
+            // 上流が 404 以外（成功・リダイレクト等）はそのまま返す
+            return build_response(upstream.unwrap());
+        }
+        if looks_like_asset {
+            // アセットパスで上流が 404 → 502 にせずそのまま 404 を伝播する
+            return build_response(upstream.unwrap());
+        }
+    }
+
+    // SPA フォールバック（拡張子の無いパスのみ index.html）
+    if !looks_like_asset {
+        let index_url = format!("{}/", base);
+        // path == "/" のとき target と index_url が同一 URL になるため再 fetch しない。
+        // 最初の proxy_fetch で既に試行済みのため、二重 fetch を避けて BAD_GATEWAY へフォールスルー。
+        if index_url != target {
+            if let Some(parts) = proxy_fetch(&state.proxy_client, &index_url).await {
+                return build_response(parts);
+            }
+        }
+    }
+
+    (
+        axum::http::StatusCode::BAD_GATEWAY,
+        "frontend を取得できませんでした",
+    )
+        .into_response()
+}
+
+async fn proxy_fetch(
+    client: &Client,
+    url: &str,
+) -> Option<(reqwest::StatusCode, Option<String>, bytes::Bytes)> {
+    let resp = client.get(url).send().await.ok()?;
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let body = resp.bytes().await.ok()?;
+    Some((status, content_type, body))
+}
+
+fn build_response(parts: (reqwest::StatusCode, Option<String>, bytes::Bytes)) -> Response {
+    let (status, content_type, body) = parts;
+    let mut builder = axum::response::Response::builder().status(
+        axum::http::StatusCode::from_u16(status.as_u16())
+            .unwrap_or(axum::http::StatusCode::OK),
+    );
+    if let Some(ct) = content_type {
+        builder = builder.header(axum::http::header::CONTENT_TYPE, ct);
+    }
+    builder
+        .body(axum::body::Body::from(body))
+        .unwrap_or_else(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }

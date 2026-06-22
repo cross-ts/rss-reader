@@ -3,10 +3,10 @@
 複数のRSS/Atomフィードを自動巡回してDuckDBに蓄積し、**日本語全文検索**付きでブラウザから閲覧できる、セルフホスト型のRSSリーダー（単一ユーザー・ローカル用途）。
 
 - バックエンド: Rust（axum + tokio）
-- ストレージ: DuckDB（`fts` 拡張による日本語全文検索、`vss` は将来のベクトル検索用にロードのみ）
+- ストレージ: DuckDB（`fts` 拡張による日本語全文検索）
 - 日本語トークナイズ: lindera（IPADIC）→ DuckDB FTS（BM25）
 - フロントエンド: React + Vite（SPA、3ペイン）
-- フィード定義: `feeds.yaml` を **SSOT（単一の正本）** とし、DuckDBはそこから再構築される派生キャッシュ
+- フィード定義: `feeds.opml` を **SSOT（単一の正本）** とし、DuckDBはそこから再構築される派生キャッシュ
 
 ## 必要環境
 - Rust（cargo）
@@ -22,7 +22,7 @@ pnpm -C web run build
 cargo run
 # → http://127.0.0.1:3000
 ```
-> 注: DBパス・feeds.yaml・`web/dist` は相対パスで解決されるため、**プロジェクトルートから起動**すること。
+> 注: DBパス・feeds.opml・`web/dist` は相対パスで解決されるため、**プロジェクトルートから起動**すること。
 
 ### 設定（環境変数 / `.env`）
 | 変数 | 既定 | 説明 |
@@ -31,7 +31,9 @@ cargo run
 | `PORT` | `3000` | ポート |
 | `POLL_INTERVAL_MINUTES` | `15` | フィード巡回間隔 |
 | `DB_PATH` | `data/rss.duckdb` | DuckDBファイル |
-| `FEEDS_PATH` | `feeds.yaml` | フィード定義（SSOT） |
+| `FEEDS_PATH` | `feeds.opml` | フィード定義（SSOT） |
+| `FRONTEND_URL` | `https://cross-ts.github.io/rss-reader/` | フロント配信元（`STATIC_DIR` 未指定時にリバースプロキシ） |
+| `STATIC_DIR` | （未設定） | ローカル静的配信する場合のみ指定（例: `web/dist`） |
 
 ### 開発（ホットリロード）
 ```sh
@@ -39,18 +41,22 @@ cargo run                 # API :3000
 pnpm -C web run dev       # Vite :5173（/api を :3000 にプロキシ）
 ```
 
-## feeds.yaml（SSOT）
-フォルダとフィードの正本は `feeds.yaml`。Web UIからの追加/削除/フォルダ変更はこのファイルへ書き戻され、その後DuckDBが `feeds.yaml` に一致するよう再構築（reconcile）される。手動編集も可能（再起動で反映）。
-```yaml
-folders:
-  - name: AR/VR
-feeds:
-  - title: Road to VR
-    url: https://www.roadtovr.com/feed/
-    folder: AR/VR
+## feeds.opml（SSOT）
+フォルダとフィードの正本は `feeds.opml`。Web UIからの追加/削除/フォルダ変更はこのファイルへ書き戻され、その後DuckDBが `feeds.opml` に一致するよう再構築（reconcile）される。手動編集も可能（再起動で反映）。
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>rss-reader subscriptions</title></head>
+  <body>
+    <outline text="AR/VR" title="AR/VR">
+      <outline type="rss" text="Road to VR" title="Road to VR"
+               xmlUrl="https://www.roadtovr.com/feed/" htmlUrl="https://www.roadtovr.com/"/>
+    </outline>
+  </body>
+</opml>
 ```
-- 起動時、`feeds.yaml` が読み取り/パース不能なら**起動を中止**（fail-fast）。不在でDBに購読が残っている場合も、誤って全削除しないよう**起動を中止**する。
-- フィードを `feeds.yaml` から削除すると、reconcile時にそのフィードの記事も削除される（孤立防止）。
+- 起動時、`feeds.opml` が読み取り/パース不能なら**起動を中止**（fail-fast）。不在でDBに購読が残っている場合も、誤って全削除しないよう**起動を中止**する。
+- フィードを `feeds.opml` から削除すると、reconcile時にそのフィードの記事も削除される（孤立防止）。
 
 ## 主な機能
 - 複数フィードの定期巡回（条件付きGET）と `(feed_id, guid)` による重複排除
@@ -72,5 +78,5 @@ MVPとして許容し、将来対応とする項目:
 - **GUIDのupsert**: 現在は `DO NOTHING`。記事の訂正・更新が反映されない。
 - **安定ID / ソフトデリート**: フィード再追加でIDが変わり得る。`feeds.yaml` に不変IDを持たせる案。
 - **絶対パス徹底 / CSP / 画像プロキシ**: 起動ディレクトリ非依存化、CSPヘッダ、外部画像の取り扱い。
-- **VSS（ベクトル類似検索）**: 拡張はロード済。ローカル埋め込み（fastembed等）で「類似記事/重複集約」を将来実装。
+- **VSS（ベクトル類似検索）**: （撤去済・将来再導入余地）
 - **WAL/クラッシュ堅牢性**: FTSインデックス再構築（`overwrite=1`）中にプロセスが異常終了すると、WALが再生不能になり起動できなくなる場合がある（`Cannot drop entry fts_main_articles`）。暫定復旧は `data/rss.duckdb.wal` の削除（メインDBは保持。記事はSSOT＋再巡回で復元）。将来対応: 再構築後の `CHECKPOINT`、または起動時のWAL自動復旧。

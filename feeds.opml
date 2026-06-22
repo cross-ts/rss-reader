@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>rss-reader subscriptions</title>
+  </head>
+  <body>
+    <outline text="AR/VR" title="AR/VR">
+      <outline type="rss" text="Road to VR" title="Road to VR" xmlUrl="https://www.roadtovr.com/feed/" htmlUrl="https://www.roadtovr.com/"/>
+      <outline type="rss" text="UploadVR" title="UploadVR" xmlUrl="https://www.uploadvr.com/rss/" htmlUrl="https://www.uploadvr.com/"/>
+    </outline>
+    <outline text="テック" title="テック">
+      <outline type="rss" text="Publickey" title="Publickey" xmlUrl="https://www.publickey1.jp/atom.xml" htmlUrl="https://www.publickey1.jp/"/>
+      <outline type="rss" text="Zenn Trending" title="Zenn Trending" xmlUrl="https://zenn.dev/feed" htmlUrl="https://zenn.dev/"/>
+    </outline>
+  </body>
+</opml>
