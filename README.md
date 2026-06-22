@@ -35,6 +35,32 @@ cargo run
 | `FRONTEND_URL` | `https://cross-ts.github.io/rss-reader/` | フロント配信元（`STATIC_DIR` 未指定時にリバースプロキシ） |
 | `STATIC_DIR` | （未設定） | ローカル静的配信する場合のみ指定（例: `web/dist`） |
 
+### リバースプロキシ配信（デフォルト）
+
+`STATIC_DIR` を指定しない場合、バックエンドは `FRONTEND_URL` が指す GitHub Pages からフロントを取得して `localhost` の単一オリジンで配信する（DuckDB UI 方式）。
+
+```sh
+# FRONTEND_URL のデフォルトは https://cross-ts.github.io/rss-reader/
+cargo run
+# → http://localhost:3000 でアクセス
+
+# ポートを変えたい場合
+PORT=3100 cargo run
+```
+
+`/api/*` はローカル DB に直結し、それ以外のリクエストは Pages にプロキシされる。SPA の拡張子なしパス（例: `/some/route`）は自動的に `index.html` にフォールバックする。
+
+### ローカル静的配信（オフライン・ビルド確認用）
+
+`STATIC_DIR` を指定すると Pages にアクセスせずローカルの `web/dist` から配信する。
+
+```sh
+pnpm -C web install
+pnpm -C web run build
+STATIC_DIR=web/dist cargo run
+# → http://localhost:3000
+```
+
 ### 開発（ホットリロード）
 ```sh
 cargo run                 # API :3000
@@ -80,3 +106,16 @@ MVPとして許容し、将来対応とする項目:
 - **絶対パス徹底 / CSP / 画像プロキシ**: 起動ディレクトリ非依存化、CSPヘッダ、外部画像の取り扱い。
 - **VSS（ベクトル類似検索）**: （撤去済・将来再導入余地）
 - **WAL/クラッシュ堅牢性**: FTSインデックス再構築（`overwrite=1`）中にプロセスが異常終了すると、WALが再生不能になり起動できなくなる場合がある（`Cannot drop entry fts_main_articles`）。暫定復旧は `data/rss.duckdb.wal` の削除（メインDBは保持。記事はSSOT＋再巡回で復元）。将来対応: 再構築後の `CHECKPOINT`、または起動時のWAL自動復旧。
+
+## 既知の制約（将来対応）
+
+リバースプロキシ配信・OPML・SPA 周辺で現在簡易実装となっている項目:
+
+- **リバースプロキシのヘッダ透過が限定的**: `Content-Type` のみ転送し、`HEAD`/`Range`/`ETag`/`Cache-Control`/`Last-Modified` 等は未対応。レスポンスボディのサイズ上限なし（上流の巨大ファイルをそのまま中継する）。プロキシ先リダイレクトの SSRF 制限なし（`proxy_client` はリダイレクト自動追従）。
+- **エラーコード体系の未整理**: API/プロキシが返す HTTP ステータス（400/404/502/504）の設計が統一されていない。
+- **OPML 関連の簡易実装**: 階層フォルダ（ネスト）の OPML ラウンドトリップ、OPML 保存と DB reconcile の跨ぎ原子性、`collect_outline` のフィード子要素への再帰が未対応。
+- **フィード自動検出の簡易実装**: `rel=alternate` の優先順位付けや候補の絞り込みが未実装。
+- **SPA フォールバック判定**: 拡張子有無のみで判定しており、`Accept` ヘッダ（`text/html` を期待するかどうか）を考慮していない。
+- **ポーリングの single-flight**: 起動巡回・定期巡回・手動更新・フィード追加時の取得が重複し得る。
+- **WAL/クラッシュ堅牢性**: 前述のとおり。
+- **VSS（ローカル埋め込みによる類似記事検索）**: 撤去済み。将来再導入の余地あり。
