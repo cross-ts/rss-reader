@@ -56,30 +56,19 @@ async fn main() -> Result<()> {
 
     let config = Config::from_env()?;
 
-    let cwd = std::env::current_dir()?;
-    let abs_db = cwd
-        .join(&config.db_path)
-        .canonicalize()
-        .unwrap_or_else(|_| cwd.join(&config.db_path));
-    let abs_feeds = {
-        let p = cwd.join(&config.feeds_path);
-        if p.exists() {
-            p.canonicalize().unwrap_or(p.clone())
-        } else {
-            p
-        }
-    };
+    // config.db_path / config.feeds_path は from_env() で cwd 基準の絶対パスに解決済み。
     let bind_addr = format!("{}:{}", config.host, config.port);
 
     tracing::info!("Starting rss-reader");
     tracing::info!("  bind     = {}", bind_addr);
-    tracing::info!("  db       = {}", abs_db.display());
-    tracing::info!("  feeds    = {}", abs_feeds.display());
+    tracing::info!("  db       = {}", config.db_path);
+    tracing::info!("  feeds    = {}", config.feeds_path);
     match &config.static_dir {
         Some(dir) => tracing::info!("  frontend = static dir {}", dir),
         None => tracing::info!("  frontend = reverse-proxy {}", config.frontend_url),
     }
 
+    // DB の親ディレクトリ作成は db::open 内で行われる（create_dir_all）。
     let db = db::open(&config.db_path)?;
 
     // feeds.opml フェイルセーフ起動
@@ -113,12 +102,15 @@ async fn main() -> Result<()> {
                     bail!(
                         "feeds.opml が見つかりません（パス: {}）が、DB には {} 件の購読があります。\
                         CWD またはファイル権限を確認してください。誤って全削除しないよう起動を中止します。",
-                        abs_feeds.display(),
+                        feeds_path,
                         feed_count
                     );
                 }
 
-                tracing::info!("feeds.opml 不在・DB 購読0件 → 空の feeds.opml を作成します");
+                tracing::info!(
+                    "feeds.opml 不在・DB 購読0件 → 空の feeds.opml を自動生成: {}",
+                    feeds_path
+                );
                 let empty = feeds::Subscriptions::default();
                 feeds::save_opml(&feeds_path, &empty)?;
                 tokio::task::spawn_blocking(move || {
