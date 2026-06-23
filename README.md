@@ -37,6 +37,33 @@ cargo run
 | `FRONTEND_URL` | `https://cross-ts.github.io/rss-reader/` | フロント配信元（`STATIC_DIR` 未指定時にリバースプロキシ） |
 | `STATIC_DIR` | （未設定） | ローカル静的配信する場合のみ指定（例: `web/dist`） |
 
+### CLI オプション
+
+環境変数に加え、コマンドライン引数でも設定を指定できます。**優先順位は「CLI 引数 > 環境変数（`.env` 含む）> 既定値」** です。
+
+| フラグ | 対応 env 変数 | 既定値 | 説明 |
+|---|---|---|---|
+| `--feeds <PATH>` | `FEEDS_PATH` | `feeds.opml` | feeds.opml のパス |
+| `--db <PATH>` | `DB_PATH` | `data/rss.duckdb` | DuckDB ファイルのパス |
+| `--host <ADDR>` | `HOST` | `127.0.0.1` | バインドアドレス |
+| `-p`, `--port <PORT>` | `PORT` | `3000` | ポート番号 |
+| `--frontend-url <URL>` | `FRONTEND_URL` | `https://cross-ts.github.io/rss-reader/` | フロント配信元 URL |
+| `--static-dir <PATH>` | `STATIC_DIR` | （未設定） | ローカル静的配信ディレクトリ |
+| `--poll-interval <MINUTES>` | `POLL_INTERVAL_MINUTES` | `15` | フィード巡回間隔（分） |
+
+```sh
+# 全オプションの確認
+rss-reader --help
+
+# バージョン確認
+rss-reader --version
+
+# 例: ポートと DB パスを指定して起動
+rss-reader --port 3100 --db /var/data/rss.duckdb
+```
+
+> パス系オプション（`--feeds`, `--db`）は相対パスの場合 cwd 基準で絶対パスに解決されます。絶対パスを指定した場合はそのまま使用されます。
+
 ### リバースプロキシ配信（デフォルト）
 
 `STATIC_DIR` を指定しない場合、バックエンドは `FRONTEND_URL` が指す GitHub Pages からフロントを取得して `localhost` の単一オリジンで配信する（DuckDB UI 方式）。

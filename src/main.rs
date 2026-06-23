@@ -25,7 +25,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use futures_util::StreamExt;
 
-use crate::config::Config;
+use clap::Parser;
+
+use crate::config::{Cli, Config};
 use crate::db::DbConn;
 
 /// プロキシ応答ボディの最大サイズ（50 MB）。
@@ -44,7 +46,11 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // .env を clap の env フォールバックより先に読み込む
     let _ = dotenvy::dotenv();
+
+    // CLI 引数をパース（優先順位: CLI 引数 > 環境変数 > 既定値）
+    let cli = Cli::parse();
 
     tracing_subscriber::registry()
         .with(
@@ -54,7 +60,7 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let config = Config::from_env()?;
+    let config = Config::from_cli(cli)?;
 
     // config.db_path / config.feeds_path は from_env() で cwd 基準の絶対パスに解決済み。
     let bind_addr = format!("{}:{}", config.host, config.port);

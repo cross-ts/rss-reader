@@ -1,6 +1,39 @@
 use anyhow::{bail, Result};
-use std::env;
+use clap::Parser;
 use std::path::{Path, PathBuf};
+
+/// セルフホスト型 RSS リーダー
+#[derive(Parser, Debug)]
+#[command(name = "rss-reader", version, about = "セルフホスト型 RSS リーダー", long_about = None)]
+pub struct Cli {
+    /// feeds.opml のパス（相対パスは cwd 基準で解決）
+    #[arg(long = "feeds", env = "FEEDS_PATH", default_value = "feeds.opml")]
+    pub feeds_path: String,
+
+    /// DuckDB ファイルのパス（相対パスは cwd 基準で解決）
+    #[arg(long = "db", env = "DB_PATH", default_value = "data/rss.duckdb")]
+    pub db_path: String,
+
+    /// バインドアドレス
+    #[arg(long, env = "HOST", default_value = "127.0.0.1")]
+    pub host: String,
+
+    /// ポート番号
+    #[arg(short = 'p', long, env = "PORT", default_value_t = 3000)]
+    pub port: u16,
+
+    /// フロントエンド配信元 URL（STATIC_DIR 未指定時にリバースプロキシ）
+    #[arg(long = "frontend-url", env = "FRONTEND_URL", default_value = "https://cross-ts.github.io/rss-reader/")]
+    pub frontend_url: String,
+
+    /// ローカル静的配信ディレクトリ（dev/offline 用）
+    #[arg(long = "static-dir", env = "STATIC_DIR")]
+    pub static_dir: Option<String>,
+
+    /// フィード巡回間隔（分）
+    #[arg(long = "poll-interval", env = "POLL_INTERVAL_MINUTES", default_value_t = 15)]
+    pub poll_interval_minutes: u64,
+}
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -28,44 +61,36 @@ fn resolve_path(cwd: &Path, raw: &str) -> PathBuf {
 }
 
 impl Config {
-    /// 環境変数（または既定値）から設定を読み込む。
+    /// CLI 引数から設定を構築する。
     /// `db_path` と `feeds_path` は **バイナリ実行時のカレントディレクトリ（cwd）基準** で
-    /// 絶対パスに解決される。env で絶対パスが指定された場合はそのまま使用する。
-    pub fn from_env() -> Result<Self> {
+    /// 絶対パスに解決される。絶対パスが指定された場合はそのまま使用する。
+    /// `frontend_url` は http/https スキームのみ許可する。
+    pub fn from_cli(cli: Cli) -> Result<Self> {
         let cwd = std::env::current_dir()?;
 
-        let frontend_url = env::var("FRONTEND_URL")
-            .unwrap_or_else(|_| "https://cross-ts.github.io/rss-reader/".to_string());
-
         // FRONTEND_URL のバリデーション
-        let parsed = url::Url::parse(&frontend_url)
-            .map_err(|e| anyhow::anyhow!("FRONTEND_URL のパースに失敗: {}: {}", frontend_url, e))?;
+        let parsed = url::Url::parse(&cli.frontend_url)
+            .map_err(|e| anyhow::anyhow!("FRONTEND_URL のパースに失敗: {}: {}", cli.frontend_url, e))?;
         match parsed.scheme() {
             "http" | "https" => {}
-            s => bail!("FRONTEND_URL は http/https のみ許可されています (got: {}): {}", s, frontend_url),
+            s => bail!("FRONTEND_URL は http/https のみ許可されています (got: {}): {}", s, cli.frontend_url),
         }
 
-        let raw_db = env::var("DB_PATH").unwrap_or_else(|_| "data/rss.duckdb".to_string());
-        let raw_feeds = env::var("FEEDS_PATH").unwrap_or_else(|_| "feeds.opml".to_string());
+        // static_dir: 空文字列は None として扱う（env 由来で空文字列が渡る場合の互換）
+        let static_dir = cli.static_dir.filter(|s| !s.is_empty());
 
         Ok(Config {
-            db_path: resolve_path(&cwd, &raw_db)
+            db_path: resolve_path(&cwd, &cli.db_path)
                 .to_string_lossy()
                 .into_owned(),
-            feeds_path: resolve_path(&cwd, &raw_feeds)
+            feeds_path: resolve_path(&cwd, &cli.feeds_path)
                 .to_string_lossy()
                 .into_owned(),
-            poll_interval_minutes: env::var("POLL_INTERVAL_MINUTES")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(15),
-            host: env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
-            port: env::var("PORT")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(3000),
-            frontend_url,
-            static_dir: env::var("STATIC_DIR").ok().filter(|s| !s.is_empty()),
+            poll_interval_minutes: cli.poll_interval_minutes,
+            host: cli.host,
+            port: cli.port,
+            frontend_url: cli.frontend_url,
+            static_dir,
         })
     }
 }
