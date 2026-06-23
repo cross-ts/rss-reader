@@ -3,11 +3,11 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use duckdb::params;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::feeds::{read_feeds_opml, reconcile_subscriptions, save_opml, FeedEntry, FolderEntry};
+use crate::db::Feed;
+use crate::feeds::{read_feeds_opml, save_opml, FeedEntry, FolderEntry};
 use crate::fetcher::{fetch_feed, fetch_with_guard, validate_feed_url};
 use crate::AppState;
 
@@ -73,7 +73,6 @@ async fn resolve_feed(
     }
 
     // 検証通過後の fetch 試行を最大5回に制限する。
-    // 検証（validate_feed_url）で弾かれた候補は枠を消費しない。
     let mut last_err: Option<anyhow::Error> = None;
     let mut fetch_attempts = 0usize;
     for candidate in candidates.into_iter() {
@@ -115,6 +114,19 @@ pub struct FeedResponse {
     pub site_url: Option<String>,
     pub folder: Option<String>,
     pub article_count: i64,
+}
+
+impl From<Feed> for FeedResponse {
+    fn from(f: Feed) -> Self {
+        Self {
+            id: f.id,
+            title: f.title,
+            url: f.url,
+            site_url: f.site_url,
+            folder: f.folder,
+            article_count: f.article_count,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -174,41 +186,12 @@ pub async fn list_feeds(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<FeedResponse>>, (StatusCode, String)> {
     let db = state.db.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        let conn = db.lock().unwrap();
-        let mut stmt = conn
-            .prepare(
-                "SELECT f.id, f.title, f.url, f.site_url, fo.name AS folder_name, COUNT(a.id) AS article_count
-                 FROM feeds f
-                 LEFT JOIN folders fo ON fo.id = f.folder_id
-                 LEFT JOIN articles a ON a.feed_id = f.id
-                 GROUP BY f.id, f.title, f.url, f.site_url, fo.name
-                 ORDER BY f.title",
-            )
-            .map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map([], |r| {
-                Ok(FeedResponse {
-                    id: r.get(0)?,
-                    title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                    url: r.get(2)?,
-                    site_url: r.get(3)?,
-                    folder: r.get(4)?,
-                    article_count: r.get(5)?,
-                })
-            })
-            .map_err(|e| e.to_string())?;
-        let mut result = Vec::new();
-        for row in rows {
-            result.push(row.map_err(|e| e.to_string())?);
-        }
-        Ok::<_, String>(result)
-    })
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let result = tokio::task::spawn_blocking(move || db.list_feeds())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(result))
+    Ok(Json(result.into_iter().map(FeedResponse::from).collect()))
 }
 
 pub async fn create_feed(
@@ -224,7 +207,6 @@ pub async fn create_feed(
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("無効なURL: {e}")))?;
 
     // フィード URL を解決（パース不可ならサイトHTMLから RSS を自動検出）。
-    // 解決できなければ 400。
     let (feed_url, title, site_url) = resolve_feed(&state.client, &input_url)
         .await
         .map_err(|e| {
@@ -269,32 +251,8 @@ pub async fn create_feed(
     let feed = tokio::task::spawn_blocking({
         let db = state.db.clone();
         move || {
-            let conn = db.lock().unwrap();
-            reconcile_subscriptions(&conn, &subs_clone)?;
-
-            let feed: FeedResponse = conn
-                .query_row(
-                    "SELECT f.id, f.title, f.url, f.site_url, fo.name AS folder_name, COUNT(a.id) AS article_count
-                     FROM feeds f
-                     LEFT JOIN folders fo ON fo.id = f.folder_id
-                     LEFT JOIN articles a ON a.feed_id = f.id
-                     WHERE f.url = ?
-                     GROUP BY f.id, f.title, f.url, f.site_url, fo.name",
-                    params![feed_url2],
-                    |r| {
-                        Ok(FeedResponse {
-                            id: r.get(0)?,
-                            title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                            url: r.get(2)?,
-                            site_url: r.get(3)?,
-                            folder: r.get(4)?,
-                            article_count: r.get(5)?,
-                        })
-                    },
-                )
-                .map_err(|e| anyhow::anyhow!(e))?;
-
-            Ok::<_, anyhow::Error>(feed)
+            db.reconcile_subscriptions(&subs_clone)?;
+            db.get_feed_by_url(&feed_url2)
         }
     })
     .await
@@ -310,14 +268,11 @@ pub async fn create_feed(
     tokio::spawn(async move {
         let _ = fetch_feed(db3.clone(), client3, feed_id, feed_url.clone(), None, None).await;
         // FTS再構築
-        let _ = tokio::task::spawn_blocking(move || {
-            let conn = db3.lock().unwrap();
-            crate::db::fts::rebuild_fts_index(&conn)
-        })
-        .await;
+        let db4 = db3.clone();
+        let _ = tokio::task::spawn_blocking(move || db4.rebuild_search_index()).await;
     });
 
-    Ok((StatusCode::CREATED, Json(feed)))
+    Ok((StatusCode::CREATED, Json(FeedResponse::from(feed))))
 }
 
 pub async fn update_feed(
@@ -330,19 +285,12 @@ pub async fn update_feed(
 
     // 旧情報取得（ロック取得後に実施）
     let db_old = state.db.clone();
-    let (old_url, old_title, old_folder): (String, String, Option<String>) =
-        tokio::task::spawn_blocking(move || {
-            let conn = db_old.lock().unwrap();
-            conn.query_row(
-                "SELECT f.url, f.title, fo.name FROM feeds f LEFT JOIN folders fo ON fo.id = f.folder_id WHERE f.id = ?",
-                params![id],
-                |r| Ok((r.get(0)?, r.get::<_, Option<String>>(1)?.unwrap_or_default(), r.get(2)?)),
-            )
-            .map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let (old_url, old_title, old_folder) = tokio::task::spawn_blocking(move || {
+        db_old.get_feed_info_by_id(id)
+    })
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
 
     let new_title = body.title.clone().unwrap_or(old_title.clone());
     // double-option で folder の「未指定」「明示null（解除）」「値あり」を区別
@@ -382,39 +330,15 @@ pub async fn update_feed(
     let feed = tokio::task::spawn_blocking({
         let db = state.db.clone();
         move || {
-            let conn = db.lock().unwrap();
-            reconcile_subscriptions(&conn, &yaml_clone)?;
-
-            let feed: FeedResponse = conn
-                .query_row(
-                    "SELECT f.id, f.title, f.url, f.site_url, fo.name AS folder_name, COUNT(a.id) AS article_count
-                     FROM feeds f
-                     LEFT JOIN folders fo ON fo.id = f.folder_id
-                     LEFT JOIN articles a ON a.feed_id = f.id
-                     WHERE f.url = ?
-                     GROUP BY f.id, f.title, f.url, f.site_url, fo.name",
-                    params![old_url2],
-                    |r| {
-                        Ok(FeedResponse {
-                            id: r.get(0)?,
-                            title: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                            url: r.get(2)?,
-                            site_url: r.get(3)?,
-                            folder: r.get(4)?,
-                            article_count: r.get(5)?,
-                        })
-                    },
-                )
-                .map_err(|e| anyhow::anyhow!(e))?;
-
-            Ok::<_, anyhow::Error>(feed)
+            db.reconcile_subscriptions(&yaml_clone)?;
+            db.get_feed_by_url(&old_url2)
         }
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(feed))
+    Ok(Json(FeedResponse::from(feed)))
 }
 
 pub async fn delete_feed(
@@ -426,18 +350,10 @@ pub async fn delete_feed(
 
     // 削除対象URLを取得（ロック取得後に実施）
     let db_url = state.db.clone();
-    let feed_url: String = tokio::task::spawn_blocking(move || {
-        let conn = db_url.lock().unwrap();
-        conn.query_row(
-            "SELECT url FROM feeds WHERE id = ?",
-            params![id],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let feed_url = tokio::task::spawn_blocking(move || db_url.get_feed_url_by_id(id))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
 
     // 1. yaml 取得
     let feeds_path = state.config.feeds_path.clone();
@@ -456,10 +372,7 @@ pub async fn delete_feed(
     let yaml_clone = yaml.clone();
     tokio::task::spawn_blocking({
         let db = state.db.clone();
-        move || {
-            let conn = db.lock().unwrap();
-            reconcile_subscriptions(&conn, &yaml_clone)
-        }
+        move || db.reconcile_subscriptions(&yaml_clone)
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?

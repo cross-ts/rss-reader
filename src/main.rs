@@ -28,14 +28,14 @@ use futures_util::StreamExt;
 use clap::Parser;
 
 use crate::config::{Cli, Config};
-use crate::db::DbConn;
+use crate::db::Db;
 
 /// プロキシ応答ボディの最大サイズ（50 MB）。
 const MAX_PROXY_BYTES: usize = 50 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: DbConn,
+    pub db: Db,
     pub config: Arc<Config>,
     pub client: Client,
     /// feeds.opml の read-modify-write を直列化するためのミューテックス。
@@ -62,10 +62,11 @@ async fn main() -> Result<()> {
 
     let config = Config::from_cli(cli)?;
 
-    // config.db_path / config.feeds_path は from_env() で cwd 基準の絶対パスに解決済み。
+    // config.db_path / config.feeds_path は from_cli() で cwd 基準の絶対パスに解決済み。
     let bind_addr = format!("{}:{}", config.host, config.port);
 
     tracing::info!("Starting rss-reader");
+    tracing::info!("  driver   = {}", config.db_driver);
     tracing::info!("  bind     = {}", bind_addr);
     tracing::info!("  db       = {}", config.db_path);
     tracing::info!("  feeds    = {}", config.feeds_path);
@@ -74,8 +75,8 @@ async fn main() -> Result<()> {
         None => tracing::info!("  frontend = reverse-proxy {}", config.frontend_url),
     }
 
-    // DB の親ディレクトリ作成は db::open 内で行われる（create_dir_all）。
-    let db = db::open(&config.db_path)?;
+    // DB の親ディレクトリ作成は Db::open 内で行われる（create_dir_all）。
+    let db = Db::open(&config.db_path, config.db_driver)?;
 
     // feeds.opml フェイルセーフ起動
     {
@@ -90,17 +91,14 @@ async fn main() -> Result<()> {
                 );
                 let subs_clone = subs.clone();
                 tokio::task::spawn_blocking(move || {
-                    let conn = db_clone.lock().unwrap();
-                    feeds::reconcile_subscriptions(&conn, &subs_clone)
+                    db_clone.reconcile_subscriptions(&subs_clone)
                 })
                 .await??;
             }
             None => {
                 let db_clone2 = db.clone();
                 let feed_count: i64 = tokio::task::spawn_blocking(move || {
-                    let conn = db_clone2.lock().unwrap();
-                    conn.query_row("SELECT COUNT(*) FROM feeds", [], |r| r.get(0))
-                        .map_err(|e| anyhow::anyhow!(e))
+                    db_clone2.feed_count()
                 })
                 .await??;
 
@@ -119,9 +117,9 @@ async fn main() -> Result<()> {
                 );
                 let empty = feeds::Subscriptions::default();
                 feeds::save_opml(&feeds_path, &empty)?;
+                let db_clone3 = db.clone();
                 tokio::task::spawn_blocking(move || {
-                    let conn = db_clone.lock().unwrap();
-                    feeds::reconcile_subscriptions(&conn, &empty)
+                    db_clone3.reconcile_subscriptions(&empty)
                 })
                 .await??;
             }

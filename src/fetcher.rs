@@ -1,12 +1,11 @@
 use anyhow::{bail, Context, Result};
 use bytes::Bytes;
 use chrono::Utc;
-use duckdb::params;
 use feed_rs::parser;
 use reqwest::{Client, Response};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use crate::db::DbConn;
+use crate::db::Db;
 use crate::tokenize::tokenize;
 
 /// Fix 3: フィード取得の最大バイト数（10MB）
@@ -248,7 +247,7 @@ pub async fn fetch_with_guard_conditional(
 }
 
 pub async fn fetch_feed(
-    db: DbConn,
+    db: Db,
     client: Client,
     feed_id: i32,
     url: String,
@@ -256,8 +255,6 @@ pub async fn fetch_feed(
     last_modified: Option<String>,
 ) -> Result<usize> {
     // Fix P1: 条件付きGET（ETag/Last-Modified）も fetch_with_guard_conditional 経由で送信。
-    // これにより巡回でも毎回 validate_feed_url（SSRF 検証）と手動リダイレクト追跡・
-    // サイズ上限が適用される。
     let outcome = fetch_with_guard_conditional(
         &client,
         &url,
@@ -331,23 +328,17 @@ pub async fn fetch_feed(
         let content_tokens_c = content_tokens.clone();
 
         let n = tokio::task::spawn_blocking(move || {
-            let conn = db_clone.lock().unwrap();
-            conn.execute(
-                "INSERT INTO articles (feed_id, guid, title, url, author, content, title_tokens, content_tokens, published_at, fetched_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                 ON CONFLICT (feed_id, guid) DO NOTHING",
-                params![
-                    feed_id,
-                    guid_c,
-                    title_c,
-                    link_c,
-                    author_c,
-                    content_c,
-                    title_tokens_c,
-                    content_tokens_c,
-                    published_at,
-                    now,
-                ],
+            db_clone.insert_article_if_new(
+                feed_id,
+                &guid_c,
+                &title_c,
+                &link_c,
+                &author_c,
+                &content_c,
+                &title_tokens_c,
+                &content_tokens_c,
+                published_at,
+                now,
             )
         })
         .await??;
@@ -356,13 +347,15 @@ pub async fn fetch_feed(
     }
 
     // ETag / Last-Modified 更新
+    let db_meta = db.clone();
     let new_etag2 = new_etag.clone();
     let new_lm2 = new_last_modified.clone();
     tokio::task::spawn_blocking(move || {
-        let conn = db.lock().unwrap();
-        conn.execute(
-            "UPDATE feeds SET etag=?, last_modified=?, last_fetched_at=? WHERE id=?",
-            params![new_etag2, new_lm2, now, feed_id],
+        db_meta.update_feed_fetch_metadata(
+            feed_id,
+            new_etag2.as_deref(),
+            new_lm2.as_deref(),
+            now,
         )
     })
     .await??;

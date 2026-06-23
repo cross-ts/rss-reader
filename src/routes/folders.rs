@@ -5,8 +5,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::db::Folder;
+use crate::feeds::{read_feeds_opml, save_opml, FolderEntry};
 use crate::AppState;
-use crate::feeds::{read_feeds_opml, reconcile_subscriptions, save_opml, FolderEntry};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +15,16 @@ pub struct FolderResponse {
     pub id: i32,
     pub name: String,
     pub feed_count: i64,
+}
+
+impl From<Folder> for FolderResponse {
+    fn from(f: Folder) -> Self {
+        Self {
+            id: f.id,
+            name: f.name,
+            feed_count: f.feed_count,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -25,37 +36,12 @@ pub async fn list_folders(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<FolderResponse>>, (StatusCode, String)> {
     let db = state.db.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        let conn = db.lock().unwrap();
-        let mut stmt = conn
-            .prepare(
-                "SELECT f.id, f.name, COUNT(fd.id) AS feed_count
-                 FROM folders f
-                 LEFT JOIN feeds fd ON fd.folder_id = f.id
-                 GROUP BY f.id, f.name
-                 ORDER BY f.name",
-            )
-            .map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map([], |r| {
-                Ok(FolderResponse {
-                    id: r.get(0)?,
-                    name: r.get(1)?,
-                    feed_count: r.get(2)?,
-                })
-            })
-            .map_err(|e| e.to_string())?;
-        let mut result = Vec::new();
-        for row in rows {
-            result.push(row.map_err(|e| e.to_string())?);
-        }
-        Ok::<_, String>(result)
-    })
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let result = tokio::task::spawn_blocking(move || db.list_folders())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(result))
+    Ok(Json(result.into_iter().map(FolderResponse::from).collect()))
 }
 
 pub async fn create_folder(
@@ -92,35 +78,15 @@ pub async fn create_folder(
     let folder = tokio::task::spawn_blocking({
         let db = state.db.clone();
         move || {
-            let conn = db.lock().unwrap();
-            reconcile_subscriptions(&conn, &yaml_clone)?;
-
-            let folder: FolderResponse = conn
-                .query_row(
-                    "SELECT f.id, f.name, COUNT(fd.id) AS feed_count
-                     FROM folders f
-                     LEFT JOIN feeds fd ON fd.folder_id = f.id
-                     WHERE f.name = ?
-                     GROUP BY f.id, f.name",
-                    duckdb::params![fname],
-                    |r| {
-                        Ok(FolderResponse {
-                            id: r.get(0)?,
-                            name: r.get(1)?,
-                            feed_count: r.get(2)?,
-                        })
-                    },
-                )
-                .map_err(|e| anyhow::anyhow!(e))?;
-
-            Ok::<_, anyhow::Error>(folder)
+            db.reconcile_subscriptions(&yaml_clone)?;
+            db.get_folder_by_name(&fname)
         }
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok((StatusCode::CREATED, Json(folder)))
+    Ok((StatusCode::CREATED, Json(FolderResponse::from(folder))))
 }
 
 pub async fn update_folder(
@@ -139,18 +105,10 @@ pub async fn update_folder(
 
     // 旧名取得（ロック取得後に実施）
     let db_old = state.db.clone();
-    let old_name: String = tokio::task::spawn_blocking(move || {
-        let conn = db_old.lock().unwrap();
-        conn.query_row(
-            "SELECT name FROM folders WHERE id = ?",
-            duckdb::params![id],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let old_name = tokio::task::spawn_blocking(move || db_old.get_folder_name_by_id(id))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
 
     // 1. yaml 取得
     let feeds_path = state.config.feeds_path.clone();
@@ -185,35 +143,15 @@ pub async fn update_folder(
     let folder = tokio::task::spawn_blocking({
         let db = state.db.clone();
         move || {
-            let conn = db.lock().unwrap();
-            reconcile_subscriptions(&conn, &yaml_clone)?;
-
-            let folder: FolderResponse = conn
-                .query_row(
-                    "SELECT f.id, f.name, COUNT(fd.id) AS feed_count
-                     FROM folders f
-                     LEFT JOIN feeds fd ON fd.folder_id = f.id
-                     WHERE f.name = ?
-                     GROUP BY f.id, f.name",
-                    duckdb::params![fname],
-                    |r| {
-                        Ok(FolderResponse {
-                            id: r.get(0)?,
-                            name: r.get(1)?,
-                            feed_count: r.get(2)?,
-                        })
-                    },
-                )
-                .map_err(|e| anyhow::anyhow!(e))?;
-
-            Ok::<_, anyhow::Error>(folder)
+            db.reconcile_subscriptions(&yaml_clone)?;
+            db.get_folder_by_name(&fname)
         }
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(folder))
+    Ok(Json(FolderResponse::from(folder)))
 }
 
 
@@ -226,18 +164,10 @@ pub async fn delete_folder(
 
     // 対象 folder 名取得（ロック取得後に実施）
     let db_old = state.db.clone();
-    let folder_name: String = tokio::task::spawn_blocking(move || {
-        let conn = db_old.lock().unwrap();
-        conn.query_row(
-            "SELECT name FROM folders WHERE id = ?",
-            duckdb::params![id],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .map_err(|e| (StatusCode::NOT_FOUND, e))?;
+    let folder_name = tokio::task::spawn_blocking(move || db_old.get_folder_name_by_id(id))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))?;
 
     // 1. yaml 取得
     let feeds_path = state.config.feeds_path.clone();
@@ -261,10 +191,7 @@ pub async fn delete_folder(
     let yaml_clone = yaml.clone();
     tokio::task::spawn_blocking({
         let db = state.db.clone();
-        move || {
-            let conn = db.lock().unwrap();
-            reconcile_subscriptions(&conn, &yaml_clone)
-        }
+        move || db.reconcile_subscriptions(&yaml_clone)
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?

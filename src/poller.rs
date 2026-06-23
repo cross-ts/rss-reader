@@ -3,40 +3,30 @@ use reqwest::Client;
 use std::time::Duration;
 use tokio::time;
 
-use crate::db::{fts, DbConn};
+use crate::db::Db;
 use crate::fetcher::fetch_feed;
 
-pub async fn run_once(db: DbConn, client: Client) -> Result<()> {
+pub async fn run_once(db: Db, client: Client) -> Result<()> {
     // 全フィードを取得
-    let feeds: Vec<(i32, String, Option<String>, Option<String>)> = {
+    let feeds = {
         let db2 = db.clone();
-        tokio::task::spawn_blocking(move || {
-            let conn = db2.lock().unwrap();
-            let mut stmt = conn.prepare(
-                "SELECT id, url, etag, last_modified FROM feeds"
-            )?;
-            let rows = stmt.query_map([], |r| {
-                Ok((
-                    r.get::<_, i32>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, Option<String>>(2)?,
-                    r.get::<_, Option<String>>(3)?,
-                ))
-            })?;
-            let mut result = Vec::new();
-            for row in rows {
-                result.push(row?);
-            }
-            Ok::<_, anyhow::Error>(result)
-        })
-        .await??
+        tokio::task::spawn_blocking(move || db2.get_feed_targets()).await??
     };
 
-    for (feed_id, url, etag, last_modified) in feeds {
+    for target in feeds {
         let db_clone = db.clone();
         let client_clone = client.clone();
-        if let Err(e) = fetch_feed(db_clone, client_clone, feed_id, url.clone(), etag, last_modified).await {
-            tracing::warn!("Failed to fetch feed {}: {}", url, e);
+        if let Err(e) = fetch_feed(
+            db_clone,
+            client_clone,
+            target.id,
+            target.url.clone(),
+            target.etag,
+            target.last_modified,
+        )
+        .await
+        {
+            tracing::warn!("Failed to fetch feed {}: {}", target.url, e);
         }
     }
 
@@ -44,8 +34,7 @@ pub async fn run_once(db: DbConn, client: Client) -> Result<()> {
     {
         let db2 = db.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = db2.lock().unwrap();
-            if let Err(e) = fts::rebuild_fts_index(&conn) {
+            if let Err(e) = db2.rebuild_search_index() {
                 tracing::warn!("FTS rebuild failed: {}", e);
             }
         })
@@ -55,7 +44,7 @@ pub async fn run_once(db: DbConn, client: Client) -> Result<()> {
     Ok(())
 }
 
-pub async fn start_poller(db: DbConn, client: Client, interval_minutes: u64) {
+pub async fn start_poller(db: Db, client: Client, interval_minutes: u64) {
     // 起動直後に1回実行
     let db2 = db.clone();
     let client2 = client.clone();
