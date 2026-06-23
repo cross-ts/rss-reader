@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "リリースタグ（例 v0.1.0）"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-14
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package
+        run: |
+          ARCHIVE_NAME="rss-reader-${{ inputs.tag }}-${{ matrix.target }}"
+          STAGING_DIR="${ARCHIVE_NAME}"
+          mkdir "${STAGING_DIR}"
+
+          cp "target/${{ matrix.target }}/release/rss-reader" "${STAGING_DIR}/"
+
+          if [ -f README.md ]; then
+            cp README.md "${STAGING_DIR}/"
+          fi
+
+          if [ -f feeds.opml ]; then
+            cp feeds.opml "${STAGING_DIR}/"
+          fi
+
+          tar czf "${ARCHIVE_NAME}.tar.gz" "${STAGING_DIR}"
+          echo "ARCHIVE_NAME=${ARCHIVE_NAME}.tar.gz" >> "${GITHUB_ENV}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifact-${{ matrix.target }}
+          path: ${{ env.ARCHIVE_NAME }}
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lR artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/rss-reader-${{ inputs.tag }}-aarch64-apple-darwin.tar.gz
+            artifacts/rss-reader-${{ inputs.tag }}-x86_64-unknown-linux-gnu.tar.gz
