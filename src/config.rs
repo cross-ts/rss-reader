@@ -27,7 +27,7 @@ pub struct Cli {
     pub feeds_path: String,
 
     /// DB driver（sqlite or duckdb）
-    #[arg(long = "db-driver", env = "DB_DRIVER", value_enum, default_value = "duckdb")]
+    #[arg(long = "db-driver", env = "DB_DRIVER", value_enum, default_value = "sqlite")]
     pub db_driver: DbDriver,
 
     /// DB ファイルのパス（相対パスは cwd 基準で解決）。
