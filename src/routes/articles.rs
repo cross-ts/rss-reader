@@ -56,12 +56,16 @@ pub async fn list_articles(
     State(state): State<AppState>,
     Query(query): Query<ArticlesQuery>,
 ) -> Result<Json<ArticlesResponse>, (StatusCode, String)> {
+    // Clamp limit to 1..=200, normalize offset to >= 0
+    let limit = query.limit.map(|l| l.clamp(1, 200)).or(Some(50));
+    let offset = query.offset.map(|o| o.max(0)).or(Some(0));
+
     let filter = ArticleFilter {
         folder_id: query.folder_id,
         feed_id: query.feed_id,
         q: query.q,
-        limit: query.limit,
-        offset: query.offset,
+        limit,
+        offset,
     };
 
     let db = state.db.clone();

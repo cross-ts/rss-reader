@@ -5,7 +5,7 @@ use feed_rs::parser;
 use reqwest::{Client, Response};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use crate::db::Db;
+use crate::db::{Db, FetchMeta, NewArticle};
 use crate::tokenize::tokenize;
 
 /// Fix 3: フィード取得の最大バイト数（10MB）
@@ -277,8 +277,9 @@ pub async fn fetch_feed(
     let feed = parser::parse(body.as_ref()).context("Failed to parse feed")?;
 
     let now = Utc::now().naive_utc();
-    let mut inserted = 0usize;
 
+    // Build article list for transactional insert
+    let mut new_articles = Vec::new();
     for entry in &feed.entries {
         let guid = entry.id.clone();
         if guid.is_empty() {
@@ -318,45 +319,28 @@ pub async fn fetch_feed(
         let title_tokens = tokenize(&title).unwrap_or_else(|_| title.clone());
         let content_tokens = tokenize(&content).unwrap_or_else(|_| content.clone());
 
-        let db_clone = db.clone();
-        let guid_c = guid.clone();
-        let title_c = title.clone();
-        let link_c = link.clone();
-        let author_c = author.clone();
-        let content_c = content.clone();
-        let title_tokens_c = title_tokens.clone();
-        let content_tokens_c = content_tokens.clone();
-
-        let n = tokio::task::spawn_blocking(move || {
-            db_clone.insert_article_if_new(
-                feed_id,
-                &guid_c,
-                &title_c,
-                &link_c,
-                &author_c,
-                &content_c,
-                &title_tokens_c,
-                &content_tokens_c,
-                published_at,
-                now,
-            )
-        })
-        .await??;
-
-        inserted += n;
+        new_articles.push(NewArticle {
+            guid,
+            title,
+            url: link,
+            author,
+            content,
+            title_tokens,
+            content_tokens,
+            published_at,
+        });
     }
 
-    // ETag / Last-Modified 更新
-    let db_meta = db.clone();
-    let new_etag2 = new_etag.clone();
-    let new_lm2 = new_last_modified.clone();
-    tokio::task::spawn_blocking(move || {
-        db_meta.update_feed_fetch_metadata(
-            feed_id,
-            new_etag2.as_deref(),
-            new_lm2.as_deref(),
-            now,
-        )
+    let meta = FetchMeta {
+        etag: new_etag,
+        last_modified: new_last_modified,
+        fetched_at: now,
+    };
+
+    // Transactionally insert all articles and update feed metadata
+    let db_tx = db.clone();
+    let inserted = tokio::task::spawn_blocking(move || {
+        db_tx.apply_fetch_result(feed_id, &new_articles, &meta)
     })
     .await??;
 

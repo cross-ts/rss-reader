@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use rusqlite::{params, Connection};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
-use super::{Article, ArticleFilter, ArticlesResult, Feed, FeedTarget, Folder};
+use super::{Article, ArticleFilter, ArticlesResult, Feed, FeedTarget, FetchMeta, Folder, NewArticle};
 use crate::feeds::Subscriptions;
 use crate::tokenize::tokenize;
 
@@ -21,6 +21,13 @@ impl Clone for SqliteDb {
 }
 
 impl SqliteDb {
+    /// Poison-safe lock helper: converts PoisonError to anyhow::Error.
+    fn conn(&self) -> Result<MutexGuard<'_, Connection>> {
+        self.conn
+            .lock()
+            .map_err(|e| anyhow!("DB lock poisoned: {e}"))
+    }
+
     /// Open (or create) a SQLite database at `path`, run migrations.
     /// FTS5 availability is verified at startup (fail-fast).
     pub fn open(path: &str) -> Result<Self> {
@@ -61,7 +68,7 @@ impl SqliteDb {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS articles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                feed_id INTEGER,
+                feed_id INTEGER REFERENCES feeds(id) ON DELETE CASCADE,
                 guid TEXT,
                 title TEXT,
                 url TEXT,
@@ -119,13 +126,13 @@ impl SqliteDb {
     }
 
     pub fn feed_count(&self) -> Result<i64> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM feeds", [], |r| r.get(0))?;
         Ok(count)
     }
 
     pub fn reconcile_subscriptions(&self, subs: &Subscriptions) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let tx = conn.unchecked_transaction()?;
 
         let result: Result<()> = (|| {
@@ -258,15 +265,14 @@ impl SqliteDb {
     }
 
     pub fn list_articles(&self, filter: ArticleFilter) -> Result<ArticlesResult> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let limit = filter.limit.unwrap_or(50);
         let offset = filter.offset.unwrap_or(0);
 
         if let Some(ref search_q) = filter.q {
             // 記事が0件のときは FTS インデックス未作成のため空を返す
             let article_count: i64 = conn
-                .query_row("SELECT count(*) FROM articles", [], |r| r.get(0))
-                .unwrap_or(0);
+                .query_row("SELECT count(*) FROM articles", [], |r| r.get(0))?;
             if article_count == 0 {
                 return Ok(ArticlesResult {
                     items: vec![],
@@ -283,12 +289,21 @@ impl SqliteDb {
                 });
             }
 
+            // Build filter clauses with bind parameters
+            // ?1 = match_query, then dynamic filter params, then limit/offset
             let mut filter_clauses = vec![];
+            let mut bind_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![];
+            let mut param_idx = 2u32; // ?1 is match_query
+
             if let Some(fid) = filter.folder_id {
-                filter_clauses.push(format!("f.folder_id = {}", fid));
+                filter_clauses.push(format!("f.folder_id = ?{}", param_idx));
+                bind_values.push(Box::new(fid));
+                param_idx += 1;
             }
             if let Some(fid) = filter.feed_id {
-                filter_clauses.push(format!("a.feed_id = {}", fid));
+                filter_clauses.push(format!("a.feed_id = ?{}", param_idx));
+                bind_values.push(Box::new(fid));
+                param_idx += 1;
             }
 
             let filter_str = if filter_clauses.is_empty() {
@@ -297,6 +312,9 @@ impl SqliteDb {
                 filter_clauses.join(" AND ")
             };
 
+            let limit_idx = param_idx;
+            let offset_idx = param_idx + 1;
+
             // bm25() は小さいほど高関連 → ORDER BY ASC
             let sql = format!(
                 "SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title,
@@ -304,28 +322,41 @@ impl SqliteDb {
                         a.author, COALESCE(a.content, '') AS content, a.published_at
                  FROM articles a
                  JOIN feeds f ON f.id = a.feed_id
-                 JOIN articles_fts fts ON a.id = fts.rowid
+                 JOIN articles_fts ON a.id = articles_fts.rowid
                  WHERE articles_fts MATCH ?1 AND {}
                  ORDER BY bm25(articles_fts) ASC
-                 LIMIT ?2 OFFSET ?3",
-                filter_str
+                 LIMIT ?{} OFFSET ?{}",
+                filter_str, limit_idx, offset_idx
             );
 
             let total_sql = format!(
                 "SELECT count(*)
                  FROM articles a
                  JOIN feeds f ON f.id = a.feed_id
-                 JOIN articles_fts fts ON a.id = fts.rowid
+                 JOIN articles_fts ON a.id = articles_fts.rowid
                  WHERE articles_fts MATCH ?1 AND {}",
                 filter_str
             );
 
+            // Build total params: match_query + filter values
+            let mut total_param_refs: Vec<&dyn rusqlite::types::ToSql> = vec![&match_query as &dyn rusqlite::types::ToSql];
+            for v in &bind_values {
+                total_param_refs.push(v.as_ref());
+            }
+
             let total: i64 = conn
-                .query_row(&total_sql, params![match_query], |r| r.get(0))
-                .unwrap_or(0);
+                .query_row(&total_sql, total_param_refs.as_slice(), |r| r.get(0))?;
+
+            // Build query params: match_query + filter values + limit + offset
+            let mut query_param_refs: Vec<&dyn rusqlite::types::ToSql> = vec![&match_query as &dyn rusqlite::types::ToSql];
+            for v in &bind_values {
+                query_param_refs.push(v.as_ref());
+            }
+            query_param_refs.push(&limit as &dyn rusqlite::types::ToSql);
+            query_param_refs.push(&offset as &dyn rusqlite::types::ToSql);
 
             let mut stmt = conn.prepare(&sql)?;
-            let rows = stmt.query_map(params![match_query, limit, offset], |r| {
+            let rows = stmt.query_map(query_param_refs.as_slice(), |r| {
                 Ok(Article {
                     id: r.get(0)?,
                     feed_id: r.get(1)?,
@@ -347,11 +378,18 @@ impl SqliteDb {
         } else {
             // 通常検索（published_at 降順、NULL は最後）
             let mut where_clauses = vec![];
+            let mut bind_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![];
+            let mut param_idx = 1u32;
+
             if let Some(fid) = filter.folder_id {
-                where_clauses.push(format!("f.folder_id = {}", fid));
+                where_clauses.push(format!("f.folder_id = ?{}", param_idx));
+                bind_values.push(Box::new(fid));
+                param_idx += 1;
             }
             if let Some(fid) = filter.feed_id {
-                where_clauses.push(format!("a.feed_id = {}", fid));
+                where_clauses.push(format!("a.feed_id = ?{}", param_idx));
+                bind_values.push(Box::new(fid));
+                param_idx += 1;
             }
 
             let where_str = if where_clauses.is_empty() {
@@ -360,13 +398,18 @@ impl SqliteDb {
                 format!("WHERE {}", where_clauses.join(" AND "))
             };
 
+            let limit_idx = param_idx;
+            let offset_idx = param_idx + 1;
+
             let total_sql = format!(
                 "SELECT count(*) FROM articles a JOIN feeds f ON f.id = a.feed_id {}",
                 where_str
             );
+
+            let total_param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                bind_values.iter().map(|v| v.as_ref()).collect();
             let total: i64 = conn
-                .query_row(&total_sql, [], |r| r.get(0))
-                .unwrap_or(0);
+                .query_row(&total_sql, total_param_refs.as_slice(), |r| r.get(0))?;
 
             let sql = format!(
                 "SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title,
@@ -376,12 +419,17 @@ impl SqliteDb {
                  JOIN feeds f ON f.id = a.feed_id
                  {}
                  ORDER BY a.published_at IS NULL, a.published_at DESC
-                 LIMIT ?1 OFFSET ?2",
-                where_str
+                 LIMIT ?{} OFFSET ?{}",
+                where_str, limit_idx, offset_idx
             );
 
+            let mut query_param_refs: Vec<&dyn rusqlite::types::ToSql> =
+                bind_values.iter().map(|v| v.as_ref()).collect();
+            query_param_refs.push(&limit as &dyn rusqlite::types::ToSql);
+            query_param_refs.push(&offset as &dyn rusqlite::types::ToSql);
+
             let mut stmt = conn.prepare(&sql)?;
-            let rows = stmt.query_map(params![limit, offset], |r| {
+            let rows = stmt.query_map(query_param_refs.as_slice(), |r| {
                 Ok(Article {
                     id: r.get(0)?,
                     feed_id: r.get(1)?,
@@ -404,7 +452,7 @@ impl SqliteDb {
     }
 
     pub fn list_feeds(&self) -> Result<Vec<Feed>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let mut stmt = conn.prepare(
             "SELECT f.id, f.title, f.url, f.site_url, fo.name AS folder_name, COUNT(a.id) AS article_count
              FROM feeds f
@@ -431,7 +479,7 @@ impl SqliteDb {
     }
 
     pub fn list_folders(&self) -> Result<Vec<Folder>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let mut stmt = conn.prepare(
             "SELECT f.id, f.name, COUNT(fd.id) AS feed_count
              FROM folders f
@@ -454,7 +502,7 @@ impl SqliteDb {
     }
 
     pub fn get_feed_targets(&self) -> Result<Vec<FeedTarget>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let mut stmt = conn.prepare("SELECT id, url, etag, last_modified FROM feeds")?;
         let rows = stmt.query_map([], |r| {
             Ok(FeedTarget {
@@ -472,7 +520,7 @@ impl SqliteDb {
     }
 
     pub fn get_feed_targets_by_id(&self, feed_id: i32) -> Result<Vec<FeedTarget>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let mut stmt =
             conn.prepare("SELECT id, url, etag, last_modified FROM feeds WHERE id = ?1")?;
         let rows = stmt.query_map(params![feed_id], |r| {
@@ -503,7 +551,7 @@ impl SqliteDb {
         published_at: Option<chrono::NaiveDateTime>,
         fetched_at: chrono::NaiveDateTime,
     ) -> Result<usize> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         // datetime を RFC3339 固定長文字列（UTC, 末尾 Z）で保存
         let published_str = published_at.map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string());
         let fetched_str = fetched_at.format("%Y-%m-%dT%H:%M:%SZ").to_string();
@@ -535,7 +583,7 @@ impl SqliteDb {
         last_modified: Option<&str>,
         last_fetched_at: chrono::NaiveDateTime,
     ) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let fetched_str = last_fetched_at.format("%Y-%m-%dT%H:%M:%SZ").to_string();
         conn.execute(
             "UPDATE feeds SET etag=?1, last_modified=?2, last_fetched_at=?3 WHERE id=?4",
@@ -545,7 +593,7 @@ impl SqliteDb {
     }
 
     pub fn rebuild_search_index(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let count: i64 = conn.query_row("SELECT count(*) FROM articles", [], |r| r.get(0))?;
         if count == 0 {
             return Ok(());
@@ -558,7 +606,7 @@ impl SqliteDb {
     }
 
     pub fn get_feed_by_url(&self, url: &str) -> Result<Feed> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let feed = conn.query_row(
             "SELECT f.id, f.title, f.url, f.site_url, fo.name AS folder_name, COUNT(a.id) AS article_count
              FROM feeds f
@@ -582,7 +630,7 @@ impl SqliteDb {
     }
 
     pub fn get_folder_by_name(&self, name: &str) -> Result<Folder> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let folder = conn.query_row(
             "SELECT f.id, f.name, COUNT(fd.id) AS feed_count
              FROM folders f
@@ -602,7 +650,7 @@ impl SqliteDb {
     }
 
     pub fn get_feed_url_by_id(&self, id: i32) -> Result<String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let url: String = conn.query_row(
             "SELECT url FROM feeds WHERE id = ?1",
             params![id],
@@ -612,7 +660,7 @@ impl SqliteDb {
     }
 
     pub fn get_feed_info_by_id(&self, id: i32) -> Result<(String, String, Option<String>)> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let result = conn.query_row(
             "SELECT f.url, f.title, fo.name FROM feeds f LEFT JOIN folders fo ON fo.id = f.folder_id WHERE f.id = ?1",
             params![id],
@@ -622,13 +670,60 @@ impl SqliteDb {
     }
 
     pub fn get_folder_name_by_id(&self, id: i32) -> Result<String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let name: String = conn.query_row(
             "SELECT name FROM folders WHERE id = ?1",
             params![id],
             |r| r.get(0),
         )?;
         Ok(name)
+    }
+
+    /// Transactionally insert articles and update feed fetch metadata.
+    /// Prevents partial success (articles inserted but metadata stale).
+    pub fn apply_fetch_result(
+        &self,
+        feed_id: i32,
+        articles: &[NewArticle],
+        meta: &FetchMeta,
+    ) -> Result<usize> {
+        let conn = self.conn()?;
+        let tx = conn.unchecked_transaction()?;
+
+        let mut inserted = 0usize;
+        for article in articles {
+            let published_str =
+                article.published_at.map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string());
+            let fetched_str = meta.fetched_at.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
+            let n = tx.execute(
+                "INSERT INTO articles (feed_id, guid, title, url, author, content, title_tokens, content_tokens, published_at, fetched_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                 ON CONFLICT (feed_id, guid) DO NOTHING",
+                params![
+                    feed_id,
+                    article.guid,
+                    article.title,
+                    article.url,
+                    article.author,
+                    article.content,
+                    article.title_tokens,
+                    article.content_tokens,
+                    published_str,
+                    fetched_str,
+                ],
+            )?;
+            inserted += n;
+        }
+
+        let fetched_str = meta.fetched_at.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+        tx.execute(
+            "UPDATE feeds SET etag=?1, last_modified=?2, last_fetched_at=?3 WHERE id=?4",
+            params![meta.etag, meta.last_modified, fetched_str, feed_id],
+        )?;
+
+        tx.commit()?;
+        Ok(inserted)
     }
 }
 

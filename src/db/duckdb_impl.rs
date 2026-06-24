@@ -1,10 +1,10 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use chrono::NaiveDateTime;
 use duckdb::params;
 use duckdb::Connection;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
-use super::{Article, ArticleFilter, ArticlesResult, Feed, FeedTarget, Folder};
+use super::{Article, ArticleFilter, ArticlesResult, Feed, FeedTarget, FetchMeta, Folder, NewArticle};
 use crate::feeds::Subscriptions;
 use crate::tokenize::tokenize;
 
@@ -23,6 +23,13 @@ impl Clone for DuckdbDb {
 }
 
 impl DuckdbDb {
+    /// Poison-safe lock helper: converts PoisonError to anyhow::Error.
+    fn conn(&self) -> Result<MutexGuard<'_, Connection>> {
+        self.conn
+            .lock()
+            .map_err(|e| anyhow!("DB lock poisoned: {e}"))
+    }
+
     /// Open (or create) a DuckDB database at `path`, run migrations.
     pub fn open(path: &str) -> Result<Self> {
         // データディレクトリ作成
@@ -87,13 +94,13 @@ impl DuckdbDb {
     }
 
     pub fn feed_count(&self) -> Result<i64> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM feeds", [], |r| r.get(0))?;
         Ok(count)
     }
 
     pub fn reconcile_subscriptions(&self, subs: &Subscriptions) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         conn.execute_batch("BEGIN")?;
 
         let result: Result<()> = (|| {
@@ -215,15 +222,14 @@ impl DuckdbDb {
     }
 
     pub fn list_articles(&self, filter: ArticleFilter) -> Result<ArticlesResult> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let limit = filter.limit.unwrap_or(50);
         let offset = filter.offset.unwrap_or(0);
 
         if let Some(ref search_q) = filter.q {
             // 記事が0件のときは FTS インデックス未作成のため空を返す
             let article_count: i64 = conn
-                .query_row("SELECT count(*) FROM articles", [], |r| r.get(0))
-                .unwrap_or(0);
+                .query_row("SELECT count(*) FROM articles", [], |r| r.get(0))?;
             if article_count == 0 {
                 return Ok(ArticlesResult {
                     items: vec![],
@@ -233,12 +239,17 @@ impl DuckdbDb {
 
             let tokenized_q = tokenize(search_q).unwrap_or_else(|_| search_q.clone());
 
+            // Build filter clauses with bind parameters
             let mut filter_clauses = vec![];
+            let mut filter_bind_values: Vec<Box<dyn duckdb::ToSql>> = vec![];
+
             if let Some(fid) = filter.folder_id {
-                filter_clauses.push(format!("f.folder_id = {}", fid));
+                filter_clauses.push("f.folder_id = ?".to_string());
+                filter_bind_values.push(Box::new(fid));
             }
             if let Some(fid) = filter.feed_id {
-                filter_clauses.push(format!("a.feed_id = {}", fid));
+                filter_clauses.push("a.feed_id = ?".to_string());
+                filter_bind_values.push(Box::new(fid));
             }
 
             let filter_str = if filter_clauses.is_empty() {
@@ -273,12 +284,24 @@ impl DuckdbDb {
                 filter_str
             );
 
+            // Build total params: tokenized_q + filter values
+            let mut total_params: Vec<&dyn duckdb::ToSql> = vec![&tokenized_q as &dyn duckdb::ToSql];
+            for v in &filter_bind_values {
+                total_params.push(v.as_ref());
+            }
             let total: i64 = conn
-                .query_row(&total_sql, params![tokenized_q], |r| r.get(0))
-                .unwrap_or(0);
+                .query_row(&total_sql, duckdb::params_from_iter(total_params.iter()), |r| r.get(0))?;
+
+            // Build query params: tokenized_q + filter values + limit + offset
+            let mut query_params: Vec<&dyn duckdb::ToSql> = vec![&tokenized_q as &dyn duckdb::ToSql];
+            for v in &filter_bind_values {
+                query_params.push(v.as_ref());
+            }
+            query_params.push(&limit as &dyn duckdb::ToSql);
+            query_params.push(&offset as &dyn duckdb::ToSql);
 
             let mut stmt = conn.prepare(&sql)?;
-            let rows = stmt.query_map(params![tokenized_q, limit, offset], |r| {
+            let rows = stmt.query_map(duckdb::params_from_iter(query_params.iter()), |r| {
                 let published_at: Option<NaiveDateTime> = r.get(7)?;
                 Ok(Article {
                     id: r.get(0)?,
@@ -302,11 +325,15 @@ impl DuckdbDb {
         } else {
             // 通常検索（published_at 降順）
             let mut where_clauses = vec![];
+            let mut bind_values: Vec<Box<dyn duckdb::ToSql>> = vec![];
+
             if let Some(fid) = filter.folder_id {
-                where_clauses.push(format!("f.folder_id = {}", fid));
+                where_clauses.push("f.folder_id = ?".to_string());
+                bind_values.push(Box::new(fid));
             }
             if let Some(fid) = filter.feed_id {
-                where_clauses.push(format!("a.feed_id = {}", fid));
+                where_clauses.push("a.feed_id = ?".to_string());
+                bind_values.push(Box::new(fid));
             }
 
             let where_str = if where_clauses.is_empty() {
@@ -319,9 +346,12 @@ impl DuckdbDb {
                 "SELECT count(*) FROM articles a JOIN feeds f ON f.id = a.feed_id {}",
                 where_str
             );
-            let total: i64 = conn
-                .query_row(&total_sql, [], |r| r.get(0))
-                .unwrap_or(0);
+            let total_params: Vec<&dyn duckdb::ToSql> = bind_values.iter().map(|v| v.as_ref()).collect();
+            let total: i64 = if total_params.is_empty() {
+                conn.query_row(&total_sql, [], |r| r.get(0))?
+            } else {
+                conn.query_row(&total_sql, duckdb::params_from_iter(total_params.iter()), |r| r.get(0))?
+            };
 
             let sql = format!(
                 "SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at
@@ -329,12 +359,16 @@ impl DuckdbDb {
                  JOIN feeds f ON f.id = a.feed_id
                  {}
                  ORDER BY a.published_at DESC NULLS LAST
-                 LIMIT {} OFFSET {}",
-                where_str, limit, offset
+                 LIMIT ? OFFSET ?",
+                where_str
             );
 
+            let mut query_params: Vec<&dyn duckdb::ToSql> = bind_values.iter().map(|v| v.as_ref()).collect();
+            query_params.push(&limit as &dyn duckdb::ToSql);
+            query_params.push(&offset as &dyn duckdb::ToSql);
+
             let mut stmt = conn.prepare(&sql)?;
-            let rows = stmt.query_map([], |r| {
+            let rows = stmt.query_map(duckdb::params_from_iter(query_params.iter()), |r| {
                 let published_at: Option<NaiveDateTime> = r.get(7)?;
                 Ok(Article {
                     id: r.get(0)?,
@@ -359,7 +393,7 @@ impl DuckdbDb {
     }
 
     pub fn list_feeds(&self) -> Result<Vec<Feed>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let mut stmt = conn.prepare(
             "SELECT f.id, f.title, f.url, f.site_url, fo.name AS folder_name, COUNT(a.id) AS article_count
              FROM feeds f
@@ -386,7 +420,7 @@ impl DuckdbDb {
     }
 
     pub fn list_folders(&self) -> Result<Vec<Folder>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let mut stmt = conn.prepare(
             "SELECT f.id, f.name, COUNT(fd.id) AS feed_count
              FROM folders f
@@ -409,7 +443,7 @@ impl DuckdbDb {
     }
 
     pub fn get_feed_targets(&self) -> Result<Vec<FeedTarget>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let mut stmt = conn.prepare("SELECT id, url, etag, last_modified FROM feeds")?;
         let rows = stmt.query_map([], |r| {
             Ok(FeedTarget {
@@ -427,7 +461,7 @@ impl DuckdbDb {
     }
 
     pub fn get_feed_targets_by_id(&self, feed_id: i32) -> Result<Vec<FeedTarget>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let mut stmt =
             conn.prepare("SELECT id, url, etag, last_modified FROM feeds WHERE id = ?")?;
         let rows = stmt.query_map(params![feed_id], |r| {
@@ -458,7 +492,7 @@ impl DuckdbDb {
         published_at: Option<chrono::NaiveDateTime>,
         fetched_at: chrono::NaiveDateTime,
     ) -> Result<usize> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let n = conn.execute(
             "INSERT INTO articles (feed_id, guid, title, url, author, content, title_tokens, content_tokens, published_at, fetched_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -486,7 +520,7 @@ impl DuckdbDb {
         last_modified: Option<&str>,
         last_fetched_at: chrono::NaiveDateTime,
     ) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         conn.execute(
             "UPDATE feeds SET etag=?, last_modified=?, last_fetched_at=? WHERE id=?",
             params![etag, last_modified, last_fetched_at, feed_id],
@@ -495,7 +529,7 @@ impl DuckdbDb {
     }
 
     pub fn rebuild_search_index(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let count: i64 = conn.query_row("SELECT count(*) FROM articles", [], |r| r.get(0))?;
         if count == 0 {
             return Ok(());
@@ -511,7 +545,7 @@ impl DuckdbDb {
 
     /// Query a single feed by URL (used after reconcile to return the created/updated feed).
     pub fn get_feed_by_url(&self, url: &str) -> Result<Feed> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let feed = conn.query_row(
             "SELECT f.id, f.title, f.url, f.site_url, fo.name AS folder_name, COUNT(a.id) AS article_count
              FROM feeds f
@@ -536,7 +570,7 @@ impl DuckdbDb {
 
     /// Query a single folder by name (used after reconcile to return the created folder).
     pub fn get_folder_by_name(&self, name: &str) -> Result<Folder> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let folder = conn.query_row(
             "SELECT f.id, f.name, COUNT(fd.id) AS feed_count
              FROM folders f
@@ -557,7 +591,7 @@ impl DuckdbDb {
 
     /// Get feed URL by id (used in delete/update routes).
     pub fn get_feed_url_by_id(&self, id: i32) -> Result<String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let url: String = conn.query_row(
             "SELECT url FROM feeds WHERE id = ?",
             params![id],
@@ -568,7 +602,7 @@ impl DuckdbDb {
 
     /// Get feed info by id (url, title, folder_name) for update route.
     pub fn get_feed_info_by_id(&self, id: i32) -> Result<(String, String, Option<String>)> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let result = conn.query_row(
             "SELECT f.url, f.title, fo.name FROM feeds f LEFT JOIN folders fo ON fo.id = f.folder_id WHERE f.id = ?",
             params![id],
@@ -579,12 +613,66 @@ impl DuckdbDb {
 
     /// Get folder name by id.
     pub fn get_folder_name_by_id(&self, id: i32) -> Result<String> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn()?;
         let name: String = conn.query_row(
             "SELECT name FROM folders WHERE id = ?",
             params![id],
             |r| r.get(0),
         )?;
         Ok(name)
+    }
+
+    /// Transactionally insert articles and update feed fetch metadata.
+    /// Prevents partial success (articles inserted but metadata stale).
+    pub fn apply_fetch_result(
+        &self,
+        feed_id: i32,
+        articles: &[NewArticle],
+        meta: &FetchMeta,
+    ) -> Result<usize> {
+        let conn = self.conn()?;
+        conn.execute_batch("BEGIN")?;
+
+        let result: Result<usize> = (|| {
+            let mut inserted = 0usize;
+            for article in articles {
+                let n = conn.execute(
+                    "INSERT INTO articles (feed_id, guid, title, url, author, content, title_tokens, content_tokens, published_at, fetched_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ON CONFLICT (feed_id, guid) DO NOTHING",
+                    params![
+                        feed_id,
+                        article.guid,
+                        article.title,
+                        article.url,
+                        article.author,
+                        article.content,
+                        article.title_tokens,
+                        article.content_tokens,
+                        article.published_at,
+                        meta.fetched_at,
+                    ],
+                )?;
+                inserted += n;
+            }
+
+            conn.execute(
+                "UPDATE feeds SET etag=?, last_modified=?, last_fetched_at=? WHERE id=?",
+                params![meta.etag, meta.last_modified, meta.fetched_at, feed_id],
+            )?;
+
+            Ok(inserted)
+        })();
+
+        match result {
+            Ok(n) => {
+                conn.execute_batch("COMMIT")?;
+                Ok(n)
+            }
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                Err(e)
+            }
+        }
     }
 }

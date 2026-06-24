@@ -126,6 +126,13 @@ async fn main() -> Result<()> {
         }
     }
 
+    // 起動時 FTS インデックス再構築（トリガ作成前に insert された既存 articles を索引に反映）
+    {
+        let db_rebuild = db.clone();
+        tokio::task::spawn_blocking(move || db_rebuild.rebuild_search_index())
+            .await??;
+    }
+
     // フィード取得用クライアント（timeout付き、自動リダイレクト無効＝SSRF手動検証のため）
     let client = Client::builder()
         .user_agent("rss-reader/0.1")

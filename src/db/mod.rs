@@ -66,6 +66,27 @@ pub struct FeedTarget {
     pub last_modified: Option<String>,
 }
 
+/// Data for a new article to be inserted (used by apply_fetch_result).
+#[derive(Debug, Clone)]
+pub struct NewArticle {
+    pub guid: String,
+    pub title: String,
+    pub url: String,
+    pub author: String,
+    pub content: String,
+    pub title_tokens: String,
+    pub content_tokens: String,
+    pub published_at: Option<chrono::NaiveDateTime>,
+}
+
+/// Metadata update for a feed after fetching.
+#[derive(Debug, Clone)]
+pub struct FetchMeta {
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
+    pub fetched_at: chrono::NaiveDateTime,
+}
+
 // ── Enum dispatch ──
 
 /// Driver-independent database handle. Each variant delegates to its concrete implementation.
@@ -250,6 +271,20 @@ impl Db {
         match self {
             Db::Sqlite(s) => s.get_folder_name_by_id(id),
             Db::Duckdb(d) => d.get_folder_name_by_id(id),
+        }
+    }
+
+    /// Transactionally insert articles and update feed fetch metadata.
+    /// Returns the number of newly inserted articles.
+    pub fn apply_fetch_result(
+        &self,
+        feed_id: i32,
+        articles: &[NewArticle],
+        meta: &FetchMeta,
+    ) -> Result<usize> {
+        match self {
+            Db::Sqlite(s) => s.apply_fetch_result(feed_id, articles, meta),
+            Db::Duckdb(d) => d.apply_fetch_result(feed_id, articles, meta),
         }
     }
 }
