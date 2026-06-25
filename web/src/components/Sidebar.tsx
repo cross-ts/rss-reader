@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Folder, type Feed } from '../api/client';
+import { useToast } from './Toast';
 
 export type SidebarSelection =
   | { type: 'newsfeed' }
@@ -16,9 +17,10 @@ interface Props {
 
 export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) {
   const qc = useQueryClient();
+  const { addToast } = useToast();
 
-  const { data: folders = [] } = useQuery({ queryKey: ['folders'], queryFn: api.getFolders });
-  const { data: feeds = [] } = useQuery({ queryKey: ['feeds'], queryFn: api.getFeeds });
+  const { data: folders = [], isLoading: foldersLoading, isError: foldersError, refetch: refetchFolders } = useQuery({ queryKey: ['folders'], queryFn: api.getFolders });
+  const { data: feeds = [], isLoading: feedsLoading, isError: feedsError, refetch: refetchFeeds } = useQuery({ queryKey: ['feeds'], queryFn: api.getFeeds });
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
@@ -43,7 +45,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
       const folderName = newFolderForFeed.trim() || feedFolder.trim() || null;
       return api.createFeed(feedUrl.trim(), folderName);
     },
-    onSuccess: () => {
+    onSuccess: (feed) => {
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
       qc.invalidateQueries({ queryKey: ['articles'] });
@@ -51,6 +53,10 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
       setFeedFolder('');
       setNewFolderForFeed('');
       setDiscoverPreview(null);
+      addToast(`Feed "${feed.title || feed.url}" added`, 'success');
+    },
+    onError: (err) => {
+      addToast(err instanceof Error ? err.message : 'Failed to add feed', 'error');
     },
   });
 
@@ -74,10 +80,12 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
       qc.invalidateQueries({ queryKey: ['articles'] });
+      addToast('Feed deleted', 'success');
     },
     onError: (err) => {
       setDeletingFeedId(null);
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete feed');
+      addToast('Failed to delete feed', 'error');
     },
   });
 
@@ -92,10 +100,12 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
       qc.invalidateQueries({ queryKey: ['folders'] });
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['articles'] });
+      addToast('Folder deleted', 'success');
     },
     onError: (err) => {
       setDeletingFolderId(null);
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete folder');
+      addToast('Failed to delete folder', 'error');
     },
   });
 
@@ -279,16 +289,39 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
       )}
 
       {/* Feed tree */}
-      <nav className="flex-1 py-1 overflow-y-auto">
+      <nav className="flex-1 py-1 overflow-y-auto" aria-label="Feed navigation">
+        {/* Loading state */}
+        {(foldersLoading || feedsLoading) && (
+          <div className="px-4 py-6 text-center">
+            <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-[11px] text-text-sub">Loading feeds...</p>
+          </div>
+        )}
+
+        {/* Error state */}
+        {(foldersError || feedsError) && !foldersLoading && !feedsLoading && (
+          <div className="px-4 py-6 text-center">
+            <p className="text-[11px] text-danger mb-2">Failed to load feeds</p>
+            <button
+              onClick={() => { refetchFolders(); refetchFeeds(); }}
+              className="px-3 py-1.5 bg-accent text-white text-[11px] rounded-lg hover:bg-accent-hover transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Newsfeed (all articles) */}
+        {!foldersLoading && !feedsLoading && (<>
         <button
           className={[
-            'w-full flex items-center gap-2 px-4 py-2 text-left text-[13px] transition-colors',
+            'w-full flex items-center gap-2 px-4 py-2 text-left text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
             selection.type === 'newsfeed'
               ? 'bg-accent-light text-accent font-semibold'
               : 'text-text-primary hover:bg-surface-2',
           ].join(' ')}
           onClick={() => onSelect({ type: 'newsfeed' })}
+          aria-current={selection.type === 'newsfeed' ? 'page' : undefined}
         >
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
@@ -368,10 +401,10 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
                   )}
                 </button>
                 <button
-                  className="flex-shrink-0 mr-2 w-5 h-5 flex items-center justify-center text-[11px] text-text-sub opacity-0 group-hover:opacity-100 hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded hover:bg-surface-2"
+                  className="flex-shrink-0 mr-2 w-6 h-6 flex items-center justify-center text-[11px] text-text-sub opacity-0 group-hover:opacity-100 hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
                   onClick={() => handleDeleteFolder(folder)}
                   disabled={deletingFolderId === folder.id}
-                  title={`Delete folder "${folder.name}"`}
+                  aria-label={`Delete folder "${folder.name}"`}
                 >
                   {deletingFolderId === folder.id ? '...' : '✕'}
                 </button>
@@ -393,6 +426,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
             </div>
           );
         })}
+        </>)}
       </nav>
 
       {/* Settings info panel */}
@@ -431,11 +465,12 @@ function FeedRow({ feed, selected, onSelect, onDelete, deleting, unreadCount, in
     >
       <button
         className={[
-          'flex-1 flex items-center gap-2 py-1.5 text-left text-[13px] min-w-0',
+          'flex-1 flex items-center gap-2 py-1.5 text-left text-[13px] min-w-0 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
           indent ? 'pl-10 pr-1' : 'pl-4 pr-1',
           selected ? 'text-accent font-medium' : 'text-text-primary',
         ].join(' ')}
         onClick={onSelect}
+        aria-current={selected ? 'page' : undefined}
       >
         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-orange-400" />
         <span className="truncate">{feed.title || feed.url}</span>
@@ -446,10 +481,10 @@ function FeedRow({ feed, selected, onSelect, onDelete, deleting, unreadCount, in
         )}
       </button>
       <button
-        className="flex-shrink-0 mr-2 w-5 h-5 flex items-center justify-center text-[11px] text-text-sub opacity-0 group-hover:opacity-100 hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded hover:bg-surface-2"
+        className="flex-shrink-0 mr-2 w-6 h-6 flex items-center justify-center text-[11px] text-text-sub opacity-0 group-hover:opacity-100 hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
         disabled={deleting}
-        title="Delete feed"
+        aria-label={`Delete feed "${feed.title || feed.url}"`}
       >
         {deleting ? '...' : '✕'}
       </button>

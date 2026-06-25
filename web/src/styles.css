@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---- Toast slide-in animation ---- */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-slide-in {
+  animation: slide-in-right 0.25s ease-out;
+}
+
+/* ---- Skeleton shimmer animation ---- */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* ---- Help overlay backdrop ---- */
+.help-overlay-backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
 /* ---- Global resets ---- */
 html, body, #root {
   height: 100%;

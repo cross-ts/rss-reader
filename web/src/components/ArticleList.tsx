@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { type Article } from '../api/client';
 import { extractThumbnail } from '../utils/thumbnail';
 import { relativeTime } from '../utils/time';
+import { decodeEntities } from '../utils/decodeEntities';
 import type { ViewMode } from './Topbar';
 
 interface Props {
@@ -12,6 +13,35 @@ interface Props {
   onSelectArticle: (article: Article) => void;
   viewMode: ViewMode;
   isRead: (id: number) => boolean;
+  onRetry?: () => void;
+}
+
+// ---- Skeleton placeholders ----
+
+function SkeletonCard() {
+  return (
+    <div className="w-full bg-white rounded-xl border border-border overflow-hidden">
+      <div className="skeleton w-full h-36" />
+      <div className="p-3 flex flex-col gap-2">
+        <div className="skeleton h-4 w-4/5" />
+        <div className="skeleton h-3 w-3/5" />
+        <div className="skeleton h-3 w-2/5" />
+      </div>
+    </div>
+  );
+}
+
+function SkeletonRow() {
+  return (
+    <div className="w-full flex items-center gap-3 px-5 py-3 border-b border-border">
+      <div className="skeleton w-14 h-14 rounded-lg flex-shrink-0" />
+      <div className="flex-1 flex flex-col gap-1.5">
+        <div className="skeleton h-4 w-4/5" />
+        <div className="skeleton h-3 w-2/5" />
+      </div>
+      <div className="skeleton h-3 w-12 flex-shrink-0" />
+    </div>
+  );
 }
 
 export function ArticleList({
@@ -22,14 +52,25 @@ export function ArticleList({
   onSelectArticle,
   viewMode,
   isRead,
+  onRetry,
 }: Props) {
   if (isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-sm text-text-sub">Loading articles...</p>
+    if (viewMode === 'grid') {
+      return (
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }, (_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
         </div>
+      );
+    }
+    return (
+      <div className="flex-1 overflow-y-auto">
+        {Array.from({ length: 10 }, (_, i) => (
+          <SkeletonRow key={i} />
+        ))}
       </div>
     );
   }
@@ -37,7 +78,17 @@ export function ArticleList({
   if (isError) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <p className="text-sm text-danger">Failed to load articles</p>
+        <div className="text-center">
+          <p className="text-sm text-danger mb-3">Failed to load articles</p>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="px-4 py-2 bg-accent text-white text-sm rounded-lg hover:bg-accent-hover transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            >
+              Retry
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -104,12 +155,14 @@ function ArticleCard({
   const thumbnail = useMemo(() => extractThumbnail(article.content), [article.content]);
   const [imgError, setImgError] = useState(false);
   const showImg = thumbnail && !imgError;
+  const decodedTitle = useMemo(() => decodeEntities(article.title), [article.title]);
 
   return (
     <button
+      data-article-id={article.id}
       onClick={onSelect}
       className={[
-        'w-full text-left bg-white rounded-xl border overflow-hidden transition-all group',
+        'w-full text-left bg-white rounded-xl border overflow-hidden transition-all group focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
         selected
           ? 'border-accent shadow-card-hover ring-1 ring-accent/20'
           : 'border-border shadow-card hover:shadow-card-hover hover:border-border-strong',
@@ -137,7 +190,7 @@ function ArticleCard({
           {!read && (
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent mr-1.5 -translate-y-px flex-shrink-0" />
           )}
-          {article.title}
+          {decodedTitle}
         </h3>
         <div className="flex items-center gap-2 text-[11px] text-text-sub">
           <span className="truncate">{article.feedTitle}</span>
@@ -164,12 +217,14 @@ function ArticleRow({
   const thumbnail = useMemo(() => extractThumbnail(article.content), [article.content]);
   const [imgError, setImgError] = useState(false);
   const showImg = thumbnail && !imgError;
+  const decodedTitle = useMemo(() => decodeEntities(article.title), [article.title]);
 
   return (
     <button
+      data-article-id={article.id}
       onClick={onSelect}
       className={[
-        'w-full text-left flex items-center gap-3 px-5 py-3 border-b border-border transition-colors',
+        'w-full text-left flex items-center gap-3 px-5 py-3 border-b border-border transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
         selected
           ? 'bg-accent-light'
           : 'hover:bg-bg-alt',
@@ -199,7 +254,7 @@ function ArticleRow({
           'text-[13px] leading-snug truncate',
           read ? 'font-normal text-text-sub' : 'font-semibold text-text-primary',
         ].join(' ')}>
-          {article.title}
+          {decodedTitle}
         </h3>
         <div className="flex items-center gap-2 mt-0.5 text-[11px] text-text-sub">
           <span className="truncate">{article.feedTitle}</span>

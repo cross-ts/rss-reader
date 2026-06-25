@@ -18,8 +18,10 @@ function RailButton({
     <button
       onClick={onClick}
       title={title}
+      aria-label={title}
+      aria-pressed={active}
       className={[
-        'w-10 h-10 flex items-center justify-center rounded-lg transition-colors',
+        'w-10 h-10 flex items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
         active
           ? 'bg-icon-rail-active text-white'
           : 'text-gray-400 hover:bg-icon-rail-hover hover:text-gray-200',

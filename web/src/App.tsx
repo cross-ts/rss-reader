@@ -1,10 +1,12 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { IconRail } from './components/IconRail';
 import { Sidebar, type SidebarSelection } from './components/Sidebar';
 import { Topbar, type ViewMode } from './components/Topbar';
 import { ArticleList } from './components/ArticleList';
 import { ArticleView } from './components/ArticleView';
+import { HelpOverlay } from './components/HelpOverlay';
+import { ToastProvider, useToast } from './components/Toast';
 import { useReadState } from './hooks/useReadState';
 import { usePersistedState } from './hooks/usePersistedState';
 import { api, type Article } from './api/client';
@@ -19,9 +21,15 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Format a Date as HH:MM */
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 function AppInner() {
   const qc = useQueryClient();
-  const { isRead, markRead, markAllRead, readIds } = useReadState();
+  const { addToast } = useToast();
+  const { isRead, markRead, toggleRead, markAllRead, undoMarkAllRead, readIds } = useReadState();
 
   // Navigation state
   const [selection, setSelection] = useState<SidebarSelection>({ type: 'newsfeed' });
@@ -36,6 +44,15 @@ function AppInner() {
   const [viewMode, setViewMode] = usePersistedState<ViewMode>('rss.viewMode', 'grid');
   const [unreadOnly, setUnreadOnly] = usePersistedState<boolean>('rss.unreadOnly', false);
 
+  // Help overlay
+  const [showHelp, setShowHelp] = useState(false);
+
+  // Search input ref (for "/" shortcut)
+  const searchInputRef = useRef<HTMLInputElement>(null!);
+
+  // Last updated time
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
   // Build query params from selection
   const queryParams = useMemo(() => {
     const params: { folderId?: number; feedId?: number; q?: string; limit?: number } = {
@@ -47,10 +64,17 @@ function AppInner() {
     return params;
   }, [selection, committedQ]);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch: refetchArticles } = useQuery({
     queryKey: ['articles', queryParams],
     queryFn: () => api.getArticles(queryParams),
   });
+
+  // Track when articles are successfully fetched
+  useEffect(() => {
+    if (data) {
+      setLastUpdated(formatTime(new Date()));
+    }
+  }, [data]);
 
   // Also fetch all feeds for unread count calculations
   const { data: feeds = [] } = useQuery({ queryKey: ['feeds'], queryFn: api.getFeeds });
@@ -101,6 +125,15 @@ function AppInner() {
       qc.invalidateQueries({ queryKey: ['articles'] });
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
+      setLastUpdated(formatTime(new Date()));
+      addToast('Feeds refreshed', 'success');
+    },
+    onError: (err) => {
+      addToast(
+        err instanceof Error ? err.message : 'Failed to refresh',
+        'error',
+        { label: 'Retry', onClick: () => refresh.mutate() },
+      );
     },
   });
 
@@ -110,6 +143,18 @@ function AppInner() {
     if (!unreadOnly) return items;
     return items.filter((a) => !isRead(a.id));
   }, [data, unreadOnly, isRead]);
+
+  // Search scope label
+  const searchScope = useMemo(() => {
+    switch (selection.type) {
+      case 'newsfeed': return 'All';
+      case 'folder': return selection.folderName;
+      case 'feed': {
+        const feed = feeds.find((f) => f.id === selection.feedId);
+        return feed?.title || 'Feed';
+      }
+    }
+  }, [selection, feeds]);
 
   // View title
   const viewTitle = useMemo(() => {
@@ -123,6 +168,12 @@ function AppInner() {
       }
     }
   }, [selection, feeds, committedQ]);
+
+  // -- Selected article index management --
+  const selectedIndex = useMemo(() => {
+    if (!selectedArticle) return -1;
+    return articles.findIndex((a) => a.id === selectedArticle.id);
+  }, [articles, selectedArticle]);
 
   const handleSelectArticle = useCallback((article: Article) => {
     setSelectedArticle(article);
@@ -163,10 +214,25 @@ function AppInner() {
     setCommittedQ('');
   }, []);
 
+  // ---- Mark all read with undo ----
   const handleMarkAllRead = useCallback(() => {
-    const ids = articles.map((a) => a.id);
-    markAllRead(ids);
-  }, [articles, markAllRead]);
+    const unreadIds = articles.filter((a) => !isRead(a.id)).map((a) => a.id);
+    if (unreadIds.length === 0) return;
+    const count = markAllRead(unreadIds);
+    if (count > 0) {
+      addToast(
+        `${count} article${count !== 1 ? 's' : ''} marked as read`,
+        'success',
+        {
+          label: 'Undo',
+          onClick: () => {
+            undoMarkAllRead();
+            addToast('Undo: articles restored to unread', 'info');
+          },
+        },
+      );
+    }
+  }, [articles, isRead, markAllRead, undoMarkAllRead, addToast]);
 
   const handleToggleViewMode = useCallback(() => {
     setViewMode((prev) => prev === 'grid' ? 'list' : 'grid');
@@ -175,6 +241,188 @@ function AppInner() {
   const handleToggleUnreadOnly = useCallback(() => {
     setUnreadOnly((prev) => !prev);
   }, [setUnreadOnly]);
+
+  // ---- Article navigation helpers ----
+  const scrollArticleIntoView = useCallback((articleId: number) => {
+    const el = document.querySelector(`[data-article-id="${articleId}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, []);
+
+  const selectArticleByIndex = useCallback((index: number) => {
+    if (index >= 0 && index < articles.length) {
+      const article = articles[index];
+      setSelectedArticle(article);
+      // scrollIntoView happens after render
+      requestAnimationFrame(() => scrollArticleIntoView(article.id));
+    }
+  }, [articles, scrollArticleIntoView]);
+
+  const goToPrevArticle = useCallback(() => {
+    if (selectedIndex > 0) {
+      selectArticleByIndex(selectedIndex - 1);
+    }
+  }, [selectedIndex, selectArticleByIndex]);
+
+  const goToNextArticle = useCallback(() => {
+    if (selectedIndex < articles.length - 1) {
+      selectArticleByIndex(selectedIndex + 1);
+    }
+  }, [selectedIndex, articles.length, selectArticleByIndex]);
+
+  const goToNextUnread = useCallback(() => {
+    // Search from current position onwards
+    const startIdx = selectedIndex >= 0 ? selectedIndex + 1 : 0;
+    for (let i = startIdx; i < articles.length; i++) {
+      if (!isRead(articles[i].id)) {
+        selectArticleByIndex(i);
+        return;
+      }
+    }
+    // Wrap around from beginning
+    for (let i = 0; i < startIdx; i++) {
+      if (!isRead(articles[i].id)) {
+        selectArticleByIndex(i);
+        return;
+      }
+    }
+  }, [selectedIndex, articles, isRead, selectArticleByIndex]);
+
+  // ---- Keyboard shortcuts ----
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't fire shortcuts if user is typing in input/textarea/contenteditable
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      // If help overlay is open, only Esc and ? close it
+      if (showHelp) {
+        if (e.key === 'Escape' || e.key === '?') {
+          e.preventDefault();
+          setShowHelp(false);
+        }
+        return;
+      }
+
+      switch (e.key) {
+        case 'j': {
+          e.preventDefault();
+          if (articles.length === 0) return;
+          if (selectedIndex < 0) {
+            selectArticleByIndex(0);
+          } else if (selectedIndex < articles.length - 1) {
+            selectArticleByIndex(selectedIndex + 1);
+          }
+          break;
+        }
+        case 'k': {
+          e.preventDefault();
+          if (articles.length === 0) return;
+          if (selectedIndex > 0) {
+            selectArticleByIndex(selectedIndex - 1);
+          } else if (selectedIndex < 0 && articles.length > 0) {
+            selectArticleByIndex(0);
+          }
+          break;
+        }
+        case 'o':
+        case 'Enter': {
+          e.preventDefault();
+          if (selectedIndex >= 0 && selectedIndex < articles.length) {
+            setSelectedArticle(articles[selectedIndex]);
+          }
+          break;
+        }
+        case 'Escape': {
+          e.preventDefault();
+          if (selectedArticle) {
+            setSelectedArticle(null);
+          } else if (searchText || committedQ) {
+            handleSearchClear();
+            searchInputRef.current?.blur();
+          }
+          break;
+        }
+        case 'm': {
+          e.preventDefault();
+          if (selectedArticle) {
+            toggleRead(selectedArticle.id);
+          } else if (selectedIndex >= 0) {
+            toggleRead(articles[selectedIndex].id);
+          }
+          break;
+        }
+        case 'n': {
+          e.preventDefault();
+          goToNextUnread();
+          break;
+        }
+        case 'u': {
+          e.preventDefault();
+          const undone = undoMarkAllRead();
+          if (undone) {
+            addToast('Undo: articles restored to unread', 'info');
+          }
+          break;
+        }
+        case 'r': {
+          e.preventDefault();
+          if (!refresh.isPending) {
+            refresh.mutate();
+          }
+          break;
+        }
+        case '/': {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+          break;
+        }
+        case '?': {
+          e.preventDefault();
+          setShowHelp(true);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    articles, selectedArticle, selectedIndex, showHelp,
+    searchText, committedQ,
+    selectArticleByIndex, goToNextUnread,
+    toggleRead, undoMarkAllRead, handleSearchClear,
+    refresh, addToast,
+  ]);
+
+  // ---- ArticleView navigation callbacks ----
+  const handlePrevArticle = selectedIndex > 0 ? goToPrevArticle : null;
+  const handleNextArticle = selectedIndex < articles.length - 1 ? goToNextArticle : null;
+
+  // Check if there's a next unread
+  const hasNextUnread = useMemo(() => {
+    return articles.some((a) => !isRead(a.id));
+  }, [articles, isRead]);
+  const handleNextUnread = hasNextUnread ? goToNextUnread : null;
+
+  const handleToggleSelectedRead = useCallback(() => {
+    if (selectedArticle) {
+      toggleRead(selectedArticle.id);
+    }
+  }, [selectedArticle, toggleRead]);
+
+  // Retry handler for ArticleList
+  const handleRetryArticles = useCallback(() => {
+    refetchArticles();
+  }, [refetchArticles]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
@@ -206,6 +454,10 @@ function AppInner() {
           onMarkAllRead={handleMarkAllRead}
           onRefresh={() => refresh.mutate()}
           isRefreshing={refresh.isPending}
+          searchInputRef={searchInputRef}
+          searchHitCount={committedQ ? (data?.total ?? null) : null}
+          searchScope={searchScope}
+          lastUpdated={lastUpdated}
         />
 
         {/* Content: Article list + Article view */}
@@ -223,6 +475,7 @@ function AppInner() {
               onSelectArticle={handleSelectArticle}
               viewMode={selectedArticle ? 'list' : viewMode}
               isRead={isRead}
+              onRetry={handleRetryArticles}
             />
           </div>
 
@@ -232,10 +485,18 @@ function AppInner() {
               article={selectedArticle}
               onClose={handleCloseArticle}
               onMarkRead={markRead}
+              isRead={isRead(selectedArticle.id)}
+              onToggleRead={handleToggleSelectedRead}
+              onPrev={handlePrevArticle}
+              onNext={handleNextArticle}
+              onNextUnread={handleNextUnread}
             />
           )}
         </div>
       </div>
+
+      {/* Help overlay */}
+      <HelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   );
 }
@@ -243,7 +504,9 @@ function AppInner() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppInner />
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

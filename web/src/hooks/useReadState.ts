@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 const STORAGE_KEY = 'rss.read';
 
@@ -24,6 +24,8 @@ function saveReadIds(ids: Set<number>): void {
 
 export function useReadState() {
   const [readIds, setReadIds] = useState<Set<number>>(loadReadIds);
+  // Snapshot of readIds before the last markAllRead, for undo
+  const undoSnapshotRef = useRef<Set<number> | null>(null);
 
   // Sync to localStorage whenever readIds changes
   useEffect(() => {
@@ -44,19 +46,49 @@ export function useReadState() {
     });
   }, []);
 
-  const markAllRead = useCallback((ids: number[]): void => {
+  const toggleRead = useCallback((id: number): void => {
     setReadIds((prev) => {
       const next = new Set(prev);
-      let changed = false;
-      for (const id of ids) {
-        if (!next.has(id)) {
-          next.add(id);
-          changed = true;
-        }
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
       }
-      return changed ? next : prev;
+      return next;
     });
   }, []);
 
-  return { isRead, markRead, markAllRead, readIds } as const;
+  /**
+   * Mark all given ids as read. Returns the count of newly-marked ids.
+   * Saves a snapshot so the operation can be undone.
+   */
+  const markAllRead = useCallback((ids: number[]): number => {
+    let count = 0;
+    setReadIds((prev) => {
+      undoSnapshotRef.current = new Set(prev);
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (!next.has(id)) {
+          next.add(id);
+          count++;
+        }
+      }
+      return count > 0 ? next : prev;
+    });
+    return count;
+  }, []);
+
+  /** Undo the last markAllRead. Returns true if undo was performed. */
+  const undoMarkAllRead = useCallback((): boolean => {
+    const snapshot = undoSnapshotRef.current;
+    if (!snapshot) return false;
+    setReadIds(snapshot);
+    undoSnapshotRef.current = null;
+    return true;
+  }, []);
+
+  /** Whether an undo is available */
+  const canUndo = undoSnapshotRef.current !== null;
+
+  return { isRead, markRead, toggleRead, markAllRead, undoMarkAllRead, canUndo, readIds } as const;
 }

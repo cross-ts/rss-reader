@@ -1,21 +1,32 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import { type Article } from '../api/client';
 import { relativeTime } from '../utils/time';
+import { decodeEntities } from '../utils/decodeEntities';
 
 interface Props {
   article: Article | null;
   onClose: () => void;
   onMarkRead: (id: number) => void;
+  isRead?: boolean;
+  onToggleRead?: () => void;
+  onPrev?: (() => void) | null;
+  onNext?: (() => void) | null;
+  onNextUnread?: (() => void) | null;
 }
 
-export function ArticleView({ article, onClose, onMarkRead }: Props) {
+export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead, onPrev, onNext, onNextUnread }: Props) {
   // Mark as read when article is opened
   useEffect(() => {
     if (article) {
       onMarkRead(article.id);
     }
   }, [article, onMarkRead]);
+
+  const decodedTitle = useMemo(
+    () => (article ? decodeEntities(article.title) : ''),
+    [article],
+  );
 
   if (!article) {
     return (
@@ -52,19 +63,71 @@ export function ArticleView({ article, onClose, onMarkRead }: Props) {
       {/* Article header */}
       <div className="flex-shrink-0 px-8 pt-6 pb-4 border-b border-border">
         <div className="max-w-3xl mx-auto">
-          {/* Close button */}
-          <div className="flex items-start gap-3 mb-4">
+          {/* Close + navigation buttons */}
+          <div className="flex items-start gap-2 mb-4">
             <button
               onClick={onClose}
-              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary transition-colors"
-              title="Close article"
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+              aria-label="Close article"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
               </svg>
             </button>
-            <h1 className="text-xl font-bold text-text-primary leading-snug flex-1">
-              {article.title}
+
+            {/* Navigation buttons */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                onClick={onPrev ?? undefined}
+                disabled={!onPrev}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                aria-label="Previous article"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                </svg>
+              </button>
+              <button
+                onClick={onNext ?? undefined}
+                disabled={!onNext}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                aria-label="Next article"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+              <button
+                onClick={onNextUnread ?? undefined}
+                disabled={!onNextUnread}
+                className="flex items-center gap-1 px-2.5 h-8 rounded-lg text-xs font-medium text-text-sub hover:bg-bg-alt hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                aria-label="Next unread article"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Next unread
+              </button>
+              {onToggleRead && (
+                <button
+                  onClick={onToggleRead}
+                  className="flex items-center gap-1 px-2.5 h-8 rounded-lg text-xs font-medium text-text-sub hover:bg-bg-alt hover:text-text-primary transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                  aria-label={isRead ? 'Mark as unread' : 'Mark as read'}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    {isRead ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 9v.906a2.25 2.25 0 01-1.183 1.981l-6.478 3.488M2.25 9v.906a2.25 2.25 0 001.183 1.981l6.478 3.488m8.839 2.51l-4.66-2.51m0 0l-1.023-.55a2.25 2.25 0 00-2.134 0l-1.022.55m0 0l-4.661 2.51" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    )}
+                  </svg>
+                  {isRead ? 'Unread' : 'Read'}
+                </button>
+              )}
+            </div>
+
+            <h1 className="text-xl font-bold text-text-primary leading-snug flex-1 ml-1">
+              {decodedTitle}
             </h1>
           </div>
 
@@ -89,7 +152,7 @@ export function ArticleView({ article, onClose, onMarkRead }: Props) {
                 href={article.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bg-alt border border-border rounded-lg text-xs text-accent font-medium hover:bg-accent-light hover:border-accent/30 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bg-alt border border-border rounded-lg text-xs text-accent font-medium hover:bg-accent-light hover:border-accent/30 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
               >
                 Open original
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
