@@ -1,12 +1,12 @@
 # RSS Reader
 
-複数のRSS/Atomフィードを自動巡回してDuckDBに蓄積し、**日本語全文検索**付きでブラウザから閲覧できる、セルフホスト型のRSSリーダー（単一ユーザー・ローカル用途）。
+複数のRSS/Atomフィードを自動巡回してSQLiteに蓄積し、**日本語全文検索**付きでブラウザから閲覧できる、セルフホスト型のRSSリーダー（単一ユーザー・ローカル用途）。
 
 - バックエンド: Rust（axum + tokio）
-- ストレージ: DuckDB（`fts` 拡張による日本語全文検索）
-- 日本語トークナイズ: lindera（IPADIC）→ DuckDB FTS（BM25）
+- ストレージ: SQLite（rusqlite bundled + FTS5 による日本語全文検索）
+- 日本語トークナイズ: lindera（IPADIC）→ SQLite FTS5（BM25）
 - フロントエンド: React + Vite（SPA、3ペイン）
-- フィード定義: `feeds.opml` を **SSOT（単一の正本）** とし、DuckDBはそこから再構築される派生キャッシュ
+- フィード定義: `feeds.opml` を **SSOT（単一の正本）** とし、SQLiteはそこから再構築される派生キャッシュ
 
 ## 必要環境
 - Rust（cargo）
@@ -32,7 +32,7 @@ cargo run
 | `HOST` | `127.0.0.1` | バインドアドレス（既定はループバックのみ） |
 | `PORT` | `3000` | ポート |
 | `POLL_INTERVAL_MINUTES` | `15` | フィード巡回間隔 |
-| `DB_PATH` | `data/rss.duckdb` | DuckDBファイル |
+| `DB_PATH` | `data/rss.sqlite` | SQLiteファイル |
 | `FEEDS_PATH` | `feeds.opml` | フィード定義（SSOT） |
 | `FRONTEND_URL` | `https://cross-ts.github.io/rss-reader/` | フロント配信元（`STATIC_DIR` 未指定時にリバースプロキシ） |
 | `STATIC_DIR` | （未設定） | ローカル静的配信する場合のみ指定（例: `web/dist`） |
@@ -44,7 +44,7 @@ cargo run
 | フラグ | 対応 env 変数 | 既定値 | 説明 |
 |---|---|---|---|
 | `--feeds <PATH>` | `FEEDS_PATH` | `feeds.opml` | feeds.opml のパス |
-| `--db <PATH>` | `DB_PATH` | `data/rss.duckdb` | DuckDB ファイルのパス |
+| `--db <PATH>` | `DB_PATH` | `data/rss.sqlite` | SQLite ファイルのパス |
 | `--host <ADDR>` | `HOST` | `127.0.0.1` | バインドアドレス |
 | `-p`, `--port <PORT>` | `PORT` | `3000` | ポート番号 |
 | `--frontend-url <URL>` | `FRONTEND_URL` | `https://cross-ts.github.io/rss-reader/` | フロント配信元 URL |
@@ -59,14 +59,14 @@ rss-reader --help
 rss-reader --version
 
 # 例: ポートと DB パスを指定して起動
-rss-reader --port 3100 --db /var/data/rss.duckdb
+rss-reader --port 3100 --db /var/data/rss.sqlite
 ```
 
 > パス系オプション（`--feeds`, `--db`）は相対パスの場合 cwd 基準で絶対パスに解決されます。絶対パスを指定した場合はそのまま使用されます。
 
 ### リバースプロキシ配信（デフォルト）
 
-`STATIC_DIR` を指定しない場合、バックエンドは `FRONTEND_URL` が指す GitHub Pages からフロントを取得して `localhost` の単一オリジンで配信する（DuckDB UI 方式）。
+`STATIC_DIR` を指定しない場合、バックエンドは `FRONTEND_URL` が指す GitHub Pages からフロントを取得して `localhost` の単一オリジンで配信する。
 
 ```sh
 # FRONTEND_URL のデフォルトは https://cross-ts.github.io/rss-reader/
@@ -97,7 +97,7 @@ pnpm -C web run dev       # Vite :5173（/api を :3000 にプロキシ）
 ```
 
 ## feeds.opml（SSOT）
-フォルダとフィードの正本は `feeds.opml`。Web UIからの追加/削除/フォルダ変更はこのファイルへ書き戻され、その後DuckDBが `feeds.opml` に一致するよう再構築（reconcile）される。手動編集も可能（再起動で反映）。
+フォルダとフィードの正本は `feeds.opml`。Web UIからの追加/削除/フォルダ変更はこのファイルへ書き戻され、その後SQLiteが `feeds.opml` に一致するよう再構築（reconcile）される。手動編集も可能（再起動で反映）。
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <opml version="2.0">
@@ -119,7 +119,7 @@ pnpm -C web run dev       # Vite :5173（/api を :3000 にプロキシ）
 ## 主な機能
 - 複数フィードの定期巡回（条件付きGET）と `(feed_id, guid)` による重複排除
 - フォルダ単位のグルーピングと記事一覧（公開日降順）
-- 日本語キーワードの全文検索（lindera + DuckDB FTS / BM25）
+- 日本語キーワードの全文検索（lindera + SQLite FTS5 / BM25）
 - Web UIからのフィード/フォルダ管理
 
 ## セキュリティ上の注意
@@ -130,14 +130,14 @@ pnpm -C web run dev       # Vite :5173（/api を :3000 にプロキシ）
 ## 既知の制限 / 今後の対応（codexアーキテクチャレビュー由来）
 MVPとして許容し、将来対応とする項目:
 - **ポーリングのsingle-flight化**: 起動巡回・定期巡回・手動更新・フィード追加時取得が重複し得る。
-- **FTS再構築の最適化**: 現在は巡回ごとに全件再構築（`overwrite=1`）。変更があった時のみ/差分・デバウンス化したい。
+- **FTS再構築の最適化**: 現在は巡回ごとに全件再構築（`rebuild`）。変更があった時のみ/差分・デバウンス化したい。
 - **DBアクセスの並行性**: 単一 `Connection` + `Mutex`。feed単位のバッチトランザクション、読み書き接続分離が望ましい。
 - **lindera tokenizer の再利用**: 現在は呼び出し毎に辞書ロード。1度だけ構築して共有したい。
 - **GUIDのupsert**: 現在は `DO NOTHING`。記事の訂正・更新が反映されない。
 - **安定ID / ソフトデリート**: フィード再追加でIDが変わり得る。`feeds.yaml` に不変IDを持たせる案。
 - **CSP / 画像プロキシ**: CSPヘッダ、外部画像の取り扱い。
 - **VSS（ベクトル類似検索）**: （撤去済・将来再導入余地）
-- **WAL/クラッシュ堅牢性**: FTSインデックス再構築（`overwrite=1`）中にプロセスが異常終了すると、WALが再生不能になり起動できなくなる場合がある（`Cannot drop entry fts_main_articles`）。暫定復旧は `data/rss.duckdb.wal` の削除（メインDBは保持。記事はSSOT＋再巡回で復元）。将来対応: 再構築後の `CHECKPOINT`、または起動時のWAL自動復旧。
+- **WAL/クラッシュ堅牢性**: SQLite WAL モード使用中。通常は自動復旧されるが、異常終了時に WAL/SHM ファイルが残る場合がある。
 
 ## 既知の制約（将来対応）
 
@@ -149,5 +149,5 @@ MVPとして許容し、将来対応とする項目:
 - **フィード自動検出の簡易実装**: `rel=alternate` の優先順位付けや候補の絞り込みが未実装。
 - **SPA フォールバック判定**: 拡張子有無のみで判定しており、`Accept` ヘッダ（`text/html` を期待するかどうか）を考慮していない。
 - **ポーリングの single-flight**: 起動巡回・定期巡回・手動更新・フィード追加時の取得が重複し得る。
-- **WAL/クラッシュ堅牢性**: 前述のとおり。
+- **WAL/クラッシュ堅牢性**: SQLite WAL モード使用中。前述のとおり。
 - **VSS（ローカル埋め込みによる類似記事検索）**: 撤去済み。将来再導入の余地あり。

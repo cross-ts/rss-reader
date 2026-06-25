@@ -1,9 +1,10 @@
 /target
-/data/*.duckdb
-/data/*.duckdb.wal
+/data/
 /web/dist
 /web/node_modules
 node_modules
 .env
-*.duckdb
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 .DS_Store

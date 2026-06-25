@@ -1,22 +1,6 @@
 use anyhow::{bail, Result};
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use std::path::{Path, PathBuf};
-
-/// DB driver selection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum DbDriver {
-    Sqlite,
-    Duckdb,
-}
-
-impl std::fmt::Display for DbDriver {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DbDriver::Sqlite => write!(f, "sqlite"),
-            DbDriver::Duckdb => write!(f, "duckdb"),
-        }
-    }
-}
 
 /// セルフホスト型 RSS リーダー
 #[derive(Parser, Debug)]
@@ -26,12 +10,8 @@ pub struct Cli {
     #[arg(long = "feeds", env = "FEEDS_PATH", default_value = "feeds.opml")]
     pub feeds_path: String,
 
-    /// DB driver（sqlite or duckdb）
-    #[arg(long = "db-driver", env = "DB_DRIVER", value_enum, default_value = "sqlite")]
-    pub db_driver: DbDriver,
-
     /// DB ファイルのパス（相対パスは cwd 基準で解決）。
-    /// 未指定時は driver に応じた既定パスを使用。
+    /// 未指定時は data/rss.sqlite を使用。
     #[arg(long = "db", env = "DB_PATH")]
     pub db_path: Option<String>,
 
@@ -58,8 +38,6 @@ pub struct Cli {
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// DB driver.
-    pub db_driver: DbDriver,
     /// DB ファイルパス（絶対パスに解決済み）。
     pub db_path: String,
     /// feeds.opml パス（絶対パスに解決済み）。
@@ -102,16 +80,10 @@ impl Config {
         // static_dir: 空文字列は None として扱う（env 由来で空文字列が渡る場合の互換）
         let static_dir = cli.static_dir.filter(|s| !s.is_empty());
 
-        // DB パス: 未指定時は driver に応じた既定パスを補完
-        let db_path_raw = cli.db_path.unwrap_or_else(|| {
-            match cli.db_driver {
-                DbDriver::Sqlite => "data/rss.sqlite".to_string(),
-                DbDriver::Duckdb => "data/rss.duckdb".to_string(),
-            }
-        });
+        // DB パス: 未指定時は既定パスを補完
+        let db_path_raw = cli.db_path.unwrap_or_else(|| "data/rss.sqlite".to_string());
 
         Ok(Config {
-            db_driver: cli.db_driver,
             db_path: resolve_path(&cwd, &db_path_raw)
                 .to_string_lossy()
                 .into_owned(),

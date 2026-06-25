@@ -66,7 +66,6 @@ async fn main() -> Result<()> {
     let bind_addr = format!("{}:{}", config.host, config.port);
 
     tracing::info!("Starting rss-reader");
-    tracing::info!("  driver   = {}", config.db_driver);
     tracing::info!("  bind     = {}", bind_addr);
     tracing::info!("  db       = {}", config.db_path);
     tracing::info!("  feeds    = {}", config.feeds_path);
@@ -76,7 +75,7 @@ async fn main() -> Result<()> {
     }
 
     // DB の親ディレクトリ作成は Db::open 内で行われる（create_dir_all）。
-    let db = Db::open(&config.db_path, config.db_driver)?;
+    let db = Db::open(&config.db_path)?;
 
     // feeds.opml フェイルセーフ起動
     {
@@ -196,7 +195,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// 非 /api リクエストを FRONTEND_URL へリバースプロキシする（DuckDB UI 方式）。
+/// 非 /api リクエストを FRONTEND_URL へリバースプロキシする。
 /// 拡張子の無いパスは SPA とみなし index.html にフォールバック。
 /// アセットらしいパス（拡張子あり）で上流が 404 を返した場合はその 404 をそのまま伝播する。
 async fn proxy_handler(State(state): State<AppState>, req: Request) -> Response {
