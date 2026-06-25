@@ -2,18 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---- Global resets ---- */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: #ffffff;
+  color: #1f2937;
+}
+
+/* ---- Scrollbar styling (light theme) ---- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
 /* ---- article-view-body (sanitized HTML content) ---- */
 .article-view-body {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.8;
   word-break: break-word;
+  color: #374151;
 }
 
 .article-view-body img {
   max-width: 100%;
   height: auto;
-  border-radius: 4px;
-  margin: 8px 0;
+  border-radius: 6px;
+  margin: 12px 0;
 }
 
 .article-view-body p {
@@ -24,33 +51,41 @@
 .article-view-body h2,
 .article-view-body h3,
 .article-view-body h4 {
-  margin: 1.2em 0 0.6em;
+  margin: 1.4em 0 0.6em;
   font-weight: 700;
   line-height: 1.4;
+  color: #1f2937;
 }
 
+.article-view-body h1 { font-size: 1.5em; }
+.article-view-body h2 { font-size: 1.3em; }
+.article-view-body h3 { font-size: 1.15em; }
+
 .article-view-body a {
-  color: #2dd4bf;
+  color: #2563eb;
+  text-decoration: none;
 }
 
 .article-view-body a:hover {
   text-decoration: underline;
+  color: #1d4ed8;
 }
 
 .article-view-body pre {
-  background: #1e2124;
-  padding: 12px 16px;
-  border-radius: 6px;
+  background: #f3f4f6;
+  padding: 14px 18px;
+  border-radius: 8px;
   overflow-x: auto;
   font-size: 13px;
   margin: 1em 0;
+  border: 1px solid #e5e7eb;
   font-family: ui-monospace, "SF Mono", Menlo, "Cascadia Code", Consolas, monospace;
 }
 
 .article-view-body code {
-  background: #1e2124;
-  padding: 2px 5px;
-  border-radius: 3px;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
   font-size: 0.9em;
   font-family: ui-monospace, "SF Mono", Menlo, "Cascadia Code", Consolas, monospace;
 }
@@ -61,10 +96,11 @@
 }
 
 .article-view-body blockquote {
-  border-left: 3px solid #2a2e33;
+  border-left: 3px solid #d1d5db;
   padding-left: 16px;
-  color: #8b949e;
+  color: #6b7280;
   margin: 1em 0;
+  font-style: italic;
 }
 
 .article-view-body ul,
@@ -75,4 +111,22 @@
 
 .article-view-body li {
   margin-bottom: 0.3em;
+}
+
+.article-view-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+.article-view-body th,
+.article-view-body td {
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.article-view-body th {
+  background: #f7f8fa;
+  font-weight: 600;
 }

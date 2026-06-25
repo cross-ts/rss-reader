@@ -2,33 +2,41 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Folder, type Feed } from '../api/client';
 
+export type SidebarSelection =
+  | { type: 'newsfeed' }
+  | { type: 'folder'; folderId: number; folderName: string }
+  | { type: 'feed'; feedId: number };
+
 interface Props {
-  selectedFolderId: number | null;
-  selectedFeedId: number | null;
-  onSelectFolder: (id: number | null) => void;
-  onSelectFeed: (id: number | null) => void;
+  selection: SidebarSelection;
+  onSelect: (sel: SidebarSelection) => void;
+  unreadCounts: { feeds: Map<number, number>; folders: Map<number, number>; total: number };
+  railView: 'newsfeed' | 'search' | 'add' | 'settings';
 }
 
-export function Sidebar({ selectedFolderId, selectedFeedId, onSelectFolder, onSelectFeed }: Props) {
+export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) {
   const qc = useQueryClient();
 
   const { data: folders = [] } = useQuery({ queryKey: ['folders'], queryFn: api.getFolders });
   const { data: feeds = [] } = useQuery({ queryKey: ['feeds'], queryFn: api.getFeeds });
 
-  // フィード追加フォーム
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+
+  // Feed addition form
   const [feedUrl, setFeedUrl] = useState('');
   const [feedFolder, setFeedFolder] = useState('');
   const [newFolderForFeed, setNewFolderForFeed] = useState('');
-
-  // フォルダ追加フォーム
-  const [newFolderName, setNewFolderName] = useState('');
-
-  // フィード検出プレビュー
   const [discoverPreview, setDiscoverPreview] = useState<{ feedUrl: string; title?: string | null } | null>(null);
 
-  // 削除中フォルダIDを追跡（どのフォルダの操作中かを識別するため）
+  // Folder addition
+  const [newFolderName, setNewFolderName] = useState('');
+
+  // Deletion tracking
   const [deletingFolderId, setDeletingFolderId] = useState<number | null>(null);
-  const [deleteFolderError, setDeleteFolderError] = useState<{ id: number; message: string } | null>(null);
+  const [deletingFeedId, setDeletingFeedId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const discoverSeqRef = React.useRef(0);
 
   const addFeed = useMutation({
     mutationFn: () => {
@@ -38,6 +46,7 @@ export function Sidebar({ selectedFolderId, selectedFeedId, onSelectFolder, onSe
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
       setFeedUrl('');
       setFeedFolder('');
       setNewFolderForFeed('');
@@ -55,40 +64,45 @@ export function Sidebar({ selectedFolderId, selectedFeedId, onSelectFolder, onSe
 
   const deleteFeed = useMutation({
     mutationFn: (id: number) => api.deleteFeed(id),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
+      setDeletingFeedId(null);
+      setDeleteError(null);
+      // If we deleted the currently selected feed, go back to newsfeed
+      if (selection.type === 'feed' && selection.feedId === id) {
+        onSelect({ type: 'newsfeed' });
+      }
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+    },
+    onError: (err) => {
+      setDeletingFeedId(null);
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete feed');
     },
   });
 
   const deleteFolder = useMutation({
     mutationFn: (id: number) => api.deleteFolder(id),
     onSuccess: (_data, id) => {
-      // 修正1: 削除したフォルダが現在選択中なら選択を解除
-      if (selectedFolderId === id) {
-        onSelectFolder(null);
-      }
       setDeletingFolderId(null);
-      setDeleteFolderError(null);
+      setDeleteError(null);
+      if (selection.type === 'folder' && selection.folderId === id) {
+        onSelect({ type: 'newsfeed' });
+      }
       qc.invalidateQueries({ queryKey: ['folders'] });
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['articles'] });
     },
-    onError: (err, id) => {
-      // 修正2: 削除失敗時にどのフォルダのエラーか記録
+    onError: (err) => {
       setDeletingFolderId(null);
-      setDeleteFolderError({ id, message: err instanceof Error ? err.message : '削除に失敗しました' });
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete folder');
     },
   });
-
-  // 修正4: 最新リクエストのみ反映するためのカウンタ
-  const discoverSeqRef = React.useRef(0);
 
   const discoverFeed = useMutation({
     mutationFn: async (url: string) => {
       const seq = ++discoverSeqRef.current;
       const data = await api.discoverFeed(url);
-      // 古いレスポンスは捨てる
       if (seq !== discoverSeqRef.current) return null;
       return data;
     },
@@ -99,7 +113,7 @@ export function Sidebar({ selectedFolderId, selectedFeedId, onSelectFolder, onSe
     },
   });
 
-  // フォルダ別にフィードをグループ化
+  // Group feeds by folder
   const folderMap = new Map<string | null, Feed[]>();
   for (const feed of feeds) {
     const key = feed.folder;
@@ -107,11 +121,19 @@ export function Sidebar({ selectedFolderId, selectedFeedId, onSelectFolder, onSe
     folderMap.get(key)!.push(feed);
   }
 
-  // フォルダ名セット（API から取得したフォルダ + フィードに付いているフォルダ）
   const folderNames = new Set<string>(folders.map((f: Folder) => f.name));
   for (const feed of feeds) {
     if (feed.folder) folderNames.add(feed.folder);
   }
+
+  const toggleFolder = (name: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   const handleAddFeed = (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,211 +154,304 @@ export function Sidebar({ selectedFolderId, selectedFeedId, onSelectFolder, onSe
 
   const handleDeleteFolder = (folder: Folder) => {
     const ok = window.confirm(
-      `フォルダ「${folder.name}」を削除しますか？\n（フォルダ内のフィードは未分類になります）`
+      `Delete folder "${folder.name}"?\nFeeds inside will become uncategorized.`
     );
     if (ok) {
-      setDeleteFolderError(null);
+      setDeleteError(null);
       setDeletingFolderId(folder.id);
       deleteFolder.mutate(folder.id);
     }
   };
 
+  const handleDeleteFeed = (feed: Feed) => {
+    const ok = window.confirm(`Delete feed "${feed.title || feed.url}"?`);
+    if (ok) {
+      setDeleteError(null);
+      setDeletingFeedId(feed.id);
+      deleteFeed.mutate(feed.id);
+    }
+  };
+
+  // Show add-feed panel when rail "add" is active
+  const showAddPanel = railView === 'add';
+
   return (
-    <aside className="bg-surface border-r border-border flex flex-col overflow-y-auto overflow-x-hidden h-screen">
-      {/* ヘッダー */}
-      <div className="px-4 py-4 border-b border-border flex-shrink-0">
-        <h2 className="text-base font-bold text-accent tracking-tight">RSS reader</h2>
+    <aside className="w-[260px] bg-surface flex flex-col overflow-hidden h-full border-r border-border flex-shrink-0">
+      {/* Header */}
+      <div className="px-4 py-3 flex-shrink-0">
+        <h2 className="text-sm font-semibold text-text-primary tracking-tight">Feeds</h2>
       </div>
 
-      {/* フィード追加 */}
-      <section className="px-3 py-3 border-b border-border flex-shrink-0">
-        <h3 className="text-[10px] font-semibold uppercase tracking-widest text-text-sub mb-2">
-          フィード追加
-        </h3>
-        <form onSubmit={handleAddFeed} className="flex flex-col gap-1.5">
-          <div className="flex gap-1">
+      {/* Error display */}
+      {deleteError && (
+        <div className="mx-3 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-danger">
+          {deleteError}
+          <button onClick={() => setDeleteError(null)} className="ml-2 text-text-sub hover:text-text-primary">dismiss</button>
+        </div>
+      )}
+
+      {/* Add feed panel (shown when rail add is active) */}
+      {showAddPanel && (
+        <div className="px-3 pb-3 border-b border-border flex-shrink-0">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-sub mb-2">
+            Add Feed
+          </h3>
+          <form onSubmit={handleAddFeed} className="flex flex-col gap-2">
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="Site or feed URL"
+                value={feedUrl}
+                onChange={(e) => { setFeedUrl(e.target.value); setDiscoverPreview(null); discoverFeed.reset(); }}
+                className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+              />
+              <button
+                type="button"
+                onClick={handleDiscover}
+                disabled={discoverFeed.isPending || !feedUrl.trim()}
+                className="px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-sub hover:text-text-primary hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {discoverFeed.isPending ? '...' : 'Detect'}
+              </button>
+            </div>
+
+            {discoverPreview && (
+              <div className="px-2.5 py-2 bg-accent-light border border-accent/20 rounded-md text-xs">
+                <p className="text-accent font-semibold truncate">{discoverPreview.title ?? '(Untitled)'}</p>
+                <p className="text-text-sub truncate text-[11px]">{discoverPreview.feedUrl}</p>
+              </div>
+            )}
+            {discoverFeed.isError && (
+              <p className="text-danger text-xs">Feed detection failed</p>
+            )}
+
+            <select
+              value={feedFolder}
+              onChange={(e) => setFeedFolder(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+            >
+              <option value="">No folder</option>
+              {[...folderNames].map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
             <input
               type="text"
-              placeholder="サイト or フィードURL"
-              value={feedUrl}
-              onChange={(e) => { setFeedUrl(e.target.value); setDiscoverPreview(null); discoverFeed.reset(); }}
-              className="flex-1 min-w-0 px-2 py-1.5 bg-surface-2 border border-border rounded text-xs font-mono text-text-primary placeholder-text-sub focus:outline-none focus:border-accent"
+              placeholder="New folder name (optional)"
+              value={newFolderForFeed}
+              onChange={(e) => setNewFolderForFeed(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
             />
             <button
-              type="button"
-              onClick={handleDiscover}
-              disabled={discoverFeed.isPending || !feedUrl.trim()}
-              className="px-2 py-1.5 bg-surface-3 border border-border rounded text-xs text-text-sub hover:text-text-primary hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              type="submit"
+              disabled={addFeed.isPending}
+              className="px-3 py-1.5 bg-accent text-white rounded-md text-xs font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {discoverFeed.isPending ? '…' : '検出'}
+              {addFeed.isPending ? 'Adding...' : 'Add Feed'}
             </button>
-          </div>
+            {addFeed.isError && <p className="text-danger text-xs">Failed to add feed</p>}
+          </form>
 
-          {/* 検出プレビュー */}
-          {discoverPreview && (
-            <div className="px-2 py-1.5 bg-surface-3 border border-accent/30 rounded text-xs">
-              <p className="text-accent font-semibold truncate">{discoverPreview.title ?? '（タイトルなし）'}</p>
-              <p className="font-mono text-text-sub truncate">{discoverPreview.feedUrl}</p>
-            </div>
-          )}
-          {discoverFeed.isError && (
-            <p className="text-danger text-xs">フィード検出に失敗しました</p>
-          )}
-
-          <select
-            value={feedFolder}
-            onChange={(e) => setFeedFolder(e.target.value)}
-            className="w-full px-2 py-1.5 bg-surface-2 border border-border rounded text-xs text-text-primary focus:outline-none focus:border-accent"
-          >
-            <option value="">フォルダなし</option>
-            {[...folderNames].map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
-          <input
-            type="text"
-            placeholder="新規フォルダ名（任意）"
-            value={newFolderForFeed}
-            onChange={(e) => setNewFolderForFeed(e.target.value)}
-            className="w-full px-2 py-1.5 bg-surface-2 border border-border rounded text-xs text-text-primary placeholder-text-sub focus:outline-none focus:border-accent"
-          />
-          <button
-            type="submit"
-            disabled={addFeed.isPending}
-            className="px-3 py-1.5 bg-accent text-bg rounded text-xs font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {addFeed.isPending ? '追加中…' : '追加'}
-          </button>
-          {addFeed.isError && <p className="text-danger text-xs">追加に失敗しました</p>}
-        </form>
-      </section>
-
-      {/* フォルダ追加 */}
-      <section className="px-3 py-3 border-b border-border flex-shrink-0">
-        <h3 className="text-[10px] font-semibold uppercase tracking-widest text-text-sub mb-2">
-          フォルダ追加
-        </h3>
-        <form onSubmit={handleAddFolder} className="flex gap-1.5">
-          <input
-            type="text"
-            placeholder="フォルダ名"
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            required
-            className="flex-1 min-w-0 px-2 py-1.5 bg-surface-2 border border-border rounded text-xs text-text-primary placeholder-text-sub focus:outline-none focus:border-accent"
-          />
-          <button
-            type="submit"
-            disabled={addFolder.isPending}
-            className="px-3 py-1.5 bg-surface-3 border border-border rounded text-xs text-text-sub hover:text-text-primary hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {addFolder.isPending ? '…' : '追加'}
-          </button>
-        </form>
-      </section>
-
-      {/* フィードツリー */}
-      <nav className="flex-1 py-2 overflow-y-auto">
-        {/* フォルダなしのフィード */}
-        {(folderMap.get(null) ?? []).length > 0 && (
-          <div className="mb-1">
-            <div className="px-4 py-1.5 text-xs font-semibold text-text-sub">
-              未分類
-            </div>
-            {(folderMap.get(null) ?? []).map((feed) => (
-              <FeedItem
-                key={feed.id}
-                feed={feed}
-                selected={selectedFeedId === feed.id}
-                onSelect={() => { onSelectFolder(null); onSelectFeed(feed.id); }}
-                onDelete={() => deleteFeed.mutate(feed.id)}
+          {/* Folder creation */}
+          <div className="mt-3 pt-3 border-t border-border">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-sub mb-2">
+              Create Folder
+            </h3>
+            <form onSubmit={handleAddFolder} className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="Folder name"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                required
+                className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
-            ))}
+              <button
+                type="submit"
+                disabled={addFolder.isPending}
+                className="px-3 py-1.5 bg-white border border-border rounded-md text-xs text-text-sub hover:text-text-primary hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {addFolder.isPending ? '...' : 'Create'}
+              </button>
+            </form>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* フォルダ別 */}
+      {/* Feed tree */}
+      <nav className="flex-1 py-1 overflow-y-auto">
+        {/* Newsfeed (all articles) */}
+        <button
+          className={[
+            'w-full flex items-center gap-2 px-4 py-2 text-left text-[13px] transition-colors',
+            selection.type === 'newsfeed'
+              ? 'bg-accent-light text-accent font-semibold'
+              : 'text-text-primary hover:bg-surface-2',
+          ].join(' ')}
+          onClick={() => onSelect({ type: 'newsfeed' })}
+        >
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+          </svg>
+          <span className="flex-1 truncate">All Articles</span>
+          {unreadCounts.total > 0 && (
+            <span className="flex-shrink-0 bg-accent text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+              {unreadCounts.total > 999 ? '999+' : unreadCounts.total}
+            </span>
+          )}
+        </button>
+
+        {/* Uncategorized feeds */}
+        {(folderMap.get(null) ?? []).map((feed) => (
+          <FeedRow
+            key={feed.id}
+            feed={feed}
+            selected={selection.type === 'feed' && selection.feedId === feed.id}
+            onSelect={() => onSelect({ type: 'feed', feedId: feed.id })}
+            onDelete={() => handleDeleteFeed(feed)}
+            deleting={deletingFeedId === feed.id}
+            unreadCount={unreadCounts.feeds.get(feed.id) ?? 0}
+            indent={false}
+          />
+        ))}
+
+        {/* Folders */}
         {folders.map((folder: Folder) => {
-          const isFolderDeleting = deletingFolderId === folder.id;
-          const folderError = deleteFolderError?.id === folder.id ? deleteFolderError.message : null;
+          const isExpanded = expandedFolders.has(folder.name);
+          const folderFeeds = folderMap.get(folder.name) ?? [];
+          const folderSelected = selection.type === 'folder' && selection.folderId === folder.id;
+          const folderUnread = unreadCounts.folders.get(folder.id) ?? 0;
+
           return (
-          <div key={folder.id} className="mb-1">
-            <div className="flex items-center group">
-              <button
-                className={[
-                  'flex-1 flex items-center gap-1.5 px-4 py-1.5 text-left text-xs font-semibold text-text-primary hover:bg-surface-3 transition-colors',
-                  selectedFolderId === folder.id && selectedFeedId === null
-                    ? 'bg-surface-3 border-l-2 border-accent pl-[14px]'
-                    : '',
-                ].join(' ')}
-                onClick={() => { onSelectFolder(folder.id); onSelectFeed(null); }}
-              >
-                <span className="truncate">&#x1F4C1; {folder.name}</span>
-                <span className="ml-auto flex-shrink-0 bg-surface-3 text-text-sub text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-                  {folder.feedCount}
-                </span>
-              </button>
-              {/* フォルダ削除ボタン — isPending 中は disabled で連打防止 */}
-              <button
-                className="flex-shrink-0 mr-2 px-1.5 py-1 text-[10px] text-text-sub opacity-0 group-hover:opacity-100 hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                onClick={() => handleDeleteFolder(folder)}
-                disabled={isFolderDeleting}
-                title={`フォルダ「${folder.name}」を削除（フィードは未分類になります）`}
-              >
-                {isFolderDeleting ? '…' : '✕'}
-              </button>
+            <div key={folder.id}>
+              <div className={[
+                'flex items-center group transition-colors',
+                folderSelected
+                  ? 'bg-accent-light'
+                  : 'hover:bg-surface-2',
+              ].join(' ')}>
+                {/* Expand/collapse chevron */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleFolder(folder.name); }}
+                  className="flex-shrink-0 w-6 h-8 ml-2 flex items-center justify-center text-text-sub hover:text-text-primary"
+                >
+                  <svg
+                    className={['w-3 h-3 transition-transform', isExpanded ? 'rotate-90' : ''].join(' ')}
+                    fill="currentColor" viewBox="0 0 20 20"
+                  >
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                {/* Folder name button */}
+                <button
+                  className={[
+                    'flex-1 flex items-center gap-1.5 pr-1 py-2 text-left text-[13px]',
+                    folderSelected
+                      ? 'text-accent font-semibold'
+                      : 'text-text-primary',
+                  ].join(' ')}
+                  onClick={() => {
+                    onSelect({ type: 'folder', folderId: folder.id, folderName: folder.name });
+                    if (!isExpanded) {
+                      setExpandedFolders((prev) => new Set(prev).add(folder.name));
+                    }
+                  }}
+                >
+                  <svg className="w-4 h-4 flex-shrink-0 text-text-sub" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+                  </svg>
+                  <span className="flex-1 truncate">{folder.name}</span>
+                  {folderUnread > 0 && (
+                    <span className="flex-shrink-0 bg-text-sub/10 text-text-sub text-[10px] font-semibold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                      {folderUnread > 999 ? '999+' : folderUnread}
+                    </span>
+                  )}
+                </button>
+                <button
+                  className="flex-shrink-0 mr-2 w-5 h-5 flex items-center justify-center text-[11px] text-text-sub opacity-0 group-hover:opacity-100 hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded hover:bg-surface-2"
+                  onClick={() => handleDeleteFolder(folder)}
+                  disabled={deletingFolderId === folder.id}
+                  title={`Delete folder "${folder.name}"`}
+                >
+                  {deletingFolderId === folder.id ? '...' : '✕'}
+                </button>
+              </div>
+
+              {/* Expanded feeds */}
+              {isExpanded && folderFeeds.map((feed) => (
+                <FeedRow
+                  key={feed.id}
+                  feed={feed}
+                  selected={selection.type === 'feed' && selection.feedId === feed.id}
+                  onSelect={() => onSelect({ type: 'feed', feedId: feed.id })}
+                  onDelete={() => handleDeleteFeed(feed)}
+                  deleting={deletingFeedId === feed.id}
+                  unreadCount={unreadCounts.feeds.get(feed.id) ?? 0}
+                  indent={true}
+                />
+              ))}
             </div>
-            {/* 削除失敗エラー表示 */}
-            {folderError && (
-              <p className="px-4 py-0.5 text-[10px] text-danger">{folderError}</p>
-            )}
-            {(folderMap.get(folder.name) ?? []).map((feed) => (
-              <FeedItem
-                key={feed.id}
-                feed={feed}
-                selected={selectedFeedId === feed.id}
-                onSelect={() => { onSelectFolder(null); onSelectFeed(feed.id); }}
-                onDelete={() => deleteFeed.mutate(feed.id)}
-              />
-            ))}
-          </div>
           );
         })}
       </nav>
+
+      {/* Settings info panel */}
+      {railView === 'settings' && (
+        <div className="px-4 py-3 border-t border-border flex-shrink-0 bg-white">
+          <h3 className="text-xs font-semibold text-text-primary mb-1">RSS Reader</h3>
+          <p className="text-[11px] text-text-sub leading-relaxed">
+            Lightweight RSS reader with local read tracking.
+            Built with React, Vite, and Tailwind CSS.
+          </p>
+        </div>
+      )}
     </aside>
   );
 }
 
-interface FeedItemProps {
+interface FeedRowProps {
   feed: Feed;
   selected: boolean;
   onSelect: () => void;
   onDelete: () => void;
+  deleting: boolean;
+  unreadCount: number;
+  indent: boolean;
 }
 
-function FeedItem({ feed, selected, onSelect, onDelete }: FeedItemProps) {
+function FeedRow({ feed, selected, onSelect, onDelete, deleting, unreadCount, indent }: FeedRowProps) {
   return (
     <div
       className={[
-        'flex items-center pl-6 group hover:bg-surface-3 transition-colors',
-        selected ? 'bg-surface-3 border-l-2 border-accent pl-[22px]' : '',
+        'flex items-center group transition-colors',
+        selected
+          ? 'bg-accent-light'
+          : 'hover:bg-surface-2',
       ].join(' ')}
     >
       <button
-        className="flex-1 flex items-center gap-1.5 px-2 py-1.5 text-left text-xs text-text-primary min-w-0"
+        className={[
+          'flex-1 flex items-center gap-2 py-1.5 text-left text-[13px] min-w-0',
+          indent ? 'pl-10 pr-1' : 'pl-4 pr-1',
+          selected ? 'text-accent font-medium' : 'text-text-primary',
+        ].join(' ')}
         onClick={onSelect}
       >
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-orange-400" />
         <span className="truncate">{feed.title || feed.url}</span>
-        <span className="ml-auto flex-shrink-0 bg-surface-3 text-text-sub text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-          {feed.articleCount}
-        </span>
+        {unreadCount > 0 && (
+          <span className="flex-shrink-0 text-text-sub text-[10px] font-medium ml-auto mr-1">
+            {unreadCount > 999 ? '999+' : unreadCount}
+          </span>
+        )}
       </button>
       <button
-        className="flex-shrink-0 mr-2 px-1.5 py-1 text-[10px] text-text-sub opacity-0 group-hover:opacity-100 hover:text-danger transition-all"
+        className="flex-shrink-0 mr-2 w-5 h-5 flex items-center justify-center text-[11px] text-text-sub opacity-0 group-hover:opacity-100 hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded hover:bg-surface-2"
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        title="フィードを削除"
+        disabled={deleting}
+        title="Delete feed"
       >
-        ✕
+        {deleting ? '...' : '✕'}
       </button>
     </div>
   );

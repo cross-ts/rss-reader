@@ -1,150 +1,215 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type Article } from '../api/client';
+import { useState, useMemo } from 'react';
+import { type Article } from '../api/client';
+import { extractThumbnail } from '../utils/thumbnail';
+import { relativeTime } from '../utils/time';
+import type { ViewMode } from './Topbar';
 
 interface Props {
-  folderId: number | null;
-  feedId: number | null;
+  articles: Article[];
+  isLoading: boolean;
+  isError: boolean;
   selectedArticleId: number | null;
   onSelectArticle: (article: Article) => void;
+  viewMode: ViewMode;
+  isRead: (id: number) => boolean;
 }
 
-export function ArticleList({ folderId, feedId, selectedArticleId, onSelectArticle }: Props) {
-  const qc = useQueryClient();
-  const [searchText, setSearchText] = useState('');
-  const [committedQ, setCommittedQ] = useState('');
+export function ArticleList({
+  articles,
+  isLoading,
+  isError,
+  selectedArticleId,
+  onSelectArticle,
+  viewMode,
+  isRead,
+}: Props) {
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-sm text-text-sub">Loading articles...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['articles', { folderId, feedId, q: committedQ }],
-    queryFn: () =>
-      api.getArticles({
-        folderId: folderId ?? undefined,
-        feedId: feedId ?? undefined,
-        q: committedQ || undefined,
-        limit: 50,
-      }),
-  });
+  if (isError) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-sm text-danger">Failed to load articles</p>
+      </div>
+    );
+  }
 
-  const refresh = useMutation({
-    mutationFn: () => api.refresh(feedId ?? undefined),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['articles'] });
-      qc.invalidateQueries({ queryKey: ['feeds'] });
-      qc.invalidateQueries({ queryKey: ['folders'] });
-    },
-  });
+  if (articles.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <svg className="w-12 h-12 text-text-muted mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+          </svg>
+          <p className="text-sm text-text-sub">No articles found</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCommittedQ(searchText.trim());
-  };
-
-  const formatDate = (iso: string | null) => {
-    if (!iso) return '日付不明';
-    try {
-      return new Date(iso).toLocaleString('ja-JP', {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit',
-      });
-    } catch {
-      return '日付不明';
-    }
-  };
-
-  const stripHtml = (html: string) => {
-    return new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '';
-  };
-
-  const articles = data?.items ?? [];
+  if (viewMode === 'grid') {
+    return (
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {articles.map((article) => (
+            <ArticleCard
+              key={article.id}
+              article={article}
+              selected={selectedArticleId === article.id}
+              read={isRead(article.id)}
+              onSelect={() => onSelectArticle(article)}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <section className="bg-surface border-r border-border flex flex-col overflow-hidden h-screen">
-      {/* ツールバー */}
-      <div className="px-3 py-3 border-b border-border flex-shrink-0 flex flex-col gap-2">
-        <form onSubmit={handleSearch} className="flex gap-1.5">
-          <input
-            type="search"
-            placeholder="キーワード検索…"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            className="flex-1 min-w-0 px-2 py-1.5 bg-surface-2 border border-border rounded text-xs font-mono text-text-primary placeholder-text-sub focus:outline-none focus:border-accent"
+    <div className="flex-1 overflow-y-auto">
+      {articles.map((article) => (
+        <ArticleRow
+          key={article.id}
+          article={article}
+          selected={selectedArticleId === article.id}
+          read={isRead(article.id)}
+          onSelect={() => onSelectArticle(article)}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---- Grid Card ----
+
+function ArticleCard({
+  article,
+  selected,
+  read,
+  onSelect,
+}: {
+  article: Article;
+  selected: boolean;
+  read: boolean;
+  onSelect: () => void;
+}) {
+  const thumbnail = useMemo(() => extractThumbnail(article.content), [article.content]);
+  const [imgError, setImgError] = useState(false);
+  const showImg = thumbnail && !imgError;
+
+  return (
+    <button
+      onClick={onSelect}
+      className={[
+        'w-full text-left bg-white rounded-xl border overflow-hidden transition-all group',
+        selected
+          ? 'border-accent shadow-card-hover ring-1 ring-accent/20'
+          : 'border-border shadow-card hover:shadow-card-hover hover:border-border-strong',
+        read ? 'opacity-70' : '',
+      ].join(' ')}
+    >
+      {/* Thumbnail */}
+      {showImg && (
+        <div className="w-full h-36 bg-bg-alt overflow-hidden">
+          <img
+            src={thumbnail}
+            alt=""
+            onError={() => setImgError(true)}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
-          <button
-            type="submit"
-            className="px-2.5 py-1.5 bg-surface-3 border border-border rounded text-xs text-text-sub hover:text-text-primary hover:border-accent transition-colors"
-          >
-            検索
-          </button>
-          {committedQ && (
-            <button
-              type="button"
-              onClick={() => { setSearchText(''); setCommittedQ(''); }}
-              className="px-2.5 py-1.5 bg-surface-3 border border-border rounded text-xs text-text-sub hover:text-danger hover:border-danger transition-colors"
-            >
-              クリア
-            </button>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="p-3">
+        <h3 className={[
+          'text-[13px] leading-snug mb-1.5 line-clamp-2',
+          read ? 'font-normal text-text-sub' : 'font-semibold text-text-primary',
+        ].join(' ')}>
+          {!read && (
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent mr-1.5 -translate-y-px flex-shrink-0" />
           )}
-        </form>
-        <button
-          className="w-full px-3 py-1.5 bg-surface-2 border border-border rounded text-xs text-text-sub hover:border-accent hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          onClick={() => refresh.mutate()}
-          disabled={refresh.isPending}
-        >
-          {refresh.isPending ? '更新中…' : '全フィード更新'}
-        </button>
+          {article.title}
+        </h3>
+        <div className="flex items-center gap-2 text-[11px] text-text-sub">
+          <span className="truncate">{article.feedTitle}</span>
+          <span className="flex-shrink-0 text-text-muted">{relativeTime(article.publishedAt)}</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ---- List Row ----
+
+function ArticleRow({
+  article,
+  selected,
+  read,
+  onSelect,
+}: {
+  article: Article;
+  selected: boolean;
+  read: boolean;
+  onSelect: () => void;
+}) {
+  const thumbnail = useMemo(() => extractThumbnail(article.content), [article.content]);
+  const [imgError, setImgError] = useState(false);
+  const showImg = thumbnail && !imgError;
+
+  return (
+    <button
+      onClick={onSelect}
+      className={[
+        'w-full text-left flex items-center gap-3 px-5 py-3 border-b border-border transition-colors',
+        selected
+          ? 'bg-accent-light'
+          : 'hover:bg-bg-alt',
+        read ? 'opacity-60' : '',
+      ].join(' ')}
+    >
+      {/* Small thumbnail */}
+      {showImg && (
+        <div className="w-14 h-14 rounded-lg bg-bg-alt overflow-hidden flex-shrink-0">
+          <img
+            src={thumbnail}
+            alt=""
+            onError={() => setImgError(true)}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+
+      {/* Unread dot */}
+      {!read && (
+        <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" />
+      )}
+
+      {/* Text */}
+      <div className="flex-1 min-w-0">
+        <h3 className={[
+          'text-[13px] leading-snug truncate',
+          read ? 'font-normal text-text-sub' : 'font-semibold text-text-primary',
+        ].join(' ')}>
+          {article.title}
+        </h3>
+        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-text-sub">
+          <span className="truncate">{article.feedTitle}</span>
+        </div>
       </div>
 
-      {refresh.isSuccess && (
-        <p className="px-3 py-1.5 text-xs text-accent flex-shrink-0">
-          {refresh.data.refreshed} 件更新しました
-        </p>
-      )}
-
-      {/* 状態表示 */}
-      {isLoading && (
-        <p className="px-4 py-8 text-xs text-text-sub text-center">読み込み中…</p>
-      )}
-      {isError && (
-        <p className="px-4 py-8 text-xs text-danger text-center">記事の取得に失敗しました</p>
-      )}
-      {!isLoading && !isError && articles.length === 0 && (
-        <p className="px-4 py-8 text-xs text-text-sub text-center">記事がありません</p>
-      )}
-
-      {/* 記事カード一覧 */}
-      <ul className="flex-1 overflow-y-auto">
-        {articles.map((article) => {
-          const excerpt = stripHtml(article.content);
-          const isSelected = selectedArticleId === article.id;
-          return (
-            <li
-              key={article.id}
-              className={[
-                'px-3 py-3 border-b border-border cursor-pointer transition-colors',
-                isSelected
-                  ? 'bg-surface-3 border-l-2 border-l-accent pl-[10px]'
-                  : 'hover:bg-surface-2',
-              ].join(' ')}
-              onClick={() => onSelectArticle(article)}
-            >
-              <div className="text-xs font-semibold text-text-primary leading-snug mb-1 line-clamp-2">
-                {article.title}
-              </div>
-              <div className="flex gap-2 mb-1">
-                <span className="font-mono text-[10px] text-accent truncate max-w-[60%]">
-                  {article.feedTitle}
-                </span>
-                <span className="font-mono text-[10px] text-text-sub ml-auto whitespace-nowrap">
-                  {formatDate(article.publishedAt)}
-                </span>
-              </div>
-              <p className="text-[11px] text-text-sub leading-relaxed line-clamp-2">
-                {excerpt.slice(0, 120)}{excerpt.length > 120 ? '…' : ''}
-              </p>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+      {/* Date */}
+      <span className="flex-shrink-0 text-[11px] text-text-muted">
+        {relativeTime(article.publishedAt)}
+      </span>
+    </button>
   );
 }
