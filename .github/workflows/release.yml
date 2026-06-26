@@ -28,18 +28,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          targets: ${{ matrix.target }}
+          go-version: "stable"
 
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: release-${{ matrix.target }}
-
+      # cgo（mattn/go-sqlite3）を有効化したネイティブビルド。
+      # クロスコンパイルはせず、各 runner で実行アーキテクチャ向けにビルドする。
       - name: Build
-        run: cargo build --release --locked --target ${{ matrix.target }}
+        env:
+          CGO_ENABLED: "1"
+        run: go build -tags sqlite_fts5 -trimpath -o rss-reader .
 
       - name: Package
         run: |
@@ -47,7 +46,7 @@ jobs:
           STAGING_DIR="${ARCHIVE_NAME}"
           mkdir "${STAGING_DIR}"
 
-          cp "target/${{ matrix.target }}/release/rss-reader" "${STAGING_DIR}/"
+          cp "rss-reader" "${STAGING_DIR}/"
 
           if [ -f README.md ]; then
             cp README.md "${STAGING_DIR}/"

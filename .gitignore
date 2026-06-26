@@ -1,10 +1,16 @@
-/target
-/data/
+# Go build output
+/rss-reader
+/rss-reader-go
+
+# Frontend build artifacts
 /web/dist
 /web/node_modules
 node_modules
-.env
+
+# Local data
+/data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
 .DS_Store
