@@ -198,6 +198,10 @@ async fn main() -> Result<()> {
 /// 非 /api リクエストを FRONTEND_URL へリバースプロキシする。
 /// 拡張子の無いパスは SPA とみなし index.html にフォールバック。
 /// アセットらしいパス（拡張子あり）で上流が 404 を返した場合はその 404 をそのまま伝播する。
+///
+/// SSRF 防止: 構築した target URL のオリジン（scheme+host+port）が設定済み
+/// FRONTEND_URL のオリジンと厳密一致することを検証する。パストラバーサル等で
+/// 別オリジンへ飛ばされることを防ぐ。
 async fn proxy_handler(State(state): State<AppState>, req: Request) -> Response {
     let path = req.uri().path().to_string();
     let query = req.uri().query().map(|q| q.to_string());
@@ -207,6 +211,16 @@ async fn proxy_handler(State(state): State<AppState>, req: Request) -> Response 
     if let Some(q) = &query {
         target.push('?');
         target.push_str(q);
+    }
+
+    // SSRF 防止: target URL のオリジンが FRONTEND_URL のオリジンと一致することを検証
+    if !verify_proxy_origin(&state.config.frontend_url, &target) {
+        tracing::warn!("proxy_handler: target URL のオリジンが FRONTEND_URL と一致しません: {}", target);
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            "不正なプロキシリクエスト",
+        )
+            .into_response();
     }
 
     // アセットらしいパスかどうかを先に判定する

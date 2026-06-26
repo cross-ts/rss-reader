@@ -66,14 +66,41 @@ fn check_ipv4(ip: Ipv4Addr) -> Result<()> {
     if ip.is_link_local() {
         bail!("リンクローカルアドレスへのアクセスは拒否されています: {}", ip);
     }
-    // 0.0.0.0/8
+    // 未指定アドレス 0.0.0.0
+    if ip.is_unspecified() {
+        bail!("未指定アドレスへのアクセスは拒否されています: {}", ip);
+    }
+    // 0.0.0.0/8 ("This host on this network")
     if ip.octets()[0] == 0 {
         bail!("無効なアドレスへのアクセスは拒否されています: {}", ip);
+    }
+    // ブロードキャスト 255.255.255.255
+    if ip.is_broadcast() {
+        bail!("ブロードキャストアドレスへのアクセスは拒否されています: {}", ip);
     }
     // 100.64.0.0/10 (CGNAT)
     let octets = ip.octets();
     if octets[0] == 100 && (octets[1] & 0xC0) == 64 {
         bail!("CGNAT アドレスへのアクセスは拒否されています: {}", ip);
+    }
+    // 192.0.0.0/24 (IETF Protocol Assignments)
+    if octets[0] == 192 && octets[1] == 0 && octets[2] == 0 {
+        bail!("IETF プロトコル割当アドレスへのアクセスは拒否されています: {}", ip);
+    }
+    // 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 (Documentation/TEST-NET)
+    if (octets[0] == 192 && octets[1] == 0 && octets[2] == 2)
+        || (octets[0] == 198 && octets[1] == 51 && octets[2] == 100)
+        || (octets[0] == 203 && octets[1] == 0 && octets[2] == 113)
+    {
+        bail!("ドキュメント用アドレスへのアクセスは拒否されています: {}", ip);
+    }
+    // 198.18.0.0/15 (Benchmarking)
+    if octets[0] == 198 && (octets[1] == 18 || octets[1] == 19) {
+        bail!("ベンチマーク用アドレスへのアクセスは拒否されています: {}", ip);
+    }
+    // 240.0.0.0/4 (Reserved for future use)
+    if octets[0] >= 240 {
+        bail!("予約済みアドレスへのアクセスは拒否されています: {}", ip);
     }
     Ok(())
 }
@@ -81,6 +108,14 @@ fn check_ipv4(ip: Ipv4Addr) -> Result<()> {
 fn check_ipv6(ip: Ipv6Addr) -> Result<()> {
     if ip.is_loopback() {
         bail!("ループバックアドレスへのアクセスは拒否されています: {}", ip);
+    }
+    // 未指定アドレス ::
+    if ip.is_unspecified() {
+        bail!("未指定アドレスへのアクセスは拒否されています: {}", ip);
+    }
+    // IPv4-mapped IPv6 (::ffff:x.x.x.x) — 埋め込まれた IPv4 を検証する
+    if let Some(v4) = ip.to_ipv4_mapped() {
+        return check_ipv4(v4);
     }
     let segments = ip.segments();
     // fc00::/7 (ユニークローカル)
@@ -90,6 +125,10 @@ fn check_ipv6(ip: Ipv6Addr) -> Result<()> {
     // fe80::/10 (リンクローカル)
     if (segments[0] & 0xFFC0) == 0xFE80 {
         bail!("リンクローカルアドレスへのアクセスは拒否されています: {}", ip);
+    }
+    // 2001:db8::/32 (Documentation)
+    if segments[0] == 0x2001 && segments[1] == 0x0db8 {
+        bail!("ドキュメント用アドレスへのアクセスは拒否されています: {}", ip);
     }
     Ok(())
 }
