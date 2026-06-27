@@ -84,7 +84,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
               <button
                 onClick={onPrev ?? undefined}
                 disabled={!onPrev}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary disabled:opacity-40 disabled:text-text-muted/50 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-muted/50 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
                 aria-label="Previous article"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -94,7 +94,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
               <button
                 onClick={onNext ?? undefined}
                 disabled={!onNext}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary disabled:opacity-40 disabled:text-text-muted/50 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-muted/50 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
                 aria-label="Next article"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -104,7 +104,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
               <button
                 onClick={onNextUnread ?? undefined}
                 disabled={!onNextUnread}
-                className="flex items-center gap-1 px-2.5 h-8 rounded-lg text-xs font-medium text-text-sub hover:bg-bg-alt hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                className="flex items-center gap-1 px-2.5 h-8 rounded-lg text-xs font-medium text-text-sub hover:bg-bg-alt hover:text-text-primary disabled:opacity-40 disabled:text-text-muted/50 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-muted/50 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
                 aria-label="Next unread article"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -209,6 +209,7 @@ function AppInner() {
   const handleSelect = useCallback((sel: SidebarSelection) => {
     setSelection(sel);
     setSelectedArticleId(null);
+    setSearchText('');
     if (layoutMode !== 'desktop') {
       setIsSidebarOpen(false);
     }
@@ -225,6 +226,7 @@ function AppInner() {
     if (view === 'newsfeed') {
       setSelection({ type: 'newsfeed' });
       setSelectedArticleId(null);
+      setSearchText('');
     }
     if (view === 'search') {
       // Focus search - no selection change needed
