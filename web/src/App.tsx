@@ -1,11 +1,10 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { IconRail } from './components/IconRail';
 import { Sidebar, type SidebarSelection } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { ArticleList } from './components/ArticleList';
 import { ArticleView } from './components/ArticleView';
-import { HelpOverlay } from './components/HelpOverlay';
 import { ToastProvider, useToast } from './components/Toast';
 import { useReadState } from './hooks/useReadState';
 import { usePersistedState } from './hooks/usePersistedState';
@@ -43,12 +42,6 @@ function AppInner() {
 
   // Persisted preferences
   const [unreadOnly, setUnreadOnly] = usePersistedState<boolean>('rss.unreadOnly', false);
-
-  // Help overlay
-  const [showHelp, setShowHelp] = useState(false);
-
-  // Search input ref (for "/" shortcut)
-  const searchInputRef = useRef<HTMLInputElement>(null!);
 
   // Last updated time
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -280,120 +273,6 @@ function AppInner() {
     }
   }, [selectedIndex, articles, isRead, selectArticleByIndex]);
 
-  // ---- Keyboard shortcuts ----
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't fire shortcuts if user is typing in input/textarea/contenteditable
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-
-      // If help overlay is open, only Esc and ? close it
-      if (showHelp) {
-        if (e.key === 'Escape' || e.key === '?') {
-          e.preventDefault();
-          setShowHelp(false);
-        }
-        return;
-      }
-
-      switch (e.key) {
-        case 'j': {
-          e.preventDefault();
-          if (articles.length === 0) return;
-          if (selectedIndex < 0) {
-            selectArticleByIndex(0);
-          } else if (selectedIndex < articles.length - 1) {
-            selectArticleByIndex(selectedIndex + 1);
-          }
-          break;
-        }
-        case 'k': {
-          e.preventDefault();
-          if (articles.length === 0) return;
-          if (selectedIndex > 0) {
-            selectArticleByIndex(selectedIndex - 1);
-          } else if (selectedIndex < 0 && articles.length > 0) {
-            selectArticleByIndex(0);
-          }
-          break;
-        }
-        case 'o':
-        case 'Enter': {
-          e.preventDefault();
-          if (selectedIndex >= 0 && selectedIndex < articles.length) {
-            setSelectedArticle(articles[selectedIndex]);
-          }
-          break;
-        }
-        case 'Escape': {
-          e.preventDefault();
-          if (selectedArticle) {
-            setSelectedArticle(null);
-          } else if (searchText) {
-            handleSearchClear();
-            searchInputRef.current?.blur();
-          }
-          break;
-        }
-        case 'm': {
-          e.preventDefault();
-          if (selectedArticle) {
-            toggleRead(selectedArticle.id);
-          } else if (selectedIndex >= 0) {
-            toggleRead(articles[selectedIndex].id);
-          }
-          break;
-        }
-        case 'n': {
-          e.preventDefault();
-          goToNextUnread();
-          break;
-        }
-        case 'u': {
-          e.preventDefault();
-          const undone = undoMarkAllRead();
-          if (undone) {
-            addToast('Undo: articles restored to unread', 'info');
-          }
-          break;
-        }
-        case 'r': {
-          e.preventDefault();
-          if (!refresh.isPending) {
-            refresh.mutate();
-          }
-          break;
-        }
-        case '/': {
-          e.preventDefault();
-          searchInputRef.current?.focus();
-          break;
-        }
-        case '?': {
-          e.preventDefault();
-          setShowHelp(true);
-          break;
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    articles, selectedArticle, selectedIndex, showHelp,
-    searchText,
-    selectArticleByIndex, goToNextUnread,
-    toggleRead, undoMarkAllRead, handleSearchClear,
-    refresh, addToast,
-  ]);
-
   // ---- ArticleView navigation callbacks ----
   const handlePrevArticle = selectedIndex > 0 ? goToPrevArticle : null;
   const handleNextArticle = selectedIndex < articles.length - 1 ? goToNextArticle : null;
@@ -442,7 +321,6 @@ function AppInner() {
           onMarkAllRead={handleMarkAllRead}
           onRefresh={() => refresh.mutate()}
           isRefreshing={refresh.isPending}
-          searchInputRef={searchInputRef}
           searchHitCount={debouncedQ ? (data?.total ?? null) : null}
           searchScope={searchScope}
           lastUpdated={lastUpdated}
@@ -481,9 +359,6 @@ function AppInner() {
           )}
         </div>
       </div>
-
-      {/* Help overlay */}
-      <HelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   );
 }
