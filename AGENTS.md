@@ -5,7 +5,7 @@
 ## Workflow
 
 - 作成したPlanは全てGitHubの `issue` に登録して進行する
-- ユーザー指示がない限り `git` 操作は全て行いPRのマージを持ってタスクを完了とする
+- ユーザー指示がない限り `git` 操作は全て行いPRのマージをもってタスクを完了とする
 
 ## 構成
 - バックエンド: Go（標準ライブラリ中心 / `net/http` `ServeMux` / `log/slog`）。`main.go` + `internal/` 配下。
