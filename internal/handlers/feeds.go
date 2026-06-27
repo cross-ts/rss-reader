@@ -72,6 +72,8 @@ func CreateFeed(database *db.DB, feedsPath string, feedsLock *sync.Mutex, feedCl
 			return
 		}
 
+		rawURL = fetcher.NormalizeURL(rawURL)
+
 		// SSRF validation.
 		if err := fetcher.ValidateFeedURL(rawURL); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -205,6 +207,8 @@ func DiscoverFeed(feedClient *http.Client) http.HandlerFunc {
 			http.Error(w, "url is required", http.StatusBadRequest)
 			return
 		}
+
+		rawURL = fetcher.NormalizeURL(rawURL)
 
 		// SSRF validation.
 		if err := fetcher.ValidateFeedURL(rawURL); err != nil {
