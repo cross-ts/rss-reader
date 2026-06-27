@@ -2,9 +2,14 @@
 
 セルフホスト型RSSリーダー（単一ユーザー・ローカル用途）。RSS/Atom を定期巡回して SQLite に蓄積し、**全文検索**付きでブラウザ閲覧する。
 
+## Workflow
+
+- 作成したPlanは全てGitHubの `issue` に登録して進行する
+- ユーザー指示がない限り `git` 操作は全て行いPRのマージをもってタスクを完了とする
+
 ## 構成
 - バックエンド: Go（標準ライブラリ中心 / `net/http` `ServeMux` / `log/slog`）。`main.go` + `internal/` 配下。
-  - `internal/config`: 設定（`os.Getenv` + `flag`）と XDG パス解決。
+  - `internal/config`: 設定（`flag`）と XDG パス解決。
   - `internal/db`: SQLite 接続・スキーマ・reconcile・記事一覧/検索・FTS 索引。
   - `internal/feeds`: OPML 2.0 の読み書き（購読の正本）。
   - `internal/fetcher`: SSRF ガード付きフィード取得・条件付きGET・フィードURL自動検出。
@@ -20,20 +25,20 @@
 - フロントエンド: **pnpm を使う（npm 禁止）**。`pnpm -C web install` / `pnpm -C web run build` / `pnpm -C web run dev`。
 - `feeds.opml`（設定）と `rss.sqlite`（データ）は既定で **XDG ベースディレクトリ**配下に作成される。DB はループ起動中ロックされる（WAL モード）。
 
-## 設定（環境変数 / CLI フラグ）
-設定は **環境変数（`os.Getenv`）と CLI フラグのみ**。**`.env` / dotenv は使用しない**（廃止済み）。優先順位は **CLI 引数 > 環境変数 > 既定値**。
+## 設定（CLI フラグ）
+設定は **CLI フラグのみ**。**環境変数・`.env` / dotenv は使用しない**。未指定時は既定値を使用。
 
-| 変数 | フラグ | 既定 | 説明 |
-|---|---|---|---|
-| `HOST` | `--host` | `127.0.0.1` | バインドアドレス（ループバックのみ） |
-| `PORT` | `-p` / `--port` | `3000` | ポート |
-| `POLL_INTERVAL_MINUTES` | `--poll-interval` | `15` | 巡回間隔（分） |
-| `DB_PATH` | `--db` | `$XDG_DATA_HOME/rss-reader/rss.sqlite`（未設定時 `~/.local/share/rss-reader/rss.sqlite`） | SQLiteファイル |
-| `FEEDS_PATH` | `--feeds` | `$XDG_CONFIG_HOME/rss-reader/feeds.opml`（未設定時 `~/.config/rss-reader/feeds.opml`） | 購読の正本（OPML 2.0） |
-| `FRONTEND_URL` | `--frontend-url` | `https://cross-ts.github.io/rss-reader/` | フロント配信元。`STATIC_DIR` 未指定時にここへリバースプロキシ |
-| `STATIC_DIR` | `--static-dir` | (未設定) | 指定時はローカル配信（dev/offline）。例 `web/dist` |
+| フラグ | 既定 | 説明 |
+|---|---|---|
+| `--host` | `127.0.0.1` | バインドアドレス（ループバックのみ） |
+| `-p` / `--port` | `3000` | ポート |
+| `--poll-interval` | `15` | 巡回間隔（分） |
+| `--db` | `$XDG_DATA_HOME/rss-reader/rss.sqlite`（未設定時 `~/.local/share/rss-reader/rss.sqlite`） | SQLiteファイル |
+| `--feeds` | `$XDG_CONFIG_HOME/rss-reader/feeds.opml`（未設定時 `~/.config/rss-reader/feeds.opml`） | 購読の正本（OPML 2.0） |
+| `--frontend-url` | `https://cross-ts.github.io/rss-reader/` | フロント配信元。`--static-dir` 未指定時にここへリバースプロキシ |
+| `--static-dir` | (未設定) | 指定時はローカル配信（dev/offline）。例 `web/dist` |
 
-- パス系（`--feeds`/`--db`、`FEEDS_PATH`/`DB_PATH`）を**明示指定した場合のみ**、相対パスは cwd 基準で絶対解決（絶対パスはそのまま）。未指定時のみ XDG 既定パスを使う。
+- パス系（`--feeds`/`--db`）を**明示指定した場合のみ**、相対パスは cwd 基準で絶対解決（絶対パスはそのまま）。未指定時のみ XDG 既定パスを使う。
 - 全オプションは `go run -tags sqlite_fts5 . --help` で確認できる。
 
 ## 不変条件（壊さないこと）
