@@ -112,10 +112,10 @@ export function useArticleMutations() {
     },
   });
 
-  const markRead = useCallback((id: number) => markReadMutation.mutate(id), [markReadMutation]);
-  const toggleRead = useCallback((id: number, currentIsRead: boolean) => toggleReadMutation.mutate({ id, currentIsRead }), [toggleReadMutation]);
-  const markAllRead = useCallback((ids: number[]) => markAllReadMutation.mutate(ids), [markAllReadMutation]);
-  const toggleStarred = useCallback((id: number, currentStarred: boolean) => toggleStarredMutation.mutate({ id, currentStarred }), [toggleStarredMutation]);
+  const markRead = useCallback((id: number) => markReadMutation.mutate(id), [markReadMutation.mutate]);
+  const toggleRead = useCallback((id: number, currentIsRead: boolean) => toggleReadMutation.mutate({ id, currentIsRead }), [toggleReadMutation.mutate]);
+  const markAllRead = useCallback((ids: number[]) => markAllReadMutation.mutate(ids), [markAllReadMutation.mutate]);
+  const toggleStarred = useCallback((id: number, currentStarred: boolean) => toggleStarredMutation.mutate({ id, currentStarred }), [toggleStarredMutation.mutate]);
 
   return { markRead, toggleRead, markAllRead, toggleStarred };
 }
