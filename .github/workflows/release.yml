@@ -12,7 +12,7 @@ permissions: {}
 
 jobs:
   build:
-    name: Build (${{ matrix.target }})
+    name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -20,10 +20,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: aarch64-apple-darwin
+          # Apple Silicon (M系) のみ。macOS の cgo バイナリは
+          # システムライブラリへ動的リンクするのが標準。
+          - name: darwin-arm64
             runner: macos-14
-          - target: x86_64-unknown-linux-gnu
+            goos: darwin
+            goarch: arm64
+            cc: clang
+            ldflags: ""
+          # cgo(go-sqlite3) を musl で完全静的リンクし、
+          # glibc バージョン依存を排除して配布可搬性を確保する。
+          - name: linux-amd64
             runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            cc: musl-gcc
+            ldflags: "-linkmode external -extldflags -static"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -33,16 +45,23 @@ jobs:
         with:
           go-version: "stable"
 
+      - name: Install musl toolchain
+        if: matrix.goos == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
       # cgo（mattn/go-sqlite3）を有効化したネイティブビルド。
       # クロスコンパイルはせず、各 runner で実行アーキテクチャ向けにビルドする。
       - name: Build
         env:
           CGO_ENABLED: "1"
-        run: go build -tags sqlite_fts5 -trimpath -o rss-reader .
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CC: ${{ matrix.cc }}
+        run: go build -tags sqlite_fts5 -trimpath -ldflags "${{ matrix.ldflags }}" -o rss-reader .
 
       - name: Package
         run: |
-          ARCHIVE_NAME="rss-reader-${{ inputs.tag }}-${{ matrix.target }}"
+          ARCHIVE_NAME="rss-reader-${{ inputs.tag }}-${{ matrix.name }}"
           STAGING_DIR="${ARCHIVE_NAME}"
           mkdir "${STAGING_DIR}"
 
@@ -62,7 +81,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: artifact-${{ matrix.target }}
+          name: artifact-${{ matrix.name }}
           path: ${{ env.ARCHIVE_NAME }}
           if-no-files-found: error
 
@@ -79,6 +98,12 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum *.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
       - name: List artifacts
         run: ls -lR artifacts/
 
@@ -90,5 +115,6 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            artifacts/rss-reader-${{ inputs.tag }}-aarch64-apple-darwin.tar.gz
-            artifacts/rss-reader-${{ inputs.tag }}-x86_64-unknown-linux-gnu.tar.gz
+            artifacts/rss-reader-${{ inputs.tag }}-darwin-arm64.tar.gz
+            artifacts/rss-reader-${{ inputs.tag }}-linux-amd64.tar.gz
+            artifacts/SHA256SUMS
