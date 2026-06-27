@@ -8,10 +8,14 @@ interface Props {
   articles: Article[];
   isLoading: boolean;
   isError: boolean;
+  hasFeeds: boolean;
+  hasActiveSearch: boolean;
   selectedArticleId: number | null;
   onSelectArticle: (article: Article) => void;
   onRetry?: () => void;
   addingFeedName?: string | null;
+  onOpenAddFeed?: () => void;
+  onOpenOpmlGuide?: () => void;
 }
 
 // ---- Skeleton placeholders ----
@@ -33,10 +37,14 @@ export function ArticleList({
   articles,
   isLoading,
   isError,
+  hasFeeds,
+  hasActiveSearch,
   selectedArticleId,
   onSelectArticle,
   onRetry,
   addingFeedName,
+  onOpenAddFeed,
+  onOpenOpmlGuide,
 }: Props) {
   if (isLoading) {
     return (
@@ -82,13 +90,50 @@ export function ArticleList({
   }
 
   if (articles.length === 0) {
+    if (!hasFeeds) {
+      return (
+        <div className="flex-1 flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.12),_transparent_40%),linear-gradient(180deg,_#ffffff_0%,_#fff9f0_100%)]">
+          <div className="w-full max-w-xl px-8 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-accent/15">
+              <svg className="h-8 w-8 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h8m3 0v6m0 0h6m-6 0l6-6M9 10h4M9 14h6" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-semibold tracking-tight text-text-primary">
+              まだフィードが登録されていません
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-text-sub">
+              最初のフィードを追加すると、ここに最新の記事が並びます。URL を貼って追加するか、OPML を使って既存の購読を移行できます。
+            </p>
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <button
+                onClick={onOpenAddFeed}
+                className="inline-flex min-w-[240px] items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <span className="text-base leading-none">+</span>
+                最初のフィードを追加する
+              </button>
+              <button
+                onClick={onOpenOpmlGuide}
+                className="inline-flex min-w-[200px] items-center justify-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-medium text-text-primary transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                OPML の使い方を見る
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <svg className="w-12 h-12 text-text-muted mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
           </svg>
-          <p className="text-sm text-text-sub">No articles found</p>
+          <p className="text-sm text-text-sub">
+            {hasActiveSearch ? 'No search results found' : 'No articles found'}
+          </p>
         </div>
       </div>
     );

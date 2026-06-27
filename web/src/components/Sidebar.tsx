@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Folder, type Feed } from '../api/client';
 import { useToast } from './Toast';
@@ -14,9 +14,10 @@ interface Props {
   unreadCounts: { feeds: Record<string, number>; folders: Record<string, number>; total: number };
   railView: 'newsfeed' | 'search' | 'add' | 'settings';
   onFeedAdding?: (feedTitle: string | null) => void;
+  addPanelFocusToken?: number;
 }
 
-export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdding }: Props) {
+export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdding, addPanelFocusToken = 0 }: Props) {
   const qc = useQueryClient();
   const { addToast } = useToast();
 
@@ -40,6 +41,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const discoverSeqRef = React.useRef(0);
+  const addFeedInputRef = useRef<HTMLInputElement | null>(null);
 
   const addFeed = useMutation({
     mutationFn: () => {
@@ -191,6 +193,12 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
   // Show add-feed panel when rail "add" is active
   const showAddPanel = railView === 'add';
 
+  useEffect(() => {
+    if (showAddPanel) {
+      requestAnimationFrame(() => addFeedInputRef.current?.focus());
+    }
+  }, [showAddPanel, addPanelFocusToken]);
+
   return (
     <aside className="w-[260px] bg-surface flex flex-col overflow-hidden h-full border-r border-border flex-shrink-0">
       {/* Header */}
@@ -215,6 +223,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
           <form onSubmit={handleAddFeed} className="flex flex-col gap-2">
             <div className="flex gap-1.5">
               <input
+                ref={addFeedInputRef}
                 type="text"
                 placeholder="Site or feed URL"
                 value={feedUrl}
@@ -443,6 +452,23 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
             Lightweight RSS reader with local read tracking.
             Built with React, Vite, and Tailwind CSS.
           </p>
+          <div className="mt-3 rounded-lg border border-border bg-surface-2 px-3 py-3">
+            <h4 className="text-[11px] font-semibold uppercase tracking-wide text-text-sub">OPML</h4>
+            <p className="mt-1 text-[11px] leading-relaxed text-text-sub">
+              既存の購読を移行したい場合は、`feeds.opml` を既定パスに配置するか、起動時に `--feeds` で OPML ファイルを指定してください。
+            </p>
+            <a
+              href="https://github.com/cross-ts/rss-reader#feedsopmlssot"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              README で手順を見る
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H21m0 0v7.5M21 6l-9 9" />
+              </svg>
+            </a>
+          </div>
         </div>
       )}
     </aside>
