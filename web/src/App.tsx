@@ -9,6 +9,7 @@ import { HelpOverlay } from './components/HelpOverlay';
 import { ToastProvider, useToast } from './components/Toast';
 import { useReadState } from './hooks/useReadState';
 import { usePersistedState } from './hooks/usePersistedState';
+import { useDebounce } from './hooks/useDebounce';
 import { api, type Article } from './api/client';
 import './styles.css';
 
@@ -38,7 +39,7 @@ function AppInner() {
 
   // Search state
   const [searchText, setSearchText] = useState('');
-  const [committedQ, setCommittedQ] = useState('');
+  const debouncedQ = useDebounce(searchText.trim(), 300);
 
   // Persisted preferences
   const [unreadOnly, setUnreadOnly] = usePersistedState<boolean>('rss.unreadOnly', false);
@@ -59,9 +60,9 @@ function AppInner() {
     };
     if (selection.type === 'folder') params.folderId = selection.folderId;
     if (selection.type === 'feed') params.feedId = selection.feedId;
-    if (committedQ) params.q = committedQ;
+    if (debouncedQ) params.q = debouncedQ;
     return params;
-  }, [selection, committedQ]);
+  }, [selection, debouncedQ]);
 
   const { data, isLoading, isError, refetch: refetchArticles } = useQuery({
     queryKey: ['articles', queryParams],
@@ -157,7 +158,7 @@ function AppInner() {
 
   // View title
   const viewTitle = useMemo(() => {
-    if (committedQ) return `Search: "${committedQ}"`;
+    if (debouncedQ) return `Search: "${debouncedQ}"`;
     switch (selection.type) {
       case 'newsfeed': return 'All Articles';
       case 'folder': return selection.folderName;
@@ -166,7 +167,7 @@ function AppInner() {
         return feed?.title || 'Feed';
       }
     }
-  }, [selection, feeds, committedQ]);
+  }, [selection, feeds, debouncedQ]);
 
   // -- Selected article index management --
   const selectedIndex = useMemo(() => {
@@ -204,13 +205,8 @@ function AppInner() {
     }
   }, []);
 
-  const handleSearchSubmit = useCallback(() => {
-    setCommittedQ(searchText.trim());
-  }, [searchText]);
-
   const handleSearchClear = useCallback(() => {
     setSearchText('');
-    setCommittedQ('');
   }, []);
 
   // ---- Mark all read with undo ----
@@ -340,7 +336,7 @@ function AppInner() {
           e.preventDefault();
           if (selectedArticle) {
             setSelectedArticle(null);
-          } else if (searchText || committedQ) {
+          } else if (searchText) {
             handleSearchClear();
             searchInputRef.current?.blur();
           }
@@ -392,7 +388,7 @@ function AppInner() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     articles, selectedArticle, selectedIndex, showHelp,
-    searchText, committedQ,
+    searchText,
     selectArticleByIndex, goToNextUnread,
     toggleRead, undoMarkAllRead, handleSearchClear,
     refresh, addToast,
@@ -439,16 +435,15 @@ function AppInner() {
           viewTitle={viewTitle}
           searchText={searchText}
           onSearchChange={setSearchText}
-          onSearchSubmit={handleSearchSubmit}
           onSearchClear={handleSearchClear}
-          hasActiveSearch={!!committedQ}
+          hasActiveSearch={!!debouncedQ}
           unreadOnly={unreadOnly}
           onToggleUnreadOnly={handleToggleUnreadOnly}
           onMarkAllRead={handleMarkAllRead}
           onRefresh={() => refresh.mutate()}
           isRefreshing={refresh.isPending}
           searchInputRef={searchInputRef}
-          searchHitCount={committedQ ? (data?.total ?? null) : null}
+          searchHitCount={debouncedQ ? (data?.total ?? null) : null}
           searchScope={searchScope}
           lastUpdated={lastUpdated}
         />
