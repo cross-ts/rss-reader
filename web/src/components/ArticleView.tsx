@@ -61,10 +61,10 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
   return (
     <div className="flex-1 flex flex-col bg-white overflow-hidden">
       {/* Article header */}
-      <div className="flex-shrink-0 px-8 pt-6 pb-4 border-b border-border">
+      <div className="flex-shrink-0 px-8 pt-4 pb-3 border-b border-border">
         <div className="max-w-3xl mx-auto">
-          {/* Close + navigation buttons */}
-          <div className="flex items-start gap-2 mb-4">
+          {/* Row 1: Toolbar */}
+          <div className="flex items-center">
             <button
               onClick={onClose}
               className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
@@ -75,8 +75,10 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
               </svg>
             </button>
 
+            <div className="flex-1" />
+
             {/* Navigation buttons */}
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1">
               <button
                 onClick={onPrev ?? undefined}
                 disabled={!onPrev}
@@ -125,14 +127,15 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
                 </button>
               )}
             </div>
-
-            <h1 className="text-xl font-bold text-text-primary leading-snug flex-1 ml-1">
-              {decodedTitle}
-            </h1>
           </div>
 
-          {/* Meta info */}
-          <div className="flex flex-wrap items-center gap-3 text-sm pl-11">
+          {/* Row 2: Title */}
+          <h1 className="text-xl font-bold text-text-primary leading-snug line-clamp-2 mt-3" title={decodedTitle}>
+            {decodedTitle}
+          </h1>
+
+          {/* Row 3: Meta info + Open original */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm mt-2">
             <span className="text-accent font-medium">{article.feedTitle}</span>
             {article.author && (
               <>
@@ -143,31 +146,27 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
             <span className="text-text-muted" title={formatDate(article.publishedAt)}>
               {relativeTime(article.publishedAt)}
             </span>
-          </div>
-
-          {/* Original link */}
-          {isValidUrl && (
-            <div className="mt-3 pl-11">
+            {isValidUrl && (
               <a
                 href={article.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bg-alt border border-border rounded-lg text-xs text-accent font-medium hover:bg-accent-light hover:border-accent/30 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                className="text-accent hover:underline inline-flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
               >
                 Open original
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                 </svg>
               </a>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {/* Article body */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div
-          className="article-view-body max-w-3xl mx-auto pl-11"
+          className="article-view-body max-w-3xl mx-auto"
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content) }}
         />
       </div>
