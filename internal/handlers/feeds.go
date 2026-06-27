@@ -154,30 +154,36 @@ func CreateFeed(database *db.DB, feedsPath string, feedsLock *sync.Mutex, feedCl
 
 		feedsLock.Unlock()
 
-		// Background: fetch feed data and rebuild FTS.
-		go func() {
-			targets, err := database.GetFeedTargetsByID(feed.ID)
-			if err != nil {
-				slog.Warn("get feed targets for background fetch", "error", err)
-				return
-			}
+		// Fetch initial articles synchronously so the client sees them immediately.
+		targets, fetchErr := database.GetFeedTargetsByID(feed.ID)
+		if fetchErr != nil {
+			slog.Warn("get feed targets for initial fetch", "error", fetchErr)
+		} else {
 			for i := range targets {
 				result, err := fetcher.FetchFeedData(feedClient, &targets[i])
 				if err != nil {
-					slog.Warn("background fetch feed", "url", targets[i].URL, "error", err)
+					slog.Warn("initial fetch feed", "url", targets[i].URL, "error", err)
 					continue
 				}
 				if result == nil {
 					continue
 				}
 				if _, err := database.ApplyFetchResult(targets[i].ID, result.Articles, result.Meta); err != nil {
-					slog.Warn("apply background fetch result", "url", targets[i].URL, "error", err)
+					slog.Warn("apply initial fetch result", "url", targets[i].URL, "error", err)
 				}
 			}
 			if err := database.RebuildSearchIndex(); err != nil {
-				slog.Warn("rebuild search index after background fetch", "error", err)
+				slog.Warn("rebuild search index after initial fetch", "error", err)
 			}
-		}()
+		}
+
+		// Re-read the feed to include the updated article count.
+		feed, err = database.GetFeedByURL(resolved.FeedURL)
+		if err != nil {
+			slog.Error("get feed after initial fetch", "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 
 		writeJSON(w, http.StatusCreated, feedToResponse(feed))
 	}

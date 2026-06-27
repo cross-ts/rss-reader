@@ -13,9 +13,10 @@ interface Props {
   onSelect: (sel: SidebarSelection) => void;
   unreadCounts: { feeds: Map<number, number>; folders: Map<number, number>; total: number };
   railView: 'newsfeed' | 'search' | 'add' | 'settings';
+  onFeedAdding?: (feedTitle: string | null) => void;
 }
 
-export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) {
+export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdding }: Props) {
   const qc = useQueryClient();
   const { addToast } = useToast();
 
@@ -46,6 +47,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
       return api.createFeed(feedUrl.trim(), folderName);
     },
     onSuccess: (feed) => {
+      onFeedAdding?.(null);
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
       qc.invalidateQueries({ queryKey: ['articles'] });
@@ -56,6 +58,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
       addToast(`Feed "${feed.title || feed.url}" added`, 'success');
     },
     onError: (err) => {
+      onFeedAdding?.(null);
       addToast(err instanceof Error ? err.message : 'Failed to add feed', 'error');
     },
   });
@@ -148,6 +151,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
   const handleAddFeed = (e: React.FormEvent) => {
     e.preventDefault();
     if (!feedUrl.trim()) return;
+    onFeedAdding?.(discoverPreview?.title ?? feedUrl.trim());
     addFeed.mutate();
   };
 

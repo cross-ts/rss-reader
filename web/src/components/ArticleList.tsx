@@ -12,6 +12,7 @@ interface Props {
   onSelectArticle: (article: Article) => void;
   isRead: (id: number) => boolean;
   onRetry?: () => void;
+  addingFeedName?: string | null;
 }
 
 // ---- Skeleton placeholders ----
@@ -37,6 +38,7 @@ export function ArticleList({
   onSelectArticle,
   isRead,
   onRetry,
+  addingFeedName,
 }: Props) {
   if (isLoading) {
     return (
@@ -62,6 +64,21 @@ export function ArticleList({
             </button>
           )}
         </div>
+      </div>
+    );
+  }
+
+  // Show fetching state when a feed is being added
+  if (addingFeedName && articles.length === 0) {
+    return (
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex items-center justify-center gap-2 py-4 text-sm text-text-sub">
+          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <span>{addingFeedName} から記事を取得しています…</span>
+        </div>
+        {Array.from({ length: 5 }, (_, i) => (
+          <SkeletonRow key={i} />
+        ))}
       </div>
     );
   }
