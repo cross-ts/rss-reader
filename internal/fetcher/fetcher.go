@@ -29,6 +29,7 @@ type FetchResult struct {
 	Outcome      FetchOutcome
 	Bytes        []byte
 	FinalURL     string
+	Header       http.Header
 	Etag         *string
 	LastModified *string
 }
@@ -151,6 +152,7 @@ func FetchWithGuardConditional(client *http.Client, startURL string, maxRedirect
 			Outcome:      FetchSuccess,
 			Bytes:        body,
 			FinalURL:     currentURL,
+			Header:       resp.Header,
 			Etag:         etag,
 			LastModified: lastModified,
 		}, nil
