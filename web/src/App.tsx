@@ -462,13 +462,19 @@ function AppInner() {
                     isLoading={isLoading}
                     isError={isError}
                     hasFeeds={feeds.length > 0}
-                    hasActiveSearch={!!debouncedQ}
                     selectedArticleId={selectedArticleId}
                     onSelectArticle={handleSelectArticle}
                     onRetry={handleRetryArticles}
                     addingFeedName={addingFeedName}
                     onOpenAddFeed={handleOpenAddFeed}
                     onOpenOpmlGuide={handleOpenOpmlGuide}
+                    searchQuery={debouncedQ || undefined}
+                    unreadOnly={unreadOnly}
+                    totalCount={data?.total}
+                    selectionLabel={searchScope}
+                    onClearSearch={handleSearchClear}
+                    onToggleUnreadOnly={handleToggleUnreadOnly}
+                    onRefresh={() => refresh.mutate()}
                   />
                 </div>
               )}
