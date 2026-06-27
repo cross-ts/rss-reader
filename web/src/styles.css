@@ -68,7 +68,8 @@ html, body, #root {
   color: #374151;
 }
 
-.article-view-body > h1:first-child {
+.article-view-body > h1:first-child,
+.article-view-body > :first-child > h1:first-child {
   display: none;
 }
 
