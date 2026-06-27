@@ -18,15 +18,21 @@ var feedMIMETypes = map[string]bool{
 	"application/feed+json": true,
 }
 
+// DiscoveredLink holds a discovered feed URL and its MIME type.
+type DiscoveredLink struct {
+	URL  string
+	Type string
+}
+
 // DiscoverFeedURLs extracts feed URLs from HTML <link rel="alternate"> elements.
-func DiscoverFeedURLs(htmlContent string, baseURL *url.URL) []string {
+func DiscoverFeedURLs(htmlContent string, baseURL *url.URL) []DiscoveredLink {
 	doc, err := html.Parse(strings.NewReader(htmlContent))
 	if err != nil {
 		return nil
 	}
 
 	seen := make(map[string]bool)
-	var urls []string
+	var links []DiscoveredLink
 
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
@@ -43,7 +49,6 @@ func DiscoverFeedURLs(htmlContent string, baseURL *url.URL) []string {
 				}
 			}
 
-			// Check if rel contains "alternate".
 			hasAlternate := false
 			for _, r := range strings.Fields(rel) {
 				if strings.EqualFold(r, "alternate") {
@@ -53,7 +58,6 @@ func DiscoverFeedURLs(htmlContent string, baseURL *url.URL) []string {
 			}
 
 			if hasAlternate && feedMIMETypes[strings.ToLower(typ)] && href != "" {
-				// Resolve against base URL.
 				resolved := href
 				if baseURL != nil {
 					if ref, err := url.Parse(href); err == nil {
@@ -63,7 +67,7 @@ func DiscoverFeedURLs(htmlContent string, baseURL *url.URL) []string {
 
 				if !seen[resolved] {
 					seen[resolved] = true
-					urls = append(urls, resolved)
+					links = append(links, DiscoveredLink{URL: resolved, Type: strings.ToLower(typ)})
 				}
 			}
 		}
@@ -74,7 +78,7 @@ func DiscoverFeedURLs(htmlContent string, baseURL *url.URL) []string {
 	}
 	walk(doc)
 
-	return urls
+	return links
 }
 
 // DiscoverFeedURLsFromLinkHeader extracts feed URLs from HTTP Link headers (RFC 8288).
@@ -218,11 +222,29 @@ type ResolveResult struct {
 	SiteURL *string
 }
 
-// ResolveFeed attempts to resolve an input URL to a feed.
-// It first tries parsing the URL content as a feed directly.
-// If that fails, it treats the content as HTML and discovers feed links.
-func ResolveFeed(client *http.Client, inputURL string) (*ResolveResult, error) {
-	// Fetch the input URL.
+// FeedCandidate holds a discovered feed candidate with metadata.
+type FeedCandidate struct {
+	FeedURL string
+	Title   string
+	SiteURL *string
+	Type    string
+}
+
+// detectFeedContentType extracts a recognized feed MIME type from a Content-Type header value.
+func detectFeedContentType(contentType string) string {
+	ct := strings.ToLower(contentType)
+	if idx := strings.IndexByte(ct, ';'); idx >= 0 {
+		ct = ct[:idx]
+	}
+	ct = strings.TrimSpace(ct)
+	if feedMIMETypes[ct] {
+		return ct
+	}
+	return ""
+}
+
+// ResolveFeeds attempts to resolve an input URL to one or more feed candidates.
+func ResolveFeeds(client *http.Client, inputURL string) ([]FeedCandidate, error) {
 	result, fetchErr := FetchWithGuardConditional(client, inputURL, 5, nil, nil)
 	if fetchErr != nil {
 		return nil, fmt.Errorf("URL の取得に失敗: %w", fetchErr)
@@ -234,7 +256,6 @@ func ResolveFeed(client *http.Client, inputURL string) (*ResolveResult, error) {
 	body := result.Bytes
 	finalURL := result.FinalURL
 
-	// Try parsing as a feed directly.
 	parser := gofeed.NewParser()
 	feed, parseErr := parser.ParseString(string(body))
 	if parseErr == nil && feed != nil {
@@ -248,49 +269,51 @@ func ResolveFeed(client *http.Client, inputURL string) (*ResolveResult, error) {
 			site = &feed.Link
 		}
 
-		return &ResolveResult{FeedURL: finalURL, Title: feedTitle, SiteURL: site}, nil
+		return []FeedCandidate{{
+			FeedURL: finalURL,
+			Title:   feedTitle,
+			SiteURL: site,
+			Type:    detectFeedContentType(result.Header.Get("Content-Type")),
+		}}, nil
 	}
 
-	// Not a feed: discover from HTML and Link headers.
 	base, err := url.Parse(finalURL)
 	if err != nil {
 		return nil, fmt.Errorf("ベース URL のパースに失敗: %w", err)
 	}
 
-	candidates := DiscoverFeedURLs(string(body), base)
+	discoveredLinks := DiscoverFeedURLs(string(body), base)
 
-	// Merge Link header candidates (deduplicated, appended after HTML ones).
-	seen := make(map[string]bool, len(candidates))
-	for _, c := range candidates {
-		seen[c] = true
+	seen := make(map[string]bool, len(discoveredLinks))
+	for _, l := range discoveredLinks {
+		seen[l.URL] = true
 	}
-	for _, c := range DiscoverFeedURLsFromLinkHeader(result.Header, base) {
-		if !seen[c] {
-			seen[c] = true
-			candidates = append(candidates, c)
+	for _, u := range DiscoverFeedURLsFromLinkHeader(result.Header, base) {
+		if !seen[u] {
+			seen[u] = true
+			discoveredLinks = append(discoveredLinks, DiscoveredLink{URL: u})
 		}
 	}
 
-	if len(candidates) == 0 {
+	if len(discoveredLinks) == 0 {
 		return nil, fmt.Errorf("フィードが見つかりませんでした: %s", inputURL)
 	}
 
-	// Try each candidate (up to 5 fetch attempts; SSRF validation failures don't count).
+	var candidates []FeedCandidate
 	var lastErr error
 	fetchAttempts := 0
-	for _, candidate := range candidates {
+	for _, link := range discoveredLinks {
 		if fetchAttempts >= 5 {
 			break
 		}
 
-		// SSRF validation: failures skip without counting.
-		if err := ValidateFeedURL(candidate); err != nil {
+		if err := ValidateFeedURL(link.URL); err != nil {
 			continue
 		}
 
 		fetchAttempts++
 
-		candidateBody, candidateFinalURL, fetchErr := FetchWithGuard(client, candidate, 5)
+		candidateBody, candidateFinalURL, fetchErr := FetchWithGuard(client, link.URL, 5)
 		if fetchErr != nil {
 			lastErr = fetchErr
 			continue
@@ -312,11 +335,33 @@ func ResolveFeed(client *http.Client, inputURL string) (*ResolveResult, error) {
 			site = &candidateFeed.Link
 		}
 
-		return &ResolveResult{FeedURL: candidateFinalURL, Title: feedTitle, SiteURL: site}, nil
+		candidates = append(candidates, FeedCandidate{
+			FeedURL: candidateFinalURL,
+			Title:   feedTitle,
+			SiteURL: site,
+			Type:    link.Type,
+		})
+	}
+
+	if len(candidates) > 0 {
+		return candidates, nil
 	}
 
 	if lastErr != nil {
 		return nil, fmt.Errorf("フィード候補の取得/パースに失敗: %w", lastErr)
 	}
 	return nil, fmt.Errorf("フィードが見つかりませんでした: %s", inputURL)
+}
+
+// ResolveFeed attempts to resolve an input URL to a feed.
+// It first tries parsing the URL content as a feed directly.
+// If that fails, it treats the content as HTML and discovers feed links.
+func ResolveFeed(client *http.Client, inputURL string) (*ResolveResult, error) {
+	candidates, err := ResolveFeeds(client, inputURL)
+	if err != nil {
+		return nil, err
+	}
+
+	c := candidates[0]
+	return &ResolveResult{FeedURL: c.FeedURL, Title: c.Title, SiteURL: c.SiteURL}, nil
 }

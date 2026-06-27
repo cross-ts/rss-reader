@@ -191,7 +191,14 @@ func CreateFeed(database *db.DB, feedsPath string, feedsLock *sync.Mutex, feedCl
 	}
 }
 
-// DiscoverFeed returns an http.HandlerFunc that discovers a feed URL from a page URL.
+type discoverCandidate struct {
+	FeedURL string  `json:"feedUrl"`
+	Title   string  `json:"title"`
+	SiteURL *string `json:"siteUrl,omitempty"`
+	Type    string  `json:"type,omitempty"`
+}
+
+// DiscoverFeed returns an http.HandlerFunc that discovers feed URLs from a page URL.
 func DiscoverFeed(feedClient *http.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
@@ -210,22 +217,28 @@ func DiscoverFeed(feedClient *http.Client) http.HandlerFunc {
 
 		rawURL = fetcher.NormalizeURL(rawURL)
 
-		// SSRF validation.
 		if err := fetcher.ValidateFeedURL(rawURL); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		resolved, err := fetcher.ResolveFeed(feedClient, rawURL)
+		candidates, err := fetcher.ResolveFeeds(feedClient, rawURL)
 		if err != nil {
 			http.Error(w, "feed not found", http.StatusNotFound)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, map[string]string{
-			"feedUrl": resolved.FeedURL,
-			"title":   resolved.Title,
-		})
+		resp := make([]discoverCandidate, len(candidates))
+		for i, c := range candidates {
+			resp[i] = discoverCandidate{
+				FeedURL: c.FeedURL,
+				Title:   c.Title,
+				SiteURL: c.SiteURL,
+				Type:    c.Type,
+			}
+		}
+
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 

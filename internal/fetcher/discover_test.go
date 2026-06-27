@@ -125,25 +125,26 @@ func TestDiscoverFeedURLsFromLinkHeader_MergedWithHTML(t *testing.T) {
 	header.Set("Link", `</atom.xml>; rel="alternate"; type="application/atom+xml"`)
 	linkCandidates := DiscoverFeedURLsFromLinkHeader(header, base)
 
-	// Merge with deduplication (same logic as ResolveFeed).
+	// Merge with deduplication (same logic as ResolveFeeds).
 	seen := make(map[string]bool, len(htmlCandidates))
-	merged := append([]string{}, htmlCandidates...)
+	var mergedURLs []string
 	for _, c := range htmlCandidates {
-		seen[c] = true
+		seen[c.URL] = true
+		mergedURLs = append(mergedURLs, c.URL)
 	}
 	for _, c := range linkCandidates {
 		if !seen[c] {
-			merged = append(merged, c)
+			mergedURLs = append(mergedURLs, c)
 		}
 	}
 
 	want := []string{"https://example.com/feed.xml", "https://example.com/atom.xml"}
-	if len(merged) != len(want) {
-		t.Fatalf("got %d URLs %v, want %d URLs %v", len(merged), merged, len(want), want)
+	if len(mergedURLs) != len(want) {
+		t.Fatalf("got %d URLs %v, want %d URLs %v", len(mergedURLs), mergedURLs, len(want), want)
 	}
-	for i := range merged {
-		if merged[i] != want[i] {
-			t.Errorf("URL[%d] = %q, want %q", i, merged[i], want[i])
+	for i := range mergedURLs {
+		if mergedURLs[i] != want[i] {
+			t.Errorf("URL[%d] = %q, want %q", i, mergedURLs[i], want[i])
 		}
 	}
 }
@@ -160,20 +161,21 @@ func TestDiscoverFeedURLsFromLinkHeader_DeduplicatesWithHTML(t *testing.T) {
 	linkCandidates := DiscoverFeedURLsFromLinkHeader(header, base)
 
 	seen := make(map[string]bool, len(htmlCandidates))
-	merged := append([]string{}, htmlCandidates...)
+	var mergedURLs []string
 	for _, c := range htmlCandidates {
-		seen[c] = true
+		seen[c.URL] = true
+		mergedURLs = append(mergedURLs, c.URL)
 	}
 	for _, c := range linkCandidates {
 		if !seen[c] {
-			merged = append(merged, c)
+			mergedURLs = append(mergedURLs, c)
 		}
 	}
 
-	if len(merged) != 1 {
-		t.Fatalf("expected 1 URL after dedup, got %d: %v", len(merged), merged)
+	if len(mergedURLs) != 1 {
+		t.Fatalf("expected 1 URL after dedup, got %d: %v", len(mergedURLs), mergedURLs)
 	}
-	if merged[0] != "https://example.com/feed.xml" {
-		t.Errorf("URL = %q, want %q", merged[0], "https://example.com/feed.xml")
+	if mergedURLs[0] != "https://example.com/feed.xml" {
+		t.Errorf("URL = %q, want %q", mergedURLs[0], "https://example.com/feed.xml")
 	}
 }
