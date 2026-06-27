@@ -46,16 +46,18 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
       const folderName = newFolderForFeed.trim() || feedFolder.trim() || null;
       return api.createFeed(feedUrl.trim(), folderName);
     },
-    onSuccess: (feed) => {
-      onFeedAdding?.(null);
+    onSuccess: async (feed) => {
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
-      qc.invalidateQueries({ queryKey: ['articles'] });
       setFeedUrl('');
       setFeedFolder('');
       setNewFolderForFeed('');
       setDiscoverPreview(null);
       addToast(`Feed "${feed.title || feed.url}" added`, 'success');
+      // 記事クエリの再取得が完了してから「追加中」表示を解除し、
+      // 一瞬 "No articles found" が出るのを防ぐ
+      await qc.invalidateQueries({ queryKey: ['articles'] });
+      onFeedAdding?.(null);
     },
     onError: (err) => {
       onFeedAdding?.(null);
