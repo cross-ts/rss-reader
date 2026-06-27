@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { IconRail } from './components/IconRail';
 import { Sidebar, type SidebarSelection } from './components/Sidebar';
-import { Topbar, type ViewMode } from './components/Topbar';
+import { Topbar } from './components/Topbar';
 import { ArticleList } from './components/ArticleList';
 import { ArticleView } from './components/ArticleView';
 import { HelpOverlay } from './components/HelpOverlay';
@@ -41,7 +41,6 @@ function AppInner() {
   const [committedQ, setCommittedQ] = useState('');
 
   // Persisted preferences
-  const [viewMode, setViewMode] = usePersistedState<ViewMode>('rss.viewMode', 'grid');
   const [unreadOnly, setUnreadOnly] = usePersistedState<boolean>('rss.unreadOnly', false);
 
   // Help overlay
@@ -233,10 +232,6 @@ function AppInner() {
       );
     }
   }, [articles, isRead, markAllRead, undoMarkAllRead, addToast]);
-
-  const handleToggleViewMode = useCallback(() => {
-    setViewMode((prev) => prev === 'grid' ? 'list' : 'grid');
-  }, [setViewMode]);
 
   const handleToggleUnreadOnly = useCallback(() => {
     setUnreadOnly((prev) => !prev);
@@ -449,8 +444,6 @@ function AppInner() {
           hasActiveSearch={!!committedQ}
           unreadOnly={unreadOnly}
           onToggleUnreadOnly={handleToggleUnreadOnly}
-          viewMode={viewMode}
-          onToggleViewMode={handleToggleViewMode}
           onMarkAllRead={handleMarkAllRead}
           onRefresh={() => refresh.mutate()}
           isRefreshing={refresh.isPending}
@@ -473,7 +466,6 @@ function AppInner() {
               isError={isError}
               selectedArticleId={selectedArticle?.id ?? null}
               onSelectArticle={handleSelectArticle}
-              viewMode={selectedArticle ? 'list' : viewMode}
               isRead={isRead}
               onRetry={handleRetryArticles}
             />

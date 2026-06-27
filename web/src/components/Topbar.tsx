@@ -1,7 +1,5 @@
 import React from 'react';
 
-export type ViewMode = 'grid' | 'list';
-
 interface Props {
   viewTitle: string;
   searchText: string;
@@ -11,8 +9,6 @@ interface Props {
   hasActiveSearch: boolean;
   unreadOnly: boolean;
   onToggleUnreadOnly: () => void;
-  viewMode: ViewMode;
-  onToggleViewMode: () => void;
   onMarkAllRead: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
@@ -31,8 +27,6 @@ export function Topbar({
   hasActiveSearch,
   unreadOnly,
   onToggleUnreadOnly,
-  viewMode,
-  onToggleViewMode,
   onMarkAllRead,
   onRefresh,
   isRefreshing,
@@ -124,25 +118,6 @@ export function Topbar({
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
           </svg>
           Unread
-        </button>
-
-        {/* View mode toggle */}
-        <button
-          onClick={onToggleViewMode}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-text-sub border border-border hover:border-accent hover:text-text-primary transition-colors min-h-[36px] focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-          aria-label={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
-          aria-pressed={viewMode === 'list'}
-        >
-          {viewMode === 'grid' ? (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-            </svg>
-          ) : (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
-            </svg>
-          )}
-          {viewMode === 'grid' ? 'Grid' : 'List'}
         </button>
 
         {/* Mark all read */}
