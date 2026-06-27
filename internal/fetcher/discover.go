@@ -77,6 +77,140 @@ func DiscoverFeedURLs(htmlContent string, baseURL *url.URL) []string {
 	return urls
 }
 
+// DiscoverFeedURLsFromLinkHeader extracts feed URLs from HTTP Link headers (RFC 8288).
+func DiscoverFeedURLsFromLinkHeader(header http.Header, baseURL *url.URL) []string {
+	seen := make(map[string]bool)
+	var urls []string
+
+	for _, headerVal := range header.Values("Link") {
+		for _, link := range parseLinkHeader(headerVal) {
+			mediaType := strings.TrimSpace(link.typ)
+			if idx := strings.IndexByte(mediaType, ';'); idx >= 0 {
+				mediaType = strings.TrimSpace(mediaType[:idx])
+			}
+			if link.hasAlternate && feedMIMETypes[strings.ToLower(mediaType)] && link.href != "" {
+				resolved := link.href
+				if baseURL != nil {
+					if ref, err := url.Parse(link.href); err == nil {
+						resolved = baseURL.ResolveReference(ref).String()
+					}
+				}
+				if !seen[resolved] {
+					seen[resolved] = true
+					urls = append(urls, resolved)
+				}
+			}
+		}
+	}
+
+	return urls
+}
+
+type parsedLink struct {
+	href         string
+	hasAlternate bool
+	typ          string
+}
+
+// parseLinkHeader parses a single Link header value which may contain
+// multiple comma-separated link entries.
+func parseLinkHeader(value string) []parsedLink {
+	var links []parsedLink
+
+	for value != "" {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			break
+		}
+
+		// Extract URI-Reference: <...>
+		if value[0] != '<' {
+			if idx := strings.IndexByte(value, ','); idx >= 0 {
+				value = value[idx+1:]
+				continue
+			}
+			break
+		}
+		end := strings.Index(value, ">")
+		if end < 0 {
+			if idx := strings.IndexByte(value, ','); idx >= 0 {
+				value = value[idx+1:]
+				continue
+			}
+			break
+		}
+		href := value[1:end]
+		value = strings.TrimSpace(value[end+1:])
+
+		var hasAlternate bool
+		var typ string
+		malformed := false
+
+		// Parse parameters (;key="value" or ;key=value)
+		for strings.HasPrefix(value, ";") {
+			value = strings.TrimSpace(value[1:])
+
+			eqIdx := strings.IndexAny(value, "=,;>")
+			if eqIdx < 0 || value[eqIdx] != '=' {
+				malformed = true
+				break
+			}
+			key := strings.TrimSpace(value[:eqIdx])
+			value = strings.TrimSpace(value[eqIdx+1:])
+
+			var paramVal string
+			if len(value) > 0 && value[0] == '"' {
+				closeQuote := strings.Index(value[1:], "\"")
+				if closeQuote < 0 {
+					malformed = true
+					break
+				}
+				paramVal = value[1 : closeQuote+1]
+				value = strings.TrimSpace(value[closeQuote+2:])
+			} else {
+				endIdx := strings.IndexAny(value, ",;")
+				if endIdx < 0 {
+					paramVal = strings.TrimSpace(value)
+					value = ""
+				} else {
+					paramVal = strings.TrimSpace(value[:endIdx])
+					value = value[endIdx:]
+				}
+			}
+
+			switch strings.ToLower(key) {
+			case "rel":
+				for _, r := range strings.Fields(paramVal) {
+					if strings.EqualFold(r, "alternate") {
+						hasAlternate = true
+						break
+					}
+				}
+			case "type":
+				typ = paramVal
+			}
+		}
+
+		if malformed {
+			if idx := strings.IndexByte(value, ','); idx >= 0 {
+				value = value[idx+1:]
+				continue
+			}
+			break
+		}
+
+		links = append(links, parsedLink{href: href, hasAlternate: hasAlternate, typ: typ})
+
+		if strings.HasPrefix(value, ",") {
+			value = value[1:]
+		} else {
+			break
+		}
+	}
+
+	return links
+}
+
 // ResolveResult holds the result of resolving an input URL to a feed.
 type ResolveResult struct {
 	FeedURL string
@@ -89,16 +223,21 @@ type ResolveResult struct {
 // If that fails, it treats the content as HTML and discovers feed links.
 func ResolveFeed(client *http.Client, inputURL string) (*ResolveResult, error) {
 	// Fetch the input URL.
-	body, finalURL, fetchErr := FetchWithGuard(client, inputURL, 5)
+	result, fetchErr := FetchWithGuardConditional(client, inputURL, 5, nil, nil)
 	if fetchErr != nil {
 		return nil, fmt.Errorf("URL の取得に失敗: %w", fetchErr)
 	}
+	if result.Outcome == FetchNotModified {
+		return nil, fmt.Errorf("予期しない 304 Not Modified（条件付きヘッダなし）")
+	}
+
+	body := result.Bytes
+	finalURL := result.FinalURL
 
 	// Try parsing as a feed directly.
 	parser := gofeed.NewParser()
 	feed, parseErr := parser.ParseString(string(body))
 	if parseErr == nil && feed != nil {
-		// Successfully parsed as a feed.
 		feedTitle := feed.Title
 		if feedTitle == "" {
 			feedTitle = finalURL
@@ -112,13 +251,26 @@ func ResolveFeed(client *http.Client, inputURL string) (*ResolveResult, error) {
 		return &ResolveResult{FeedURL: finalURL, Title: feedTitle, SiteURL: site}, nil
 	}
 
-	// Not a feed: treat as HTML and discover feed links.
+	// Not a feed: discover from HTML and Link headers.
 	base, err := url.Parse(finalURL)
 	if err != nil {
 		return nil, fmt.Errorf("ベース URL のパースに失敗: %w", err)
 	}
 
 	candidates := DiscoverFeedURLs(string(body), base)
+
+	// Merge Link header candidates (deduplicated, appended after HTML ones).
+	seen := make(map[string]bool, len(candidates))
+	for _, c := range candidates {
+		seen[c] = true
+	}
+	for _, c := range DiscoverFeedURLsFromLinkHeader(result.Header, base) {
+		if !seen[c] {
+			seen[c] = true
+			candidates = append(candidates, c)
+		}
+	}
+
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("フィードが見つかりませんでした: %s", inputURL)
 	}
