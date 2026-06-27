@@ -27,6 +27,9 @@ type Article struct {
 	Author      *string
 	Content     string
 	PublishedAt *string
+	IsRead      bool
+	ReadAt      *string
+	Starred     bool
 }
 
 // ArticlesResult holds a page of articles along with the total count.

@@ -37,6 +37,9 @@ func NewServeMux(state *AppState) *http.ServeMux {
 
 	// Article routes
 	mux.HandleFunc("GET /api/articles", handlers.ListArticles(state.DB))
+	mux.HandleFunc("PATCH /api/articles/{id}", handlers.UpdateArticle(state.DB))
+	mux.HandleFunc("POST /api/articles/mark-read", handlers.MarkArticlesRead(state.DB))
+	mux.HandleFunc("GET /api/unread-counts", handlers.UnreadCounts(state.DB))
 
 	// Refresh route
 	mux.HandleFunc("POST /api/refresh", handlers.Refresh(state.DB, state.FeedClient))
@@ -55,7 +58,7 @@ func NewServeMux(state *AppState) *http.ServeMux {
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		if r.Method == http.MethodOptions {
