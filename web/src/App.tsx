@@ -6,7 +6,7 @@ import { Topbar } from './components/Topbar';
 import { ArticleList } from './components/ArticleList';
 import { ArticleView } from './components/ArticleView';
 import { ToastProvider, useToast } from './components/Toast';
-import { useReadState } from './hooks/useReadState';
+import { useArticleMutations } from './hooks/useArticleMutations';
 import { usePersistedState } from './hooks/usePersistedState';
 import { useDebounce } from './hooks/useDebounce';
 import { api, type Article } from './api/client';
@@ -29,7 +29,7 @@ function formatTime(date: Date): string {
 function AppInner() {
   const qc = useQueryClient();
   const { addToast } = useToast();
-  const { isRead, markRead, toggleRead, markAllRead, undoMarkAllRead, readIds } = useReadState();
+  const { markRead, toggleRead, markAllRead, toggleStarred } = useArticleMutations();
 
   // Navigation state
   const [selection, setSelection] = useState<SidebarSelection>({ type: 'newsfeed' });
@@ -72,45 +72,20 @@ function AppInner() {
     }
   }, [data]);
 
-  // Also fetch all feeds for unread count calculations
   const { data: feeds = [] } = useQuery({ queryKey: ['feeds'], queryFn: api.getFeeds });
-  const { data: folders = [] } = useQuery({ queryKey: ['folders'], queryFn: api.getFolders });
+  useQuery({ queryKey: ['folders'], queryFn: api.getFolders });
 
-  // For unread counts, we fetch a larger set of articles (all articles) to compute badge counts
-  // This is an approximation based on loaded articles
-  const { data: allArticlesData } = useQuery({
-    queryKey: ['articles', { limit: 500 }],
-    queryFn: () => api.getArticles({ limit: 500 }),
-    staleTime: 120_000,
+  const { data: unreadCountsData } = useQuery({
+    queryKey: ['unreadCounts'],
+    queryFn: api.getUnreadCounts,
+    staleTime: 60_000,
   });
 
-  // Compute unread counts from loaded articles
-  const unreadCounts = useMemo(() => {
-    const feedCounts = new Map<number, number>();
-    const folderCounts = new Map<number, number>();
-    let total = 0;
-
-    const allArticles = allArticlesData?.items ?? [];
-    for (const article of allArticles) {
-      if (!readIds.has(article.id)) {
-        total++;
-        feedCounts.set(article.feedId, (feedCounts.get(article.feedId) ?? 0) + 1);
-      }
-    }
-
-    // Compute folder counts by summing feed counts for feeds in each folder
-    for (const folder of folders) {
-      let folderTotal = 0;
-      for (const feed of feeds) {
-        if (feed.folder === folder.name) {
-          folderTotal += feedCounts.get(feed.id) ?? 0;
-        }
-      }
-      folderCounts.set(folder.id, folderTotal);
-    }
-
-    return { feeds: feedCounts, folders: folderCounts, total };
-  }, [allArticlesData, readIds, feeds, folders]);
+  const unreadCounts = useMemo(() => ({
+    feeds: unreadCountsData?.feeds ?? {},
+    folders: unreadCountsData?.folders ?? {},
+    total: unreadCountsData?.total ?? 0,
+  }), [unreadCountsData]);
 
   const refresh = useMutation({
     mutationFn: () => {
@@ -121,6 +96,7 @@ function AppInner() {
       qc.invalidateQueries({ queryKey: ['articles'] });
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
+      qc.invalidateQueries({ queryKey: ['unreadCounts'] });
       setLastUpdated(formatTime(new Date()));
       addToast('Feeds refreshed', 'success');
     },
@@ -137,8 +113,8 @@ function AppInner() {
   const articles = useMemo(() => {
     const items = data?.items ?? [];
     if (!unreadOnly) return items;
-    return items.filter((a) => !isRead(a.id));
-  }, [data, unreadOnly, isRead]);
+    return items.filter((a) => !a.isRead);
+  }, [data, unreadOnly]);
 
   // Search scope label
   const searchScope = useMemo(() => {
@@ -205,25 +181,25 @@ function AppInner() {
     setSearchText('');
   }, []);
 
-  // ---- Mark all read with undo ----
   const handleMarkAllRead = useCallback(() => {
-    const unreadIds = articles.filter((a) => !isRead(a.id)).map((a) => a.id);
+    const unreadIds = articles.filter((a) => !a.isRead).map((a) => a.id);
     if (unreadIds.length === 0) return;
-    const count = markAllRead(unreadIds);
-    if (count > 0) {
-      addToast(
-        `${count} article${count !== 1 ? 's' : ''} marked as read`,
-        'success',
-        {
-          label: 'Undo',
-          onClick: () => {
-            undoMarkAllRead();
-            addToast('Undo: articles restored to unread', 'info');
-          },
+    markAllRead(unreadIds);
+    const count = unreadIds.length;
+    addToast(
+      `${count} article${count !== 1 ? 's' : ''} marked as read`,
+      'success',
+      {
+        label: 'Undo',
+        onClick: () => {
+          for (const id of unreadIds) {
+            toggleRead(id, true);
+          }
+          addToast('Undo: articles restored to unread', 'info');
         },
-      );
-    }
-  }, [articles, isRead, markAllRead, undoMarkAllRead, addToast]);
+      },
+    );
+  }, [articles, markAllRead, toggleRead, addToast]);
 
   const handleToggleUnreadOnly = useCallback(() => {
     setUnreadOnly((prev) => !prev);
@@ -259,22 +235,20 @@ function AppInner() {
   }, [selectedIndex, articles.length, selectArticleByIndex]);
 
   const goToNextUnread = useCallback(() => {
-    // Search from current position onwards
     const startIdx = selectedIndex >= 0 ? selectedIndex + 1 : 0;
     for (let i = startIdx; i < articles.length; i++) {
-      if (!isRead(articles[i].id)) {
+      if (!articles[i].isRead) {
         selectArticleByIndex(i);
         return;
       }
     }
-    // Wrap around from beginning
     for (let i = 0; i < startIdx; i++) {
-      if (!isRead(articles[i].id)) {
+      if (!articles[i].isRead) {
         selectArticleByIndex(i);
         return;
       }
     }
-  }, [selectedIndex, articles, isRead, selectArticleByIndex]);
+  }, [selectedIndex, articles, selectArticleByIndex]);
 
   // ---- ArticleView navigation callbacks ----
   const handlePrevArticle = selectedIndex > 0 ? goToPrevArticle : null;
@@ -282,13 +256,13 @@ function AppInner() {
 
   // Check if there's a next unread
   const hasNextUnread = useMemo(() => {
-    return articles.some((a) => !isRead(a.id));
-  }, [articles, isRead]);
+    return articles.some((a) => !a.isRead);
+  }, [articles]);
   const handleNextUnread = hasNextUnread ? goToNextUnread : null;
 
   const handleToggleSelectedRead = useCallback(() => {
     if (selectedArticle) {
-      toggleRead(selectedArticle.id);
+      toggleRead(selectedArticle.id, selectedArticle.isRead);
     }
   }, [selectedArticle, toggleRead]);
 
@@ -343,7 +317,6 @@ function AppInner() {
               isError={isError}
               selectedArticleId={selectedArticle?.id ?? null}
               onSelectArticle={handleSelectArticle}
-              isRead={isRead}
               onRetry={handleRetryArticles}
               addingFeedName={addingFeedName}
             />
@@ -355,11 +328,13 @@ function AppInner() {
               article={selectedArticle}
               onClose={handleCloseArticle}
               onMarkRead={markRead}
-              isRead={isRead(selectedArticle.id)}
+              isRead={selectedArticle.isRead}
               onToggleRead={handleToggleSelectedRead}
               onPrev={handlePrevArticle}
               onNext={handleNextArticle}
               onNextUnread={handleNextUnread}
+              starred={selectedArticle.starred}
+              onToggleStarred={() => toggleStarred(selectedArticle.id, selectedArticle.starred)}
             />
           )}
         </div>
