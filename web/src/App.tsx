@@ -67,6 +67,7 @@ function AppInner() {
 
   // Feed being added (for fetching indicator)
   const [addingFeedName, setAddingFeedName] = useState<string | null>(null);
+  const [addPanelFocusToken, setAddPanelFocusToken] = useState(0);
 
   // Last updated time
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -242,6 +243,23 @@ function AppInner() {
     setIsSidebarOpen((prev) => !prev);
   }, [layoutMode]);
 
+  const handleOpenAddFeed = useCallback(() => {
+    setRailView('add');
+    setSelectedArticleId(null);
+    if (layoutMode !== 'desktop') {
+      setIsSidebarOpen(true);
+    }
+    setAddPanelFocusToken((prev) => prev + 1);
+  }, [layoutMode]);
+
+  const handleOpenOpmlGuide = useCallback(() => {
+    setRailView('settings');
+    setSelectedArticleId(null);
+    if (layoutMode !== 'desktop') {
+      setIsSidebarOpen(true);
+    }
+  }, [layoutMode]);
+
   const handleSearchClear = useCallback(() => {
     setSearchText('');
   }, []);
@@ -355,6 +373,7 @@ function AppInner() {
       unreadCounts={unreadCounts}
       railView={railView}
       onFeedAdding={setAddingFeedName}
+      addPanelFocusToken={addPanelFocusToken}
     />
   );
 
@@ -442,10 +461,14 @@ function AppInner() {
                     articles={articles}
                     isLoading={isLoading}
                     isError={isError}
+                    hasFeeds={feeds.length > 0}
+                    hasActiveSearch={!!debouncedQ}
                     selectedArticleId={selectedArticleId}
                     onSelectArticle={handleSelectArticle}
                     onRetry={handleRetryArticles}
                     addingFeedName={addingFeedName}
+                    onOpenAddFeed={handleOpenAddFeed}
+                    onOpenOpmlGuide={handleOpenOpmlGuide}
                   />
                 </div>
               )}
