@@ -84,7 +84,7 @@ func DiscoverFeedURLsFromLinkHeader(header http.Header, baseURL *url.URL) []stri
 
 	for _, headerVal := range header.Values("Link") {
 		for _, link := range parseLinkHeader(headerVal) {
-			mediaType := link.typ
+			mediaType := strings.TrimSpace(link.typ)
 			if idx := strings.IndexByte(mediaType, ';'); idx >= 0 {
 				mediaType = strings.TrimSpace(mediaType[:idx])
 			}
@@ -226,6 +226,9 @@ func ResolveFeed(client *http.Client, inputURL string) (*ResolveResult, error) {
 	result, fetchErr := FetchWithGuardConditional(client, inputURL, 5, nil, nil)
 	if fetchErr != nil {
 		return nil, fmt.Errorf("URL の取得に失敗: %w", fetchErr)
+	}
+	if result.Outcome == FetchNotModified {
+		return nil, fmt.Errorf("予期しない 304 Not Modified（条件付きヘッダなし）")
 	}
 
 	body := result.Bytes
