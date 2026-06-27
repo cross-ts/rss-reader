@@ -33,7 +33,7 @@ function AppInner() {
 
   // Navigation state
   const [selection, setSelection] = useState<SidebarSelection>({ type: 'newsfeed' });
-  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null);
   const [railView, setRailView] = useState<'newsfeed' | 'search' | 'add' | 'settings'>('newsfeed');
 
   // Search state
@@ -116,6 +116,11 @@ function AppInner() {
     return items.filter((a) => !a.isRead);
   }, [data, unreadOnly]);
 
+  const selectedArticle = useMemo(() => {
+    if (selectedArticleId == null) return null;
+    return articles.find((a) => a.id === selectedArticleId) ?? null;
+  }, [articles, selectedArticleId]);
+
   // Search scope label
   const searchScope = useMemo(() => {
     switch (selection.type) {
@@ -148,16 +153,16 @@ function AppInner() {
   }, [articles, selectedArticle]);
 
   const handleSelectArticle = useCallback((article: Article) => {
-    setSelectedArticle(article);
+    setSelectedArticleId(article.id);
   }, []);
 
   const handleCloseArticle = useCallback(() => {
-    setSelectedArticle(null);
+    setSelectedArticleId(null);
   }, []);
 
   const handleSelect = useCallback((sel: SidebarSelection) => {
     setSelection(sel);
-    setSelectedArticle(null);
+    setSelectedArticleId(null);
     // When selecting from sidebar, switch rail to newsfeed view
     if (railView === 'search') {
       // keep search view
@@ -170,7 +175,7 @@ function AppInner() {
     setRailView(view);
     if (view === 'newsfeed') {
       setSelection({ type: 'newsfeed' });
-      setSelectedArticle(null);
+      setSelectedArticleId(null);
     }
     if (view === 'search') {
       // Focus search - no selection change needed
@@ -216,7 +221,7 @@ function AppInner() {
   const selectArticleByIndex = useCallback((index: number) => {
     if (index >= 0 && index < articles.length) {
       const article = articles[index];
-      setSelectedArticle(article);
+      setSelectedArticleId(article.id);
       // scrollIntoView happens after render
       requestAnimationFrame(() => scrollArticleIntoView(article.id));
     }
@@ -315,7 +320,7 @@ function AppInner() {
               articles={articles}
               isLoading={isLoading}
               isError={isError}
-              selectedArticleId={selectedArticle?.id ?? null}
+              selectedArticleId={selectedArticleId}
               onSelectArticle={handleSelectArticle}
               onRetry={handleRetryArticles}
               addingFeedName={addingFeedName}
