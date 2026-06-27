@@ -6,7 +6,6 @@ interface Props {
   viewTitle: string;
   searchText: string;
   onSearchChange: (text: string) => void;
-  onSearchSubmit: () => void;
   onSearchClear: () => void;
   hasActiveSearch: boolean;
   unreadOnly: boolean;
@@ -26,7 +25,6 @@ export function Topbar({
   viewTitle,
   searchText,
   onSearchChange,
-  onSearchSubmit,
   onSearchClear,
   hasActiveSearch,
   unreadOnly,
@@ -42,10 +40,6 @@ export function Topbar({
   lastUpdated,
 }: Props) {
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      onSearchSubmit();
-    }
     if (e.key === 'Escape') {
       e.preventDefault();
       onSearchClear();
