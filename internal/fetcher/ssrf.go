@@ -5,7 +5,16 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 )
+
+// NormalizeURL prepends "https://" if the URL has no scheme.
+func NormalizeURL(rawURL string) string {
+	if !strings.Contains(rawURL, "://") {
+		return "https://" + rawURL
+	}
+	return rawURL
+}
 
 // ValidateFeedURL validates that a URL is safe to fetch (SSRF protection).
 // It checks the scheme, host, and all resolved IP addresses.
