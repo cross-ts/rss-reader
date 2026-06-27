@@ -10,8 +10,18 @@ import (
 
 // NormalizeURL prepends "https://" if the URL has no scheme.
 func NormalizeURL(rawURL string) string {
-	if !strings.Contains(rawURL, "://") {
+	if strings.HasPrefix(rawURL, "//") {
+		return "https:" + rawURL
+	}
+	schemeEnd := strings.Index(rawURL, "://")
+	if schemeEnd < 0 {
 		return "https://" + rawURL
+	}
+	// :// is a scheme only if no path/query/fragment delimiter appears before it.
+	for _, sep := range []byte{'/', '?', '#'} {
+		if i := strings.IndexByte(rawURL, sep); i >= 0 && i < schemeEnd {
+			return "https://" + rawURL
+		}
 	}
 	return rawURL
 }
