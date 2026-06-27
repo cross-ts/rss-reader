@@ -674,15 +674,17 @@ func (d *DB) RebuildSearchIndex() error {
 }
 
 // SetArticleRead sets the read state of a single article.
-// When marking as read, read_at is set to the given timestamp; when marking
-// as unread, read_at is cleared. Returns false if no article matched the id.
+// When marking as read, read_at is set to the given timestamp only if the
+// article was previously unread (preserving the first read timestamp); when
+// marking as unread, read_at is cleared. Returns false if no article matched
+// the id.
 func (d *DB) SetArticleRead(id int, isRead bool, readAt string) (bool, error) {
 	var result sql.Result
 	var err error
 	if isRead {
-		result, err = d.db.Exec(`UPDATE articles SET is_read = 1, read_at = ? WHERE id = ?`, readAt, id)
+		result, err = d.db.Exec(`UPDATE articles SET is_read = 1, read_at = ? WHERE id = ? AND is_read = 0`, readAt, id)
 	} else {
-		result, err = d.db.Exec(`UPDATE articles SET is_read = 0, read_at = NULL WHERE id = ?`, id)
+		result, err = d.db.Exec(`UPDATE articles SET is_read = 0, read_at = NULL WHERE id = ? AND is_read = 1`, id)
 	}
 	if err != nil {
 		return false, fmt.Errorf("set article read: %w", err)
@@ -691,7 +693,16 @@ func (d *DB) SetArticleRead(id int, isRead bool, readAt string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("rows affected: %w", err)
 	}
-	return affected > 0, nil
+	if affected > 0 {
+		return true, nil
+	}
+	// No rows updated — check whether the article exists (it may already
+	// be in the desired state).
+	var exists bool
+	if err := d.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM articles WHERE id = ?)`, id).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check article exists: %w", err)
+	}
+	return exists, nil
 }
 
 // MarkArticlesRead marks the given article ids as read, setting read_at on
@@ -725,7 +736,8 @@ func (d *DB) MarkArticlesRead(ids []int, readAt string) (int64, error) {
 }
 
 // SetArticleStarred sets the starred state of a single article.
-// Returns false if no article matched the id.
+// Returns false if no article matched the id. When the starred state is already
+// in the desired state, it is treated as success.
 func (d *DB) SetArticleStarred(id int, starred bool) (bool, error) {
 	val := 0
 	if starred {
@@ -739,7 +751,16 @@ func (d *DB) SetArticleStarred(id int, starred bool) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("rows affected: %w", err)
 	}
-	return affected > 0, nil
+	if affected > 0 {
+		return true, nil
+	}
+	// No rows updated — check whether the article exists (it may already
+	// be in the desired state).
+	var exists bool
+	if err := d.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM articles WHERE id = ?)`, id).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check article exists: %w", err)
+	}
+	return exists, nil
 }
 
 // UnreadCounts holds aggregated unread counts by feed, by folder, and overall.
