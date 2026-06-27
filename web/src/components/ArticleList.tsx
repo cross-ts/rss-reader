@@ -9,13 +9,19 @@ interface Props {
   isLoading: boolean;
   isError: boolean;
   hasFeeds: boolean;
-  hasActiveSearch: boolean;
   selectedArticleId: number | null;
   onSelectArticle: (article: Article) => void;
   onRetry?: () => void;
   addingFeedName?: string | null;
   onOpenAddFeed?: () => void;
   onOpenOpmlGuide?: () => void;
+  searchQuery?: string;
+  unreadOnly?: boolean;
+  totalCount?: number;
+  selectionLabel?: string;
+  onClearSearch?: () => void;
+  onToggleUnreadOnly?: () => void;
+  onRefresh?: () => void;
 }
 
 // ---- Skeleton placeholders ----
@@ -38,13 +44,19 @@ export function ArticleList({
   isLoading,
   isError,
   hasFeeds,
-  hasActiveSearch,
   selectedArticleId,
   onSelectArticle,
   onRetry,
   addingFeedName,
   onOpenAddFeed,
   onOpenOpmlGuide,
+  searchQuery,
+  unreadOnly,
+  totalCount,
+  selectionLabel,
+  onClearSearch,
+  onToggleUnreadOnly,
+  onRefresh,
 }: Props) {
   if (isLoading) {
     return (
@@ -125,15 +137,66 @@ export function ArticleList({
       );
     }
 
+    if (unreadOnly && (totalCount ?? 0) > 0) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <svg className="w-12 h-12 text-text-muted mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm text-text-sub">未読記事はありません</p>
+            {onToggleUnreadOnly && (
+              <button
+                onClick={onToggleUnreadOnly}
+                className="text-sm text-accent hover:text-accent-hover transition-colors mt-2 block mx-auto"
+              >
+                すべての記事を表示
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (searchQuery) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <svg className="w-12 h-12 text-text-muted mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
+            <p className="text-sm text-text-sub">&ldquo;{searchQuery}&rdquo; に一致する記事はありません</p>
+            {selectionLabel && (
+              <p className="text-xs text-text-muted mt-1">{selectionLabel} を検索</p>
+            )}
+            {onClearSearch && (
+              <button
+                onClick={onClearSearch}
+                className="text-sm text-accent hover:text-accent-hover transition-colors mt-2 block mx-auto"
+              >
+                検索をクリア
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <svg className="w-12 h-12 text-text-muted mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
           </svg>
-          <p className="text-sm text-text-sub">
-            {hasActiveSearch ? 'No search results found' : 'No articles found'}
-          </p>
+          <p className="text-sm text-text-sub">{selectionLabel ? `${selectionLabel} に記事がありません` : '記事がありません'}</p>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="px-4 py-2 bg-accent text-white text-sm rounded-lg hover:bg-accent-hover transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none mt-4"
+            >
+              更新
+            </button>
+          )}
         </div>
       </div>
     );
