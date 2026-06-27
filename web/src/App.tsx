@@ -380,7 +380,7 @@ function AppInner() {
   return (
     <div className="relative flex h-screen overflow-hidden bg-white">
       {showArticleFullscreen ? (
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           <ArticleView
             article={selectedArticle}
             onClose={handleCloseArticle}
@@ -481,7 +481,7 @@ function AppInner() {
 
               {/* Article view (right panel) */}
               {showArticlePane && (
-                <div className="min-w-0 overflow-hidden bg-white">
+                <div className="min-w-0 overflow-hidden bg-white flex flex-col">
                   <ArticleView
                     article={selectedArticle}
                     onClose={handleCloseArticle}
