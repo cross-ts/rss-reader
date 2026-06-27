@@ -61,7 +61,7 @@ export function Topbar({
             </svg>
           </button>
         )}
-        <h1 className="text-base font-semibold text-text-primary truncate">{viewTitle}</h1>
+        <h1 className="min-w-0 text-base font-semibold text-text-primary truncate">{viewTitle}</h1>
         {lastUpdated && (
           <span className="flex-shrink-0 text-[11px] text-text-muted" title="Last updated">
             Updated {lastUpdated}

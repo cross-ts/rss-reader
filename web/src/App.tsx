@@ -411,16 +411,13 @@ function AppInner() {
                   onClick={() => setIsSidebarOpen(false)}
                 />
               )}
-              <div
-                className={[
-                  'absolute inset-y-0 left-14 z-40 transition-transform duration-200 ease-out',
-                  isSidebarOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none',
-                ].join(' ')}
-              >
-                <div className="h-full shadow-2xl">
-                  {sidebarPanel}
+              {isSidebarOpen && (
+                <div className="absolute inset-y-0 left-14 z-40 transition-transform duration-200 ease-out">
+                  <div className="h-full shadow-2xl">
+                    {sidebarPanel}
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
 
