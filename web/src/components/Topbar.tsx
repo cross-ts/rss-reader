@@ -14,6 +14,9 @@ interface Props {
   searchHitCount?: number | null;
   searchScope?: string;
   lastUpdated?: string | null;
+  canToggleSidebar?: boolean;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export function Topbar({
@@ -30,6 +33,9 @@ export function Topbar({
   searchHitCount,
   searchScope,
   lastUpdated,
+  canToggleSidebar = false,
+  isSidebarOpen = false,
+  onToggleSidebar,
 }: Props) {
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -42,8 +48,20 @@ export function Topbar({
   return (
     <div className="px-5 py-3 border-b border-border bg-white flex-shrink-0">
       {/* Top row: title + last updated */}
-      <div className="flex items-center gap-3 mb-3">
-        <h1 className="text-base font-semibold text-text-primary truncate">{viewTitle}</h1>
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        {canToggleSidebar && onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-text-sub transition-colors hover:border-accent hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            aria-label={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            aria-pressed={isSidebarOpen}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        )}
+        <h1 className="min-w-0 text-base font-semibold text-text-primary truncate">{viewTitle}</h1>
         {lastUpdated && (
           <span className="flex-shrink-0 text-[11px] text-text-muted" title="Last updated">
             Updated {lastUpdated}
@@ -52,9 +70,9 @@ export function Topbar({
       </div>
 
       {/* Controls row */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Search */}
-        <div className="flex-1 flex items-center gap-1.5 max-w-md">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 max-w-md">
           <div className="relative flex-1">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

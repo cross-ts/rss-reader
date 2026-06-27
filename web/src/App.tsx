@@ -21,9 +21,31 @@ const queryClient = new QueryClient({
   },
 });
 
+const DESKTOP_BREAKPOINT = 1280;
+const TABLET_BREAKPOINT = 900;
+const ICON_RAIL_WIDTH = 56;
+const SIDEBAR_WIDTH = 260;
+const ARTICLE_LIST_MIN_WIDTH = 300;
+const ARTICLE_VIEW_MIN_WIDTH = 560;
+
+type LayoutMode = 'desktop' | 'tablet' | 'mobile';
+
 /** Format a Date as HH:MM */
 function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function getViewportWidth(): number {
+  if (typeof window === 'undefined') {
+    return DESKTOP_BREAKPOINT;
+  }
+  return window.innerWidth;
+}
+
+function getLayoutMode(width: number): LayoutMode {
+  if (width >= DESKTOP_BREAKPOINT) return 'desktop';
+  if (width >= TABLET_BREAKPOINT) return 'tablet';
+  return 'mobile';
 }
 
 function AppInner() {
@@ -48,6 +70,26 @@ function AppInner() {
 
   // Last updated time
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(getViewportWidth);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const layoutMode = useMemo(() => getLayoutMode(viewportWidth), [viewportWidth]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportWidth(getViewportWidth());
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (layoutMode === 'desktop') {
+      setIsSidebarOpen(true);
+    }
+  }, [layoutMode]);
 
   // Build query params from selection
   const queryParams = useMemo(() => {
@@ -154,7 +196,10 @@ function AppInner() {
 
   const handleSelectArticle = useCallback((article: Article) => {
     setSelectedArticleId(article.id);
-  }, []);
+    if (layoutMode === 'mobile') {
+      setIsSidebarOpen(false);
+    }
+  }, [layoutMode]);
 
   const handleCloseArticle = useCallback(() => {
     setSelectedArticleId(null);
@@ -163,13 +208,16 @@ function AppInner() {
   const handleSelect = useCallback((sel: SidebarSelection) => {
     setSelection(sel);
     setSelectedArticleId(null);
+    if (layoutMode !== 'desktop') {
+      setIsSidebarOpen(false);
+    }
     // When selecting from sidebar, switch rail to newsfeed view
     if (railView === 'search') {
       // keep search view
     } else if (railView !== 'add' && railView !== 'settings') {
       setRailView('newsfeed');
     }
-  }, [railView]);
+  }, [layoutMode, railView]);
 
   const handleRailChange = useCallback((view: 'newsfeed' | 'search' | 'add' | 'settings') => {
     setRailView(view);
@@ -180,7 +228,19 @@ function AppInner() {
     if (view === 'search') {
       // Focus search - no selection change needed
     }
-  }, []);
+    if (layoutMode !== 'desktop') {
+      if (view === 'add' || view === 'settings') {
+        setIsSidebarOpen(true);
+      } else if (view === 'search') {
+        setIsSidebarOpen(false);
+      }
+    }
+  }, [layoutMode]);
+
+  const handleToggleSidebar = useCallback(() => {
+    if (layoutMode === 'desktop') return;
+    setIsSidebarOpen((prev) => !prev);
+  }, [layoutMode]);
 
   const handleSearchClear = useCallback(() => {
     setSearchText('');
@@ -276,74 +336,145 @@ function AppInner() {
     refetchArticles();
   }, [refetchArticles]);
 
+  const showArticleFullscreen = layoutMode === 'mobile' && selectedArticle !== null;
+  const layoutSidebarWidth = layoutMode === 'desktop' ? SIDEBAR_WIDTH : 0;
+  const canShowArticleAndList =
+    layoutMode !== 'mobile' &&
+    viewportWidth >= ICON_RAIL_WIDTH + layoutSidebarWidth + ARTICLE_LIST_MIN_WIDTH + ARTICLE_VIEW_MIN_WIDTH;
+  const showArticlePane = layoutMode === 'desktop' || selectedArticle !== null;
+  const showListPane = !selectedArticle || layoutMode === 'desktop' || canShowArticleAndList;
+  const contentGridClass =
+    showListPane && showArticlePane
+      ? 'grid-cols-[minmax(300px,360px)_minmax(560px,1fr)]'
+      : 'grid-cols-1';
+  const selectedArticleRead = selectedArticle?.isRead ?? false;
+  const sidebarPanel = (
+    <Sidebar
+      selection={selection}
+      onSelect={handleSelect}
+      unreadCounts={unreadCounts}
+      railView={railView}
+      onFeedAdding={setAddingFeedName}
+    />
+  );
+
   return (
-    <div className="flex h-screen overflow-hidden bg-white">
-      {/* Icon Rail */}
-      <IconRail activeView={railView} onChangeView={handleRailChange} />
-
-      {/* Sidebar */}
-      <Sidebar
-        selection={selection}
-        onSelect={handleSelect}
-        unreadCounts={unreadCounts}
-        railView={railView}
-        onFeedAdding={setAddingFeedName}
-      />
-
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar */}
-        <Topbar
-          viewTitle={viewTitle}
-          searchText={searchText}
-          onSearchChange={setSearchText}
-          onSearchClear={handleSearchClear}
-          hasActiveSearch={!!debouncedQ}
-          unreadOnly={unreadOnly}
-          onToggleUnreadOnly={handleToggleUnreadOnly}
-          onMarkAllRead={handleMarkAllRead}
-          onRefresh={() => refresh.mutate()}
-          isRefreshing={refresh.isPending}
-          searchHitCount={debouncedQ ? (data?.total ?? null) : null}
-          searchScope={searchScope}
-          lastUpdated={lastUpdated}
-        />
-
-        {/* Content: Article list + Article view */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Article list */}
-          <div className={[
-            'flex flex-col overflow-hidden transition-all',
-            selectedArticle ? 'w-[360px] flex-shrink-0 border-r border-border' : 'flex-1',
-          ].join(' ')}>
-            <ArticleList
-              articles={articles}
-              isLoading={isLoading}
-              isError={isError}
-              selectedArticleId={selectedArticleId}
-              onSelectArticle={handleSelectArticle}
-              onRetry={handleRetryArticles}
-              addingFeedName={addingFeedName}
-            />
-          </div>
-
-          {/* Article view (right panel) */}
-          {selectedArticle && (
-            <ArticleView
-              article={selectedArticle}
-              onClose={handleCloseArticle}
-              onMarkRead={markRead}
-              isRead={selectedArticle.isRead}
-              onToggleRead={handleToggleSelectedRead}
-              onPrev={handlePrevArticle}
-              onNext={handleNextArticle}
-              onNextUnread={handleNextUnread}
-              starred={selectedArticle.starred}
-              onToggleStarred={() => toggleStarred(selectedArticle.id, selectedArticle.starred)}
-            />
-          )}
+    <div className="relative flex h-screen overflow-hidden bg-white">
+      {showArticleFullscreen ? (
+        <div className="flex-1 min-w-0">
+          <ArticleView
+            article={selectedArticle}
+            onClose={handleCloseArticle}
+            onMarkRead={markRead}
+            isRead={selectedArticleRead}
+            onToggleRead={handleToggleSelectedRead}
+            onPrev={handlePrevArticle}
+            onNext={handleNextArticle}
+            onNextUnread={handleNextUnread}
+            starred={selectedArticle?.starred ?? false}
+            onToggleStarred={
+              selectedArticle
+                ? () => toggleStarred(selectedArticle.id, selectedArticle.starred)
+                : undefined
+            }
+          />
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Icon Rail */}
+          <IconRail activeView={railView} onChangeView={handleRailChange} />
+
+          {/* Sidebar */}
+          {layoutMode === 'desktop' && sidebarPanel}
+          {layoutMode !== 'desktop' && (
+            <>
+              {isSidebarOpen && (
+                <button
+                  type="button"
+                  aria-label="Close sidebar"
+                  className="absolute inset-y-0 left-14 right-0 z-30 bg-black/20"
+                  onClick={() => setIsSidebarOpen(false)}
+                />
+              )}
+              {isSidebarOpen && (
+                <div className="absolute inset-y-0 left-14 z-40 transition-transform duration-200 ease-out">
+                  <div className="h-full shadow-2xl">
+                    {sidebarPanel}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Main content area */}
+          <div className="flex-1 flex min-w-0 flex-col overflow-hidden">
+            {/* Topbar */}
+            <Topbar
+              viewTitle={viewTitle}
+              searchText={searchText}
+              onSearchChange={setSearchText}
+              onSearchClear={handleSearchClear}
+              hasActiveSearch={!!debouncedQ}
+              unreadOnly={unreadOnly}
+              onToggleUnreadOnly={handleToggleUnreadOnly}
+              onMarkAllRead={handleMarkAllRead}
+              onRefresh={() => refresh.mutate()}
+              isRefreshing={refresh.isPending}
+              searchHitCount={debouncedQ ? (data?.total ?? null) : null}
+              searchScope={searchScope}
+              lastUpdated={lastUpdated}
+              canToggleSidebar={layoutMode !== 'desktop'}
+              isSidebarOpen={isSidebarOpen}
+              onToggleSidebar={handleToggleSidebar}
+            />
+
+            {/* Content: Article list + Article view */}
+            <div className={['grid flex-1 min-w-0 overflow-hidden', contentGridClass].join(' ')}>
+              {/* Article list */}
+              {showListPane && (
+                <div
+                  className={[
+                    'min-w-0 overflow-hidden',
+                    showArticlePane ? 'border-r border-border' : '',
+                  ].join(' ')}
+                >
+                  <ArticleList
+                    articles={articles}
+                    isLoading={isLoading}
+                    isError={isError}
+                    selectedArticleId={selectedArticleId}
+                    onSelectArticle={handleSelectArticle}
+                    onRetry={handleRetryArticles}
+                    addingFeedName={addingFeedName}
+                  />
+                </div>
+              )}
+
+              {/* Article view (right panel) */}
+              {showArticlePane && (
+                <div className="min-w-0 overflow-hidden bg-white">
+                  <ArticleView
+                    article={selectedArticle}
+                    onClose={handleCloseArticle}
+                    onMarkRead={markRead}
+                    isRead={selectedArticleRead}
+                    onToggleRead={handleToggleSelectedRead}
+                    onPrev={handlePrevArticle}
+                    onNext={handleNextArticle}
+                    onNextUnread={handleNextUnread}
+                    starred={selectedArticle?.starred ?? false}
+                    onToggleStarred={
+                      selectedArticle
+                        ? () => toggleStarred(selectedArticle.id, selectedArticle.starred)
+                        : undefined
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

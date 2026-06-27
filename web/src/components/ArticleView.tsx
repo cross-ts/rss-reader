@@ -63,10 +63,10 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
   return (
     <div className="flex-1 flex flex-col bg-white overflow-hidden">
       {/* Article header */}
-      <div className="flex-shrink-0 px-8 pt-4 pb-3 border-b border-border">
+      <div className="flex-shrink-0 border-b border-border px-4 py-4 sm:px-6 sm:py-4 lg:px-8">
         <div className="max-w-3xl mx-auto">
           {/* Row 1: Toolbar */}
-          <div className="flex items-center">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={onClose}
               className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-text-sub hover:bg-bg-alt hover:text-text-primary transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
@@ -80,7 +80,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
             <div className="flex-1" />
 
             {/* Navigation buttons */}
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center justify-end gap-1">
               <button
                 onClick={onPrev ?? undefined}
                 disabled={!onPrev}
@@ -181,7 +181,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
       </div>
 
       {/* Article body */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
         <div
           className="article-view-body max-w-3xl mx-auto"
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content) }}
