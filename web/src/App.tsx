@@ -43,6 +43,9 @@ function AppInner() {
   // Persisted preferences
   const [unreadOnly, setUnreadOnly] = usePersistedState<boolean>('rss.unreadOnly', false);
 
+  // Feed being added (for fetching indicator)
+  const [addingFeedName, setAddingFeedName] = useState<string | null>(null);
+
   // Last updated time
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -305,6 +308,7 @@ function AppInner() {
         onSelect={handleSelect}
         unreadCounts={unreadCounts}
         railView={railView}
+        onFeedAdding={setAddingFeedName}
       />
 
       {/* Main content area */}
@@ -341,6 +345,7 @@ function AppInner() {
               onSelectArticle={handleSelectArticle}
               isRead={isRead}
               onRetry={handleRetryArticles}
+              addingFeedName={addingFeedName}
             />
           </div>
 
