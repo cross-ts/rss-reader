@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // DB wraps a sql.DB connection to the SQLite database.
@@ -23,7 +23,7 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("create db directory: %w", err)
 	}
 
-	sqlDB, err := sql.Open("sqlite3", path)
+	sqlDB, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}

@@ -3,13 +3,13 @@
 複数のRSS/Atomフィードを自動巡回してSQLiteに蓄積し、**全文検索**付きでブラウザから閲覧できる、セルフホスト型のRSSリーダー（単一ユーザー・ローカル用途）。
 
 - バックエンド: Go（標準ライブラリ中心 / `net/http` `ServeMux`）
-- ストレージ: SQLite（`mattn/go-sqlite3` + FTS5 による全文検索）
+- ストレージ: SQLite（`modernc.org/sqlite` + FTS5 による全文検索）
 - 全文検索: SQLite FTS5 の **trigram トークナイザ**（BM25 ランキング）
 - フロントエンド: React + Vite（SPA、3ペイン）
 - フィード定義: `feeds.opml` を **SSOT（単一の正本）** とし、SQLiteはそこから再構築される派生キャッシュ
 
 ## 必要環境
-- Go（cgo を使うため C コンパイラ（gcc/clang）が必要）
+- Go
 - Node.js + **pnpm**（npmは使わない）
 
 ## セットアップと起動
@@ -18,8 +18,8 @@
 pnpm -C web install
 pnpm -C web run build
 
-# 2) バックエンドを起動（FTS5 を有効化するため -tags sqlite_fts5 が必須）
-go run -tags sqlite_fts5 .
+# 2) バックエンドを起動
+go run .
 # → http://127.0.0.1:3000
 ```
 > **`feeds.opml`（設定）と `rss.sqlite`（データ）は既定で XDG ベースディレクトリ配下に作成されます。**
@@ -31,7 +31,6 @@ go run -tags sqlite_fts5 .
 >
 > **このリポジトリ直下のサンプル `feeds.opml` を引き継ぎたい場合**は、`--feeds ./feeds.opml` で明示指定するか、`~/.config/rss-reader/` へ手動コピーしてください。
 
-> **FTS5 について**: ビルドタグ `sqlite_fts5` を付けないと FTS5 仮想テーブルの作成に失敗し、起動時に fail-fast します。`go run`/`go build`/`go test` いずれも `-tags sqlite_fts5` を付けてください。
 
 ### 設定（環境変数）
 
@@ -63,10 +62,10 @@ go run -tags sqlite_fts5 .
 
 ```sh
 # 全オプションの確認
-go run -tags sqlite_fts5 . --help
+go run . --help
 
 # 例: ポートと DB パスを指定して起動
-go run -tags sqlite_fts5 . --port 3100 --db /var/data/rss.sqlite
+go run . --port 3100 --db /var/data/rss.sqlite
 ```
 
 > パス系オプション（`--feeds`, `--db`）を明示指定した場合、相対パスは cwd 基準で絶対パスに解決されます。絶対パスはそのまま使用されます。明示指定が無い場合のみ XDG 既定パスが使われます。
@@ -74,7 +73,7 @@ go run -tags sqlite_fts5 . --port 3100 --db /var/data/rss.sqlite
 ### バイナリのビルド
 
 ```sh
-go build -tags sqlite_fts5 -o rss-reader .
+go build -o rss-reader .
 ./rss-reader
 ```
 
@@ -84,7 +83,7 @@ go build -tags sqlite_fts5 -o rss-reader .
 
 ```sh
 # FRONTEND_URL のデフォルトは https://cross-ts.github.io/rss-reader/
-go run -tags sqlite_fts5 .
+go run .
 # → http://localhost:3000 でアクセス
 ```
 
@@ -97,13 +96,13 @@ go run -tags sqlite_fts5 .
 ```sh
 pnpm -C web install
 pnpm -C web run build
-STATIC_DIR=web/dist go run -tags sqlite_fts5 .
+STATIC_DIR=web/dist go run .
 # → http://localhost:3000
 ```
 
 ### 開発（ホットリロード）
 ```sh
-go run -tags sqlite_fts5 .   # API :3000
+go run .   # API :3000
 pnpm -C web run dev          # Vite :5173（/api を :3000 にプロキシ）
 ```
 
