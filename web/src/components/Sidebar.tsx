@@ -11,7 +11,7 @@ export type SidebarSelection =
 interface Props {
   selection: SidebarSelection;
   onSelect: (sel: SidebarSelection) => void;
-  unreadCounts: { feeds: Map<number, number>; folders: Map<number, number>; total: number };
+  unreadCounts: { feeds: Record<string, number>; folders: Record<string, number>; total: number };
   railView: 'newsfeed' | 'search' | 'add' | 'settings';
   onFeedAdding?: (feedTitle: string | null) => void;
 }
@@ -349,7 +349,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
             onSelect={() => onSelect({ type: 'feed', feedId: feed.id })}
             onDelete={() => handleDeleteFeed(feed)}
             deleting={deletingFeedId === feed.id}
-            unreadCount={unreadCounts.feeds.get(feed.id) ?? 0}
+            unreadCount={unreadCounts.feeds[String(feed.id)] ?? 0}
             indent={false}
           />
         ))}
@@ -359,7 +359,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
           const isExpanded = expandedFolders.has(folder.name);
           const folderFeeds = folderMap.get(folder.name) ?? [];
           const folderSelected = selection.type === 'folder' && selection.folderId === folder.id;
-          const folderUnread = unreadCounts.folders.get(folder.id) ?? 0;
+          const folderUnread = unreadCounts.folders[String(folder.id)] ?? 0;
 
           return (
             <div key={folder.id}>
@@ -425,7 +425,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
                   onSelect={() => onSelect({ type: 'feed', feedId: feed.id })}
                   onDelete={() => handleDeleteFeed(feed)}
                   deleting={deletingFeedId === feed.id}
-                  unreadCount={unreadCounts.feeds.get(feed.id) ?? 0}
+                  unreadCount={unreadCounts.feeds[String(feed.id)] ?? 0}
                   indent={true}
                 />
               ))}
