@@ -161,8 +161,8 @@ function AppInner() {
 
   const selectedArticle = useMemo(() => {
     if (selectedArticleId == null) return null;
-    return articles.find((a) => a.id === selectedArticleId) ?? null;
-  }, [articles, selectedArticleId]);
+    return (data?.items ?? []).find((a) => a.id === selectedArticleId) ?? null;
+  }, [data, selectedArticleId]);
 
   // Search scope label
   const searchScope = useMemo(() => {

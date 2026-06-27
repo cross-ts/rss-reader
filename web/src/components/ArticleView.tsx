@@ -23,7 +23,8 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
     if (article && !article.isRead) {
       onMarkRead(article.id);
     }
-  }, [article, onMarkRead]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article?.id]);
 
   const decodedTitle = useMemo(
     () => (article ? decodeEntities(article.title) : ''),
