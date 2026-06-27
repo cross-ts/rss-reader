@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 )
 
 // Config holds the application configuration.
@@ -21,76 +20,25 @@ type Config struct {
 	StaticDir           string // empty string means not set
 }
 
-// Parse parses configuration from CLI flags and environment variables.
-// Priority: CLI flag > env var > default value.
+// Parse parses configuration from CLI flags.
+// Priority: CLI flag > default value.
 func Parse() (*Config, error) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 
-	feeds := fs.String("feeds", "", "Path to feeds OPML file (env: FEEDS_PATH)")
-	db := fs.String("db", "", "Path to SQLite database (env: DB_PATH)")
-	host := fs.String("host", "127.0.0.1", "Listen host (env: HOST)")
-	port := fs.Int("port", 3000, "Listen port (env: PORT)")
+	feeds := fs.String("feeds", "", "Path to feeds OPML file")
+	db := fs.String("db", "", "Path to SQLite database")
+	host := fs.String("host", "127.0.0.1", "Listen host")
+	port := fs.Int("port", 3000, "Listen port")
 	fs.IntVar(port, "p", 3000, "Listen port (shorthand)")
-	frontendURL := fs.String("frontend-url", "https://cross-ts.github.io/rss-reader/", "Frontend URL (env: FRONTEND_URL)")
-	staticDir := fs.String("static-dir", "", "Static file directory (env: STATIC_DIR)")
-	pollInterval := fs.Uint64("poll-interval", 15, "Poll interval in minutes (env: POLL_INTERVAL_MINUTES)")
+	frontendURL := fs.String("frontend-url", "https://cross-ts.github.io/rss-reader/", "Frontend URL")
+	staticDir := fs.String("static-dir", "", "Static file directory")
+	pollInterval := fs.Uint64("poll-interval", 15, "Poll interval in minutes")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(0)
 		}
 		return nil, err
-	}
-
-	// Track which flags were explicitly set on CLI.
-	setFlags := make(map[string]bool)
-	fs.Visit(func(f *flag.Flag) {
-		setFlags[f.Name] = true
-	})
-
-	// Apply env var fallbacks for flags not explicitly set on CLI.
-	if !setFlags["feeds"] {
-		if v := os.Getenv("FEEDS_PATH"); v != "" {
-			*feeds = v
-		}
-	}
-	if !setFlags["db"] {
-		if v := os.Getenv("DB_PATH"); v != "" {
-			*db = v
-		}
-	}
-	if !setFlags["host"] {
-		if v := os.Getenv("HOST"); v != "" {
-			*host = v
-		}
-	}
-	if !setFlags["port"] && !setFlags["p"] {
-		if v := os.Getenv("PORT"); v != "" {
-			p, err := strconv.Atoi(v)
-			if err != nil {
-				return nil, fmt.Errorf("invalid PORT value %q: %w", v, err)
-			}
-			*port = p
-		}
-	}
-	if !setFlags["frontend-url"] {
-		if v := os.Getenv("FRONTEND_URL"); v != "" {
-			*frontendURL = v
-		}
-	}
-	if !setFlags["static-dir"] {
-		if v := os.Getenv("STATIC_DIR"); v != "" {
-			*staticDir = v
-		}
-	}
-	if !setFlags["poll-interval"] {
-		if v := os.Getenv("POLL_INTERVAL_MINUTES"); v != "" {
-			pi, err := strconv.ParseUint(v, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid POLL_INTERVAL_MINUTES value %q: %w", v, err)
-			}
-			*pollInterval = pi
-		}
 	}
 
 	// Validate FrontendURL: must have http or https scheme.

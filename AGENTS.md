@@ -2,6 +2,11 @@
 
 セルフホスト型RSSリーダー（単一ユーザー・ローカル用途）。RSS/Atom を定期巡回して SQLite に蓄積し、**全文検索**付きでブラウザ閲覧する。
 
+## Workflow
+
+- 作成したPlanは全てGitHubの `issue` に登録して進行する
+- ユーザー指示がない限り `git` 操作は全て行いPRのマージを持ってタスクを完了とする
+
 ## 構成
 - バックエンド: Go（標準ライブラリ中心 / `net/http` `ServeMux` / `log/slog`）。`main.go` + `internal/` 配下。
   - `internal/config`: 設定（`os.Getenv` + `flag`）と XDG パス解決。
