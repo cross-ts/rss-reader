@@ -1,6 +1,14 @@
 name: Release
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "*.go"
+      - "go.mod"
+      - "go.sum"
+      - "internal/**"
+      - "feeds.opml"
   workflow_dispatch:
     inputs:
       tag:
@@ -10,9 +18,46 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  resolve-tag:
+    name: Resolve Tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "${GITHUB_OUTPUT}"
+          else
+            LATEST=$(git tag --list 'v*' --sort=-v:refname | head -1)
+            if [ -z "${LATEST}" ]; then
+              echo "tag=v0.1.0" >> "${GITHUB_OUTPUT}"
+            else
+              MAJOR=$(echo "${LATEST}" | sed 's/^v//' | cut -d. -f1)
+              MINOR=$(echo "${LATEST}" | sed 's/^v//' | cut -d. -f2)
+              PATCH=$(echo "${LATEST}" | sed 's/^v//' | cut -d. -f3)
+              PATCH=$((PATCH + 1))
+              echo "tag=v${MAJOR}.${MINOR}.${PATCH}" >> "${GITHUB_OUTPUT}"
+            fi
+          fi
+
   build:
     name: Build (${{ matrix.name }})
+    needs: [resolve-tag]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -44,7 +89,7 @@ jobs:
 
       - name: Package
         run: |
-          ARCHIVE_NAME="rss-reader-${{ inputs.tag }}-${{ matrix.name }}"
+          ARCHIVE_NAME="rss-reader-${{ needs.resolve-tag.outputs.tag }}-${{ matrix.name }}"
           STAGING_DIR="${ARCHIVE_NAME}"
           mkdir "${STAGING_DIR}"
 
@@ -70,7 +115,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
+    needs: [resolve-tag, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -93,11 +138,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
-          tag_name: ${{ inputs.tag }}
-          name: ${{ inputs.tag }}
+          tag_name: ${{ needs.resolve-tag.outputs.tag }}
+          name: ${{ needs.resolve-tag.outputs.tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            artifacts/rss-reader-${{ inputs.tag }}-darwin-arm64.tar.gz
-            artifacts/rss-reader-${{ inputs.tag }}-linux-amd64.tar.gz
+            artifacts/rss-reader-${{ needs.resolve-tag.outputs.tag }}-darwin-arm64.tar.gz
+            artifacts/rss-reader-${{ needs.resolve-tag.outputs.tag }}-linux-amd64.tar.gz
             artifacts/SHA256SUMS
