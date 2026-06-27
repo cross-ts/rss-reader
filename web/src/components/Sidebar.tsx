@@ -247,8 +247,9 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
                 <p className="text-[11px] text-text-sub">{discoverPreview.length} feeds found — select one:</p>
                 {discoverPreview.map((candidate, i) => (
                   <button
-                    key={candidate.feedUrl}
+                    key={`${i}-${candidate.feedUrl}`}
                     type="button"
+                    aria-pressed={i === selectedCandidateIndex}
                     onClick={() => {
                       setSelectedCandidateIndex(i);
                       setFeedUrl(candidate.feedUrl);
