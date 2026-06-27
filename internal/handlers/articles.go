@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/cross-ts/rss-reader/internal/db"
 )
@@ -18,6 +20,9 @@ type ArticleResponse struct {
 	Author      *string `json:"author"`
 	Content     string  `json:"content"`
 	PublishedAt *string `json:"publishedAt"`
+	IsRead      bool    `json:"isRead"`
+	ReadAt      *string `json:"readAt"`
+	Starred     bool    `json:"starred"`
 }
 
 // ArticlesListResponse is the JSON response for a paginated list of articles.
@@ -37,6 +42,9 @@ func articleToResponse(a *db.Article) ArticleResponse {
 		Author:      a.Author,
 		Content:     a.Content,
 		PublishedAt: a.PublishedAt,
+		IsRead:      a.IsRead,
+		ReadAt:      a.ReadAt,
+		Starred:     a.Starred,
 	}
 }
 
@@ -112,6 +120,122 @@ func ListArticles(database *db.DB) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, ArticlesListResponse{
 			Items: items,
 			Total: result.Total,
+		})
+	}
+}
+
+// UpdateArticle returns an http.HandlerFunc that updates the read and/or
+// starred state of a single article via PATCH /api/articles/{id}.
+func UpdateArticle(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "invalid article id", http.StatusBadRequest)
+			return
+		}
+
+		var body struct {
+			IsRead  *bool `json:"isRead"`
+			Starred *bool `json:"starred"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if body.IsRead == nil && body.Starred == nil {
+			http.Error(w, "isRead or starred is required", http.StatusBadRequest)
+			return
+		}
+
+		updated := false
+		if body.IsRead != nil {
+			ok, err := database.SetArticleRead(id, *body.IsRead, time.Now().UTC().Format(time.RFC3339))
+			if err != nil {
+				slog.Error("set article read", "id", id, "error", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+			updated = updated || ok
+		}
+		if body.Starred != nil {
+			ok, err := database.SetArticleStarred(id, *body.Starred)
+			if err != nil {
+				slog.Error("set article starred", "id", id, "error", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+			updated = updated || ok
+		}
+
+		if !updated {
+			http.Error(w, "article not found", http.StatusNotFound)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// MarkArticlesReadResponse is the JSON response for the bulk mark-read endpoint.
+type MarkArticlesReadResponse struct {
+	Updated int64 `json:"updated"`
+}
+
+// MarkArticlesRead returns an http.HandlerFunc that marks multiple articles as
+// read in one request via POST /api/articles/mark-read.
+func MarkArticlesRead(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			ArticleIDs []int `json:"articleIds"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		updated, err := database.MarkArticlesRead(body.ArticleIDs, time.Now().UTC().Format(time.RFC3339))
+		if err != nil {
+			slog.Error("mark articles read", "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, MarkArticlesReadResponse{Updated: updated})
+	}
+}
+
+// UnreadCountsResponse is the JSON response for GET /api/unread-counts.
+type UnreadCountsResponse struct {
+	Total   int64            `json:"total"`
+	Feeds   map[string]int64 `json:"feeds"`
+	Folders map[string]int64 `json:"folders"`
+}
+
+// UnreadCounts returns an http.HandlerFunc that reports unread article counts
+// aggregated by feed, folder, and overall via GET /api/unread-counts.
+func UnreadCounts(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		counts, err := database.GetUnreadCounts()
+		if err != nil {
+			slog.Error("get unread counts", "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		feeds := make(map[string]int64, len(counts.Feeds))
+		for id, c := range counts.Feeds {
+			feeds[strconv.Itoa(id)] = c
+		}
+		folders := make(map[string]int64, len(counts.Folders))
+		for id, c := range counts.Folders {
+			folders[strconv.Itoa(id)] = c
+		}
+
+		writeJSON(w, http.StatusOK, UnreadCountsResponse{
+			Total:   counts.Total,
+			Feeds:   feeds,
+			Folders: folders,
 		})
 	}
 }

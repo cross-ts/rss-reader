@@ -24,11 +24,20 @@ export interface Article {
   author: string | null;
   content: string;
   publishedAt: string | null; // ISO8601
+  isRead: boolean;
+  readAt: string | null;
+  starred: boolean;
 }
 
 export interface ArticleListResponse {
   items: Article[];
   total: number;
+}
+
+export interface UnreadCounts {
+  total: number;
+  feeds: Record<string, number>;
+  folders: Record<string, number>;
 }
 
 export interface ArticleQuery {
@@ -117,5 +126,29 @@ export const api = {
   refresh(feedId?: number): Promise<{ refreshed: number }> {
     const qs = feedId != null ? `?feedId=${feedId}` : '';
     return request(`/api/refresh${qs}`, { method: 'POST' });
+  },
+
+  // 記事の既読/スター状態を更新
+  updateArticle(
+    id: number,
+    patch: { isRead?: boolean; starred?: boolean },
+  ): Promise<void> {
+    return request(`/api/articles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
+
+  // 複数記事をまとめて既読化
+  markArticlesRead(articleIds: number[]): Promise<{ updated: number }> {
+    return request('/api/articles/mark-read', {
+      method: 'POST',
+      body: JSON.stringify({ articleIds }),
+    });
+  },
+
+  // 未読数集計（フィード/フォルダ/全体）
+  getUnreadCounts(): Promise<UnreadCounts> {
+    return request('/api/unread-counts');
   },
 };

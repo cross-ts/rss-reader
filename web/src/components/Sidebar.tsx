@@ -13,9 +13,10 @@ interface Props {
   onSelect: (sel: SidebarSelection) => void;
   unreadCounts: { feeds: Map<number, number>; folders: Map<number, number>; total: number };
   railView: 'newsfeed' | 'search' | 'add' | 'settings';
+  onFeedAdding?: (feedTitle: string | null) => void;
 }
 
-export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) {
+export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdding }: Props) {
   const qc = useQueryClient();
   const { addToast } = useToast();
 
@@ -45,17 +46,21 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
       const folderName = newFolderForFeed.trim() || feedFolder.trim() || null;
       return api.createFeed(feedUrl.trim(), folderName);
     },
-    onSuccess: (feed) => {
+    onSuccess: async (feed) => {
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
-      qc.invalidateQueries({ queryKey: ['articles'] });
       setFeedUrl('');
       setFeedFolder('');
       setNewFolderForFeed('');
       setDiscoverPreview(null);
       addToast(`Feed "${feed.title || feed.url}" added`, 'success');
+      // 記事クエリの再取得が完了してから「追加中」表示を解除し、
+      // 一瞬 "No articles found" が出るのを防ぐ
+      await qc.invalidateQueries({ queryKey: ['articles'] });
+      onFeedAdding?.(null);
     },
     onError: (err) => {
+      onFeedAdding?.(null);
       addToast(err instanceof Error ? err.message : 'Failed to add feed', 'error');
     },
   });
@@ -148,6 +153,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView }: Props) 
   const handleAddFeed = (e: React.FormEvent) => {
     e.preventDefault();
     if (!feedUrl.trim()) return;
+    onFeedAdding?.(discoverPreview?.title ?? feedUrl.trim());
     addFeed.mutate();
   };
 
