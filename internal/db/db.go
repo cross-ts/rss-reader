@@ -65,6 +65,12 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("create articles table: %w", err)
 	}
 
+	// Migrate read-state columns (is_read, read_at, starred) onto the articles table.
+	if err := migrateReadState(sqlDB); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("migrate read state: %w", err)
+	}
+
 	// Migrate legacy FTS schema (Rust-era: title_tokens, content_tokens) to trigram.
 	if err := migrateLegacyFTS(sqlDB); err != nil {
 		sqlDB.Close()
@@ -270,7 +276,7 @@ func (d *DB) listArticlesNoSearch(filter ArticleFilter) (*ArticlesResult, error)
 
 	// Fetch items
 	selectQuery := fmt.Sprintf(
-		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at %s ORDER BY a.published_at IS NULL, a.published_at DESC LIMIT ? OFFSET ?`,
+		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC LIMIT ? OFFSET ?`,
 		baseQuery,
 	)
 	args = append(args, filter.Limit, filter.Offset)
@@ -344,7 +350,7 @@ func (d *DB) listArticlesFTS(filter ArticleFilter, q string) (*ArticlesResult, e
 
 	// Fetch items
 	selectQuery := fmt.Sprintf(
-		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at %s ORDER BY bm25(articles_fts) ASC LIMIT ? OFFSET ?`,
+		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY bm25(articles_fts) ASC LIMIT ? OFFSET ?`,
 		baseQuery,
 	)
 	args = append(args, filter.Limit, filter.Offset)
@@ -402,7 +408,7 @@ func (d *DB) listArticlesLike(filter ArticleFilter, q string) (*ArticlesResult, 
 
 	// Fetch items
 	selectQuery := fmt.Sprintf(
-		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at %s ORDER BY a.published_at IS NULL, a.published_at DESC LIMIT ? OFFSET ?`,
+		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC LIMIT ? OFFSET ?`,
 		baseQuery,
 	)
 	args = append(args, filter.Limit, filter.Offset)
@@ -425,7 +431,7 @@ func scanArticles(rows *sql.Rows) ([]Article, error) {
 	var items []Article
 	for rows.Next() {
 		var a Article
-		if err := rows.Scan(&a.ID, &a.FeedID, &a.FeedTitle, &a.Title, &a.URL, &a.Author, &a.Content, &a.PublishedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.FeedID, &a.FeedTitle, &a.Title, &a.URL, &a.Author, &a.Content, &a.PublishedAt, &a.IsRead, &a.ReadAt, &a.Starred); err != nil {
 			return nil, fmt.Errorf("scan article: %w", err)
 		}
 		items = append(items, a)
@@ -665,6 +671,202 @@ func (d *DB) RebuildSearchIndex() error {
 
 	slog.Info("search index rebuilt")
 	return nil
+}
+
+// SetArticleRead sets the read state of a single article.
+// When marking as read, read_at is set to the given timestamp; when marking
+// as unread, read_at is cleared. Returns false if no article matched the id.
+func (d *DB) SetArticleRead(id int, isRead bool, readAt string) (bool, error) {
+	var result sql.Result
+	var err error
+	if isRead {
+		result, err = d.db.Exec(`UPDATE articles SET is_read = 1, read_at = ? WHERE id = ?`, readAt, id)
+	} else {
+		result, err = d.db.Exec(`UPDATE articles SET is_read = 0, read_at = NULL WHERE id = ?`, id)
+	}
+	if err != nil {
+		return false, fmt.Errorf("set article read: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("rows affected: %w", err)
+	}
+	return affected > 0, nil
+}
+
+// MarkArticlesRead marks the given article ids as read, setting read_at on
+// articles that were previously unread. Returns the number of rows updated.
+func (d *DB) MarkArticlesRead(ids []int, readAt string) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, 0, len(ids)+1)
+	args = append(args, readAt)
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(
+		`UPDATE articles SET is_read = 1, read_at = ? WHERE is_read = 0 AND id IN (%s)`,
+		strings.Join(placeholders, ","),
+	)
+	result, err := d.db.Exec(query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("mark articles read: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("rows affected: %w", err)
+	}
+	return affected, nil
+}
+
+// SetArticleStarred sets the starred state of a single article.
+// Returns false if no article matched the id.
+func (d *DB) SetArticleStarred(id int, starred bool) (bool, error) {
+	val := 0
+	if starred {
+		val = 1
+	}
+	result, err := d.db.Exec(`UPDATE articles SET starred = ? WHERE id = ?`, val, id)
+	if err != nil {
+		return false, fmt.Errorf("set article starred: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("rows affected: %w", err)
+	}
+	return affected > 0, nil
+}
+
+// UnreadCounts holds aggregated unread counts by feed, by folder, and overall.
+type UnreadCounts struct {
+	Total   int64
+	Feeds   map[int]int64
+	Folders map[int]int64
+}
+
+// GetUnreadCounts computes unread article counts grouped by feed and folder,
+// plus the overall total, entirely in SQL.
+func (d *DB) GetUnreadCounts() (*UnreadCounts, error) {
+	counts := &UnreadCounts{
+		Feeds:   make(map[int]int64),
+		Folders: make(map[int]int64),
+	}
+
+	// Overall total (includes any rows with a NULL feed_id).
+	if err := d.db.QueryRow(`SELECT COUNT(*) FROM articles WHERE is_read = 0`).Scan(&counts.Total); err != nil {
+		return nil, fmt.Errorf("query total unread count: %w", err)
+	}
+
+	// Per-feed unread counts (skip NULL feed_id, which can't map to a feed badge).
+	feedRows, err := d.db.Query(`SELECT feed_id, COUNT(*) FROM articles WHERE is_read = 0 AND feed_id IS NOT NULL GROUP BY feed_id`)
+	if err != nil {
+		return nil, fmt.Errorf("query feed unread counts: %w", err)
+	}
+	defer feedRows.Close()
+	for feedRows.Next() {
+		var feedID int
+		var c int64
+		if err := feedRows.Scan(&feedID, &c); err != nil {
+			return nil, fmt.Errorf("scan feed unread count: %w", err)
+		}
+		counts.Feeds[feedID] = c
+	}
+	if err := feedRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate feed unread counts: %w", err)
+	}
+
+	// Per-folder unread counts.
+	folderRows, err := d.db.Query(`SELECT f.folder_id, COUNT(*)
+		FROM articles a JOIN feeds f ON f.id = a.feed_id
+		WHERE a.is_read = 0 AND f.folder_id IS NOT NULL
+		GROUP BY f.folder_id`)
+	if err != nil {
+		return nil, fmt.Errorf("query folder unread counts: %w", err)
+	}
+	defer folderRows.Close()
+	for folderRows.Next() {
+		var folderID int
+		var c int64
+		if err := folderRows.Scan(&folderID, &c); err != nil {
+			return nil, fmt.Errorf("scan folder unread count: %w", err)
+		}
+		counts.Folders[folderID] = c
+	}
+	if err := folderRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate folder unread counts: %w", err)
+	}
+
+	return counts, nil
+}
+
+// migrateReadState adds the is_read, read_at, and starred columns to the
+// articles table if they do not already exist. SQLite has no
+// "ADD COLUMN IF NOT EXISTS", so we inspect the existing columns first.
+func migrateReadState(sqlDB *sql.DB) error {
+	existing, err := tableColumns(sqlDB, "articles")
+	if err != nil {
+		return fmt.Errorf("inspect articles columns: %w", err)
+	}
+
+	type column struct {
+		name string
+		ddl  string
+	}
+	wanted := []column{
+		{"is_read", `ALTER TABLE articles ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0`},
+		{"read_at", `ALTER TABLE articles ADD COLUMN read_at TEXT`},
+		{"starred", `ALTER TABLE articles ADD COLUMN starred INTEGER NOT NULL DEFAULT 0`},
+	}
+
+	for _, c := range wanted {
+		if existing[c.name] {
+			continue
+		}
+		slog.Info("migrating articles read-state column", "column", c.name)
+		if _, err := sqlDB.Exec(c.ddl); err != nil {
+			return fmt.Errorf("add column %q: %w", c.name, err)
+		}
+	}
+
+	if _, err := sqlDB.Exec(`CREATE INDEX IF NOT EXISTS idx_articles_feed_unread ON articles(feed_id, is_read)`); err != nil {
+		return fmt.Errorf("create unread index: %w", err)
+	}
+
+	return nil
+}
+
+// tableColumns returns the set of column names for the given table.
+func tableColumns(sqlDB *sql.DB, table string) (map[string]bool, error) {
+	rows, err := sqlDB.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return nil, fmt.Errorf("pragma table_info: %w", err)
+	}
+	defer rows.Close()
+
+	cols := make(map[string]bool)
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			ctype     string
+			notnull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return nil, fmt.Errorf("scan table_info: %w", err)
+		}
+		cols[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate table_info: %w", err)
+	}
+	return cols, nil
 }
 
 // migrateLegacyFTS detects the old Rust-era FTS schema (title_tokens, content_tokens)
