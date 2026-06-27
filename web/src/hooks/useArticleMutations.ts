@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type ArticleListResponse } from '../api/client';
 
@@ -111,10 +112,10 @@ export function useArticleMutations() {
     },
   });
 
-  const markRead = (id: number) => markReadMutation.mutate(id);
-  const toggleRead = (id: number, currentIsRead: boolean) => toggleReadMutation.mutate({ id, currentIsRead });
-  const markAllRead = (ids: number[]) => markAllReadMutation.mutate(ids);
-  const toggleStarred = (id: number, currentStarred: boolean) => toggleStarredMutation.mutate({ id, currentStarred });
+  const markRead = useCallback((id: number) => markReadMutation.mutate(id), [markReadMutation.mutate]);
+  const toggleRead = useCallback((id: number, currentIsRead: boolean) => toggleReadMutation.mutate({ id, currentIsRead }), [toggleReadMutation.mutate]);
+  const markAllRead = useCallback((ids: number[]) => markAllReadMutation.mutate(ids), [markAllReadMutation.mutate]);
+  const toggleStarred = useCallback((id: number, currentStarred: boolean) => toggleStarredMutation.mutate({ id, currentStarred }), [toggleStarredMutation.mutate]);
 
   return { markRead, toggleRead, markAllRead, toggleStarred };
 }

@@ -23,7 +23,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
     if (article && !article.isRead) {
       onMarkRead(article.id);
     }
-  }, [article, onMarkRead]);
+  }, [article?.id, article?.isRead, onMarkRead]);
 
   const decodedTitle = useMemo(
     () => (article ? decodeEntities(article.title) : ''),
