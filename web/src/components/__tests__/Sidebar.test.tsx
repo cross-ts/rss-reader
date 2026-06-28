@@ -27,7 +27,7 @@ vi.mock('../Toast', () => ({
   useToast: () => ({ addToast: vi.fn() }),
 }));
 
-const mockApi = api as {
+const mockApi = api as unknown as {
   getFolders: ReturnType<typeof vi.fn>;
   getFeeds: ReturnType<typeof vi.fn>;
   createFeed: ReturnType<typeof vi.fn>;
