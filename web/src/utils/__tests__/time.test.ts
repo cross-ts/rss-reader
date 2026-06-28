@@ -66,15 +66,11 @@ describe('relativeTime', () => {
     expect(result).toMatch(/^[A-Z][a-z]{2} \d{1,2}, \d{4}$/);
   });
 
-  it('handles invalid date strings gracefully (does not throw)', () => {
-    // Invalid dates produce NaN diff, fall through all comparisons,
-    // and toLocaleDateString returns "Invalid Date"
-    expect(() => relativeTime('not-a-date')).not.toThrow();
+  it('returns empty string for invalid date strings', () => {
+    expect(relativeTime('not-a-date')).toBe('');
   });
 
-  it('handles garbage input gracefully (does not throw)', () => {
-    expect(() => relativeTime('xyz')).not.toThrow();
+  it('returns empty string for garbage input', () => {
+    expect(relativeTime('xyz')).toBe('');
   });
-
-  it.todo('should return empty string for invalid date strings (see #74)');
 });

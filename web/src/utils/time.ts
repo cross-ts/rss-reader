@@ -6,6 +6,7 @@ export function relativeTime(iso: string | null): string {
   if (!iso) return '';
   try {
     const date = new Date(iso);
+    if (isNaN(date.getTime())) return '';
     const now = Date.now();
     const diff = now - date.getTime();
     if (diff < 0) return 'just now';
