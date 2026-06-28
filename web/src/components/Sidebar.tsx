@@ -32,6 +32,8 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
   const [newFolderForFeed, setNewFolderForFeed] = useState('');
   const [discoverPreview, setDiscoverPreview] = useState<FeedCandidate[] | null>(null);
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState(0);
+  const [addFeedResult, setAddFeedResult] = useState<Feed | null>(null);
+  const [isResolvingFeed, setIsResolvingFeed] = useState(false);
 
   // Folder addition
   const [newFolderName, setNewFolderName] = useState('');
@@ -41,21 +43,24 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
   const [deletingFeedId, setDeletingFeedId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const discoverSeqRef = React.useRef(0);
+  const discoverSeqRef = useRef(0);
   const addFeedInputRef = useRef<HTMLInputElement | null>(null);
 
   const addFeed = useMutation({
-    mutationFn: () => {
+    mutationFn: async ({ candidateURL, candidateTitle }: { candidateURL: string; candidateTitle: string }) => {
       const folderName = newFolderForFeed.trim() || feedFolder.trim() || null;
-      return api.createFeed(feedUrl.trim(), folderName);
+      onFeedAdding?.(candidateTitle);
+      return api.createFeed(candidateURL, folderName);
     },
     onSuccess: async (feed) => {
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
+      setAddFeedResult(feed);
       setFeedUrl('');
       setFeedFolder('');
       setNewFolderForFeed('');
       setDiscoverPreview(null);
+      setSelectedCandidateIndex(0);
       addToast(`Feed "${feed.title || feed.url}" added`, 'success');
       // 記事クエリの再取得が完了してから「追加中」表示を解除し、
       // 一瞬 "No articles found" が出るのを防ぐ
@@ -117,21 +122,6 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
     },
   });
 
-  const discoverFeed = useMutation({
-    mutationFn: async (url: string) => {
-      const seq = ++discoverSeqRef.current;
-      const data = await api.discoverFeed(url);
-      if (seq !== discoverSeqRef.current) return null;
-      return data;
-    },
-    onSuccess: (data) => {
-      if (!data || data.length === 0) return;
-      setDiscoverPreview(data);
-      setSelectedCandidateIndex(0);
-      setFeedUrl(data[0].feedUrl);
-    },
-  });
-
   // Group feeds by folder
   const folderMap = new Map<string | null, Feed[]>();
   for (const feed of feeds) {
@@ -156,20 +146,52 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
 
   const handleAddFeed = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!feedUrl.trim()) return;
-    onFeedAdding?.(discoverPreview?.[selectedCandidateIndex]?.title ?? feedUrl.trim());
-    addFeed.mutate();
+    const inputURL = feedUrl.trim();
+    if (!inputURL) return;
+
+    if (discoverPreview && discoverPreview.length > 1) {
+      const selectedCandidate = discoverPreview[selectedCandidateIndex];
+      if (!selectedCandidate) return;
+      setAddFeedResult(null);
+      addFeed.mutate({
+        candidateURL: selectedCandidate.feedUrl,
+        candidateTitle: selectedCandidate.title ?? selectedCandidate.feedUrl,
+      });
+      return;
+    }
+
+    setAddFeedResult(null);
+    setDiscoverPreview(null);
+    setSelectedCandidateIndex(0);
+    const seq = ++discoverSeqRef.current;
+    setIsResolvingFeed(true);
+    api.discoverFeed(inputURL)
+      .then((candidates) => {
+        if (seq !== discoverSeqRef.current) return;
+        if (candidates.length > 1) {
+          setIsResolvingFeed(false);
+          setDiscoverPreview(candidates);
+          return;
+        }
+
+        const candidate = candidates[0];
+        setIsResolvingFeed(false);
+        addFeed.mutate({
+          candidateURL: candidate?.feedUrl ?? inputURL,
+          candidateTitle: candidate?.title ?? inputURL,
+        });
+      })
+      .catch((err: unknown) => {
+        if (seq !== discoverSeqRef.current) return;
+        setIsResolvingFeed(false);
+        addToast(err instanceof Error ? err.message : 'Failed to detect feed', 'error');
+      });
   };
 
   const handleAddFolder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
     addFolder.mutate();
-  };
-
-  const handleDiscover = () => {
-    if (!feedUrl.trim()) return;
-    discoverFeed.mutate(feedUrl.trim());
   };
 
   const handleDeleteFolder = (folder: Folder) => {
@@ -229,22 +251,22 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
                 type="text"
                 placeholder="Site or feed URL"
                 value={feedUrl}
-                onChange={(e) => { setFeedUrl(e.target.value); setDiscoverPreview(null); setSelectedCandidateIndex(0); discoverFeed.reset(); }}
+                onChange={(e) => {
+                  setFeedUrl(e.target.value);
+                  discoverSeqRef.current++;
+                  setDiscoverPreview(null);
+                  setSelectedCandidateIndex(0);
+                  setAddFeedResult(null);
+                  setIsResolvingFeed(false);
+                  addFeed.reset();
+                }}
                 className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
-              <button
-                type="button"
-                onClick={handleDiscover}
-                disabled={discoverFeed.isPending || !feedUrl.trim()}
-                className="px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-sub hover:text-text-primary hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                {discoverFeed.isPending ? '...' : 'Detect'}
-              </button>
             </div>
 
             {discoverPreview && discoverPreview.length > 1 && (
               <div className="flex flex-col gap-1">
-                <p className="text-[11px] text-text-sub">{discoverPreview.length} feeds found — select one:</p>
+                <p className="text-[11px] text-text-sub">{discoverPreview.length} feeds found. Select one to continue.</p>
                 {discoverPreview.map((candidate, i) => (
                   <button
                     key={`${i}-${candidate.feedUrl}`}
@@ -252,7 +274,6 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
                     aria-pressed={i === selectedCandidateIndex}
                     onClick={() => {
                       setSelectedCandidateIndex(i);
-                      setFeedUrl(candidate.feedUrl);
                     }}
                     className={[
                       'w-full text-left px-2.5 py-2 rounded-md text-xs transition-colors',
@@ -274,14 +295,14 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
                 ))}
               </div>
             )}
-            {discoverPreview && discoverPreview.length === 1 && (
-              <div className="px-2.5 py-2 bg-accent-light border border-accent/20 rounded-md text-xs">
-                <p className="text-accent font-semibold truncate">{discoverPreview[0].title ?? '(Untitled)'}</p>
-                <p className="text-text-sub truncate text-[11px]">{discoverPreview[0].feedUrl}</p>
+            {addFeedResult && (
+              <div className="px-2.5 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-xs">
+                <p className="text-emerald-800 font-semibold truncate">{addFeedResult.title || addFeedResult.url}</p>
+                <p className="text-emerald-700/80 truncate text-[11px]">{addFeedResult.url}</p>
+                <p className="text-emerald-800 mt-1">
+                  {addFeedResult.articleCount} article{addFeedResult.articleCount === 1 ? '' : 's'} fetched
+                </p>
               </div>
-            )}
-            {discoverFeed.isError && (
-              <p className="text-danger text-xs">Feed detection failed</p>
             )}
 
             <select
@@ -303,10 +324,10 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
             />
             <button
               type="submit"
-              disabled={addFeed.isPending}
+              disabled={isResolvingFeed || addFeed.isPending}
               className="px-3 py-1.5 bg-accent text-white rounded-md text-xs font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {addFeed.isPending ? 'Adding...' : 'Add Feed'}
+              {isResolvingFeed || addFeed.isPending ? 'Adding...' : discoverPreview && discoverPreview.length > 1 ? 'Add Selected Feed' : 'Add Feed'}
             </button>
             {addFeed.isError && <p className="text-danger text-xs">Failed to add feed</p>}
           </form>
