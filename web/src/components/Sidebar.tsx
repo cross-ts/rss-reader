@@ -226,6 +226,8 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
 
   // Show add-feed panel when rail "add" is active
   const showAddPanel = railView === 'add';
+  const isCreatingFeed = addFeed.isPending;
+  const isAddFeedBusy = isResolvingFeed || isCreatingFeed;
 
   useEffect(() => {
     if (showAddPanel) {
@@ -268,8 +270,11 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
                   setSelectedCandidateIndex(0);
                   setAddFeedResult(null);
                   setIsResolvingFeed(false);
-                  addFeed.reset();
+                  if (!addFeed.isPending) {
+                    addFeed.reset();
+                  }
                 }}
+                disabled={isCreatingFeed}
                 className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
             </div>
@@ -318,6 +323,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
             <select
               value={feedFolder}
               onChange={(e) => setFeedFolder(e.target.value)}
+              disabled={isCreatingFeed}
               className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
             >
               <option value="">No folder</option>
@@ -330,14 +336,15 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
               placeholder="New folder name (optional)"
               value={newFolderForFeed}
               onChange={(e) => setNewFolderForFeed(e.target.value)}
+              disabled={isCreatingFeed}
               className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
             />
             <button
               type="submit"
-              disabled={isResolvingFeed || addFeed.isPending}
+              disabled={isAddFeedBusy}
               className="px-3 py-1.5 bg-accent text-white rounded-md text-xs font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isResolvingFeed || addFeed.isPending ? 'Adding...' : discoverPreview && discoverPreview.length > 1 ? 'Add Selected Feed' : 'Add Feed'}
+              {isAddFeedBusy ? 'Adding...' : discoverPreview && discoverPreview.length > 1 ? 'Add Selected Feed' : 'Add Feed'}
             </button>
             {addFeed.isError && <p className="text-danger text-xs">Failed to add feed</p>}
           </form>
