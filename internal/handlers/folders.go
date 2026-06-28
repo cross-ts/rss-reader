@@ -30,10 +30,6 @@ func folderToResponse(f *db.Folder) FolderResponse {
 
 // readAndReconcile reads OPML, reconciles with DB, and returns the subscriptions.
 func readAndReconcile(database *db.DB, feedsPath string, subs *feeds.Subscriptions) error {
-	if err := feeds.SaveOPML(feedsPath, subs); err != nil {
-		return err
-	}
-
 	folderDefs := make([]db.FolderDef, len(subs.Folders))
 	for i, f := range subs.Folders {
 		folderDefs[i] = db.FolderDef{Name: f.Name}
@@ -48,7 +44,11 @@ func readAndReconcile(database *db.DB, feedsPath string, subs *feeds.Subscriptio
 		}
 	}
 
-	return database.ReconcileSubscriptions(folderDefs, feedDefs)
+	if err := database.ReconcileSubscriptions(folderDefs, feedDefs); err != nil {
+		return err
+	}
+
+	return feeds.SaveOPML(feedsPath, subs)
 }
 
 // ensureSubscriptions reads existing OPML or creates empty subscriptions.
