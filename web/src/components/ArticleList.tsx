@@ -22,6 +22,9 @@ interface Props {
   onClearSearch?: () => void;
   onToggleUnreadOnly?: () => void;
   onRefresh?: () => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  isFetchingMore?: boolean;
 }
 
 // ---- Skeleton placeholders ----
@@ -57,6 +60,9 @@ export function ArticleList({
   onClearSearch,
   onToggleUnreadOnly,
   onRefresh,
+  onLoadMore,
+  hasMore,
+  isFetchingMore,
 }: Props) {
   if (isLoading) {
     return (
@@ -213,6 +219,24 @@ export function ArticleList({
           onSelect={() => onSelectArticle(article)}
         />
       ))}
+      {hasMore && (
+        <div className="py-4 text-center">
+          {isFetchingMore ? (
+            <span className="inline-flex items-center gap-2 text-sm text-text-sub">
+              <span className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              読み込み中…
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onLoadMore?.()}
+              className="text-sm text-accent hover:text-accent-hover transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            >
+              もっと読む
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

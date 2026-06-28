@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { IconRail } from './components/IconRail';
 import { Sidebar, type SidebarSelection } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
@@ -92,7 +92,7 @@ function AppInner() {
     }
   }, [layoutMode]);
 
-  // Build query params from selection
+  // Build query params from selection (offset managed by useInfiniteQuery)
   const queryParams = useMemo(() => {
     const params: { folderId?: number; feedId?: number; q?: string; limit?: number } = {
       limit: 100,
@@ -103,10 +103,26 @@ function AppInner() {
     return params;
   }, [selection, debouncedQ]);
 
-  const { data, isLoading, isError, refetch: refetchArticles } = useQuery({
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch: refetchArticles,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['articles', queryParams],
-    queryFn: () => api.getArticles(queryParams),
+    queryFn: ({ pageParam }) => api.getArticles({ ...queryParams, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((sum, p) => sum + p.items.length, 0);
+      return loaded < lastPage.total ? loaded : undefined;
+    },
   });
+
+  // Flatten paginated results
+  const allItems = data?.pages.flatMap(p => p.items) ?? [];
 
   // Track when articles are successfully fetched
   useEffect(() => {
@@ -154,15 +170,14 @@ function AppInner() {
 
   // Filter articles by read state if unreadOnly
   const articles = useMemo(() => {
-    const items = data?.items ?? [];
-    if (!unreadOnly) return items;
-    return items.filter((a) => !a.isRead);
-  }, [data, unreadOnly]);
+    if (!unreadOnly) return allItems;
+    return allItems.filter((a) => !a.isRead);
+  }, [allItems, unreadOnly]);
 
   const selectedArticle = useMemo(() => {
     if (selectedArticleId == null) return null;
-    return (data?.items ?? []).find((a) => a.id === selectedArticleId) ?? null;
-  }, [data, selectedArticleId]);
+    return allItems.find((a) => a.id === selectedArticleId) ?? null;
+  }, [allItems, selectedArticleId]);
 
   // Search scope label
   const searchScope = useMemo(() => {
@@ -439,7 +454,7 @@ function AppInner() {
               onMarkAllRead={handleMarkAllRead}
               onRefresh={() => refresh.mutate()}
               isRefreshing={refresh.isPending}
-              searchHitCount={debouncedQ ? (data?.total ?? null) : null}
+              searchHitCount={debouncedQ ? (data?.pages[0]?.total ?? null) : null}
               searchScope={searchScope}
               lastUpdated={lastUpdated}
               canToggleSidebar={layoutMode !== 'desktop'}
@@ -470,11 +485,14 @@ function AppInner() {
                     onOpenOpmlGuide={handleOpenOpmlGuide}
                     searchQuery={debouncedQ || undefined}
                     unreadOnly={unreadOnly}
-                    totalCount={data?.total}
+                    totalCount={data?.pages[0]?.total}
                     selectionLabel={searchScope}
                     onClearSearch={handleSearchClear}
                     onToggleUnreadOnly={handleToggleUnreadOnly}
                     onRefresh={() => refresh.mutate()}
+                    onLoadMore={() => fetchNextPage()}
+                    hasMore={hasNextPage}
+                    isFetchingMore={isFetchingNextPage}
                   />
                 </div>
               )}

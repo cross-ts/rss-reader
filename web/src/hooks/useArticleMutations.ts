@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { api, type ArticleListResponse } from '../api/client';
 
 export function useArticleMutations() {
@@ -9,12 +9,15 @@ export function useArticleMutations() {
     mutationFn: (id: number) => api.updateArticle(id, { isRead: true }),
     onMutate: async (id: number) => {
       await queryClient.cancelQueries({ queryKey: ['articles'] });
-      const previousQueries = queryClient.getQueriesData<ArticleListResponse>({ queryKey: ['articles'] });
-      queryClient.setQueriesData<ArticleListResponse>({ queryKey: ['articles'] }, (old) => {
+      const previousQueries = queryClient.getQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] });
+      queryClient.setQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] }, (old) => {
         if (!old) return old;
         return {
           ...old,
-          items: old.items.map((a) => (a.id === id ? { ...a, isRead: true, readAt: new Date().toISOString() } : a)),
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.map((a) => (a.id === id ? { ...a, isRead: true, readAt: new Date().toISOString() } : a)),
+          })),
         };
       });
       return { previousQueries };
@@ -35,14 +38,17 @@ export function useArticleMutations() {
       api.updateArticle(id, { isRead: !currentIsRead }),
     onMutate: async ({ id, currentIsRead }) => {
       await queryClient.cancelQueries({ queryKey: ['articles'] });
-      const previousQueries = queryClient.getQueriesData<ArticleListResponse>({ queryKey: ['articles'] });
-      queryClient.setQueriesData<ArticleListResponse>({ queryKey: ['articles'] }, (old) => {
+      const previousQueries = queryClient.getQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] });
+      queryClient.setQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] }, (old) => {
         if (!old) return old;
         return {
           ...old,
-          items: old.items.map((a) =>
-            a.id === id ? { ...a, isRead: !currentIsRead, readAt: !currentIsRead ? new Date().toISOString() : null } : a,
-          ),
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.map((a) =>
+              a.id === id ? { ...a, isRead: !currentIsRead, readAt: !currentIsRead ? new Date().toISOString() : null } : a,
+            ),
+          })),
         };
       });
       return { previousQueries };
@@ -62,15 +68,18 @@ export function useArticleMutations() {
     mutationFn: (ids: number[]) => api.markArticlesRead(ids),
     onMutate: async (ids: number[]) => {
       await queryClient.cancelQueries({ queryKey: ['articles'] });
-      const previousQueries = queryClient.getQueriesData<ArticleListResponse>({ queryKey: ['articles'] });
+      const previousQueries = queryClient.getQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] });
       const idSet = new Set(ids);
-      queryClient.setQueriesData<ArticleListResponse>({ queryKey: ['articles'] }, (old) => {
+      queryClient.setQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] }, (old) => {
         if (!old) return old;
         return {
           ...old,
-          items: old.items.map((a) =>
-            idSet.has(a.id) ? { ...a, isRead: true, readAt: new Date().toISOString() } : a,
-          ),
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.map((a) =>
+              idSet.has(a.id) ? { ...a, isRead: true, readAt: new Date().toISOString() } : a,
+            ),
+          })),
         };
       });
       return { previousQueries };
@@ -91,12 +100,15 @@ export function useArticleMutations() {
       api.updateArticle(id, { starred: !currentStarred }),
     onMutate: async ({ id, currentStarred }) => {
       await queryClient.cancelQueries({ queryKey: ['articles'] });
-      const previousQueries = queryClient.getQueriesData<ArticleListResponse>({ queryKey: ['articles'] });
-      queryClient.setQueriesData<ArticleListResponse>({ queryKey: ['articles'] }, (old) => {
+      const previousQueries = queryClient.getQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] });
+      queryClient.setQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] }, (old) => {
         if (!old) return old;
         return {
           ...old,
-          items: old.items.map((a) => (a.id === id ? { ...a, starred: !currentStarred } : a)),
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.map((a) => (a.id === id ? { ...a, starred: !currentStarred } : a)),
+          })),
         };
       });
       return { previousQueries };

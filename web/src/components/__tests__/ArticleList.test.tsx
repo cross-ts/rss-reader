@@ -225,4 +225,33 @@ describe('ArticleList', () => {
     const star = container.querySelector('.text-amber-400');
     expect(star).not.toBeInTheDocument();
   });
+
+  it('shows "もっと読む" button when hasMore is true', () => {
+    const onLoadMore = vi.fn();
+    const article = makeArticle({ id: 1 });
+    render(
+      <ArticleList {...defaultProps} articles={[article]} hasMore={true} onLoadMore={onLoadMore} />,
+    );
+    const btn = screen.getByText('もっと読む');
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not show "もっと読む" button when hasMore is false', () => {
+    const article = makeArticle({ id: 1 });
+    render(
+      <ArticleList {...defaultProps} articles={[article]} hasMore={false} />,
+    );
+    expect(screen.queryByText('もっと読む')).not.toBeInTheDocument();
+  });
+
+  it('shows spinner when isFetchingMore is true', () => {
+    const article = makeArticle({ id: 1 });
+    render(
+      <ArticleList {...defaultProps} articles={[article]} hasMore={true} isFetchingMore={true} />,
+    );
+    expect(screen.getByText('読み込み中…')).toBeInTheDocument();
+    expect(screen.queryByText('もっと読む')).not.toBeInTheDocument();
+  });
 });
