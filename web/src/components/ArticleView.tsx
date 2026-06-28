@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { type Article } from '../api/client';
 import { relativeTime } from '../utils/time';
 import { decodeEntities } from '../utils/decodeEntities';
+import { resolveContentLinks } from '../utils/resolveLinks';
 
 interface Props {
   article: Article | null;
@@ -31,6 +32,11 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
       onMarkRead(article.id);
     }
   }, [article?.id, onMarkRead]);
+
+  const sanitizedContent = useMemo(
+    () => (article ? DOMPurify.sanitize(resolveContentLinks(article.content, article.url)) : ''),
+    [article?.content, article?.url],
+  );
 
   const decodedTitle = useMemo(
     () => (article ? decodeEntities(article.title) : ''),
@@ -191,7 +197,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
         <div
           className="article-view-body max-w-3xl mx-auto"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content) }}
+          dangerouslySetInnerHTML={{ __html: sanitizedContent }}
         />
       </div>
     </div>
