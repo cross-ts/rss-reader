@@ -228,8 +228,9 @@ export function ArticleList({
             </span>
           ) : (
             <button
-              onClick={onLoadMore}
-              className="text-sm text-accent hover:text-accent-hover transition-colors"
+              type="button"
+              onClick={() => onLoadMore?.()}
+              className="text-sm text-accent hover:text-accent-hover transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
             >
               もっと読む
             </button>

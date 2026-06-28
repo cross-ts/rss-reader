@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { type ReactNode } from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, type InfiniteData } from '@tanstack/react-query';
 import { useArticleMutations } from '../useArticleMutations';
 import { api, type Article, type ArticleListResponse } from '../../api/client';
 
@@ -53,9 +53,9 @@ function seedArticlesCache(
   queryClient: QueryClient,
   articles: Article[],
 ): void {
-  queryClient.setQueryData<ArticleListResponse>(['articles'], {
-    items: articles,
-    total: articles.length,
+  queryClient.setQueryData<InfiniteData<ArticleListResponse>>(['articles'], {
+    pages: [{ items: articles, total: articles.length }],
+    pageParams: [0],
   });
 }
 
@@ -105,9 +105,9 @@ describe('useArticleMutations', () => {
 
       await waitFor(() => {
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].isRead).toBe(true);
-        expect(cached?.items[0].readAt).toBeTruthy();
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].isRead).toBe(true);
+        expect(cached?.pages[0].items[0].readAt).toBeTruthy();
       });
     });
 
@@ -127,9 +127,9 @@ describe('useArticleMutations', () => {
 
       await waitFor(() => {
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].isRead).toBe(false);
-        expect(cached?.items[0].readAt).toBeNull();
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].isRead).toBe(false);
+        expect(cached?.pages[0].items[0].readAt).toBeNull();
       });
     });
   });
@@ -150,9 +150,9 @@ describe('useArticleMutations', () => {
       await waitFor(() => {
         expect(mockUpdateArticle).toHaveBeenCalledWith(1, { isRead: true });
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].isRead).toBe(true);
-        expect(cached?.items[0].readAt).toBeTruthy();
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].isRead).toBe(true);
+        expect(cached?.pages[0].items[0].readAt).toBeTruthy();
       });
     });
 
@@ -175,9 +175,9 @@ describe('useArticleMutations', () => {
       await waitFor(() => {
         expect(mockUpdateArticle).toHaveBeenCalledWith(1, { isRead: false });
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].isRead).toBe(false);
-        expect(cached?.items[0].readAt).toBeNull();
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].isRead).toBe(false);
+        expect(cached?.pages[0].items[0].readAt).toBeNull();
       });
     });
 
@@ -197,9 +197,9 @@ describe('useArticleMutations', () => {
 
       await waitFor(() => {
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].isRead).toBe(false);
-        expect(cached?.items[0].readAt).toBeNull();
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].isRead).toBe(false);
+        expect(cached?.pages[0].items[0].readAt).toBeNull();
       });
     });
   });
@@ -244,13 +244,13 @@ describe('useArticleMutations', () => {
 
       await waitFor(() => {
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].isRead).toBe(true);
-        expect(cached?.items[0].readAt).toBeTruthy();
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].isRead).toBe(true);
+        expect(cached?.pages[0].items[0].readAt).toBeTruthy();
         // id=2 should remain unread
-        expect(cached?.items[1].isRead).toBe(false);
-        expect(cached?.items[2].isRead).toBe(true);
-        expect(cached?.items[2].readAt).toBeTruthy();
+        expect(cached?.pages[0].items[1].isRead).toBe(false);
+        expect(cached?.pages[0].items[2].isRead).toBe(true);
+        expect(cached?.pages[0].items[2].readAt).toBeTruthy();
       });
     });
 
@@ -273,9 +273,9 @@ describe('useArticleMutations', () => {
 
       await waitFor(() => {
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].isRead).toBe(false);
-        expect(cached?.items[1].isRead).toBe(false);
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].isRead).toBe(false);
+        expect(cached?.pages[0].items[1].isRead).toBe(false);
       });
     });
   });
@@ -296,8 +296,8 @@ describe('useArticleMutations', () => {
       await waitFor(() => {
         expect(mockUpdateArticle).toHaveBeenCalledWith(1, { starred: true });
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].starred).toBe(true);
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].starred).toBe(true);
       });
     });
 
@@ -316,8 +316,8 @@ describe('useArticleMutations', () => {
       await waitFor(() => {
         expect(mockUpdateArticle).toHaveBeenCalledWith(1, { starred: false });
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].starred).toBe(false);
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].starred).toBe(false);
       });
     });
 
@@ -337,8 +337,8 @@ describe('useArticleMutations', () => {
 
       await waitFor(() => {
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].starred).toBe(false);
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].starred).toBe(false);
       });
     });
 
@@ -359,10 +359,10 @@ describe('useArticleMutations', () => {
 
       await waitFor(() => {
         const cached =
-          queryClient.getQueryData<ArticleListResponse>(['articles']);
-        expect(cached?.items[0].starred).toBe(true);
+          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
+        expect(cached?.pages[0].items[0].starred).toBe(true);
         // Article 2 should be unchanged
-        expect(cached?.items[1].starred).toBe(true);
+        expect(cached?.pages[0].items[1].starred).toBe(true);
       });
     });
   });
