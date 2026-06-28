@@ -45,7 +45,7 @@
 - **SSOT は feeds.opml**。全 mutation（feed/folder の create/update/delete）は「`FeedsLock` 取得 → OPML読込 → 変更 → OPML 保存 → `ReconcileSubscriptions`」の順。`FeedsLock`（`server.AppState` の `sync.Mutex`）で read-modify-write を直列化（lost update 防止）。ハンドラには `&state.FeedsLock` を渡す。
 - `ReconcileSubscriptions`（`internal/db`）はトランザクション（`db.Begin()` → `tx.Commit()`）付き。OPML にない feed の記事は `ON DELETE CASCADE` 相当で削除。OPML 読込失敗は fail-fast（不在=nil、パース失敗=err）。起動時、OPML 不在かつ DB に購読が残る場合は誤削除防止のため**起動中止**（`main.go` の `reconcileOnStartup`）。OPML 不在かつ DB が空なら空テンプレートを自動生成。
 - **SSRF 対策**: フィード取得は http/https のみ（`fetcher.ValidateFeedURL`）。DNS解決後 IP でループバック/プライベート/リンクローカル/CGNAT を拒否（`checkIP`/`checkIPv4`/`checkIPv6`）。リダイレクトは Go 標準の自動追従を無効化し（`CheckRedirect`）、`FetchWithGuard(Conditional)` で手動・毎ホップ検証。15s タイムアウト、10MB 上限（`MaxFeedBytes`）。新規取得経路を足すときも `FetchWithGuard` 系を使う。
-- **FTS**: `articles_fts` を `fts5(..., tokenize='trigram')` で作成し、`articles` への INSERT/DELETE/UPDATE をトリガで同期。検索は `articles_fts MATCH ?` + `ORDER BY bm25(articles_fts)`。3文字以上は trigram MATCH、1〜2文字は LIKE フォールバック（trigram は3-gram のため）。全件再構築は `INSERT INTO articles_fts(articles_fts) VALUES('rebuild')`。
+- **FTS**: `articles_fts` を `fts5(..., tokenize='trigram')` で作成し、`articles` への INSERT/DELETE/UPDATE をトリガで同期。検索は `articles_fts MATCH ?`。並び順は全経路共通で `published_at DESC`（関連度順は使用しない）。3文字以上は trigram MATCH、1〜2文字は LIKE フォールバック（trigram は3-gram のため）。全件再構築は `INSERT INTO articles_fts(articles_fts) VALUES('rebuild')`。
 - リバースプロキシ配信時、プロキシ先は `FRONTEND_URL` のオリジンと**厳密一致**するもののみ許可（SSRF 対策）。`/api/*` はローカル DB に直結。
 - 記事本文はフロントで DOMPurify サニタイズ。元記事リンクは http/https のみ。
 

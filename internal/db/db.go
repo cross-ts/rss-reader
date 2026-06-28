@@ -276,7 +276,7 @@ func (d *DB) listArticlesNoSearch(filter ArticleFilter) (*ArticlesResult, error)
 
 	// Fetch items
 	selectQuery := fmt.Sprintf(
-		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC LIMIT ? OFFSET ?`,
+		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC, a.id DESC LIMIT ? OFFSET ?`,
 		baseQuery,
 	)
 	args = append(args, filter.Limit, filter.Offset)
@@ -350,7 +350,7 @@ func (d *DB) listArticlesFTS(filter ArticleFilter, q string) (*ArticlesResult, e
 
 	// Fetch items
 	selectQuery := fmt.Sprintf(
-		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY bm25(articles_fts) ASC LIMIT ? OFFSET ?`,
+		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC, a.id DESC LIMIT ? OFFSET ?`,
 		baseQuery,
 	)
 	args = append(args, filter.Limit, filter.Offset)
@@ -408,7 +408,7 @@ func (d *DB) listArticlesLike(filter ArticleFilter, q string) (*ArticlesResult, 
 
 	// Fetch items
 	selectQuery := fmt.Sprintf(
-		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC LIMIT ? OFFSET ?`,
+		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC, a.id DESC LIMIT ? OFFSET ?`,
 		baseQuery,
 	)
 	args = append(args, filter.Limit, filter.Offset)
