@@ -27,15 +27,7 @@ vi.mock('../Toast', () => ({
   useToast: () => ({ addToast: vi.fn() }),
 }));
 
-const mockApi = api as {
-  getFolders: ReturnType<typeof vi.fn>;
-  getFeeds: ReturnType<typeof vi.fn>;
-  createFeed: ReturnType<typeof vi.fn>;
-  createFolder: ReturnType<typeof vi.fn>;
-  deleteFeed: ReturnType<typeof vi.fn>;
-  deleteFolder: ReturnType<typeof vi.fn>;
-  discoverFeed: ReturnType<typeof vi.fn>;
-};
+const mockApi = vi.mocked(api);
 
 const testFeeds: Feed[] = [
   { id: 1, title: 'Tech Blog', url: 'https://tech.com/feed', siteUrl: 'https://tech.com', folder: null, articleCount: 10 },
