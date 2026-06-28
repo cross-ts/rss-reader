@@ -2397,6 +2397,43 @@ func TestMigrateReadState_IndexError(t *testing.T) {
 // --- ApplyFetchResult commit error ---
 // Line 649: commit error is nearly impossible to trigger without filesystem issues.
 
+// --- FTS ordering ---
+
+func TestListArticles_SearchFTS_OrderByPublishedAtDesc(t *testing.T) {
+	d := openTestDB(t)
+	seedFeeds(t, d, nil, []FeedDef{
+		{Title: "Feed", URL: "https://example.com/feed"},
+	})
+	feed, _ := d.GetFeedByURL("https://example.com/feed")
+
+	// Insert articles containing the same keyword but with different published_at dates.
+	seedArticles(t, d, feed.ID, []NewArticle{
+		{GUID: "old", Title: "Kubernetes setup guide", URL: "u1", Content: "Deploy Kubernetes clusters", PublishedAt: strPtr("2024-01-01T00:00:00Z")},
+		{GUID: "mid", Title: "Kubernetes networking deep dive", URL: "u2", Content: "Kubernetes networking explained", PublishedAt: strPtr("2024-06-15T00:00:00Z")},
+		{GUID: "new", Title: "Kubernetes security best practices", URL: "u3", Content: "Securing Kubernetes workloads", PublishedAt: strPtr("2024-12-01T00:00:00Z")},
+	})
+
+	q := "Kubernetes"
+	result, err := d.ListArticles(ArticleFilter{Q: &q, Limit: 10})
+	if err != nil {
+		t.Fatalf("fts search: %v", err)
+	}
+	if result.Total != 3 {
+		t.Fatalf("expected 3 matches, got %d", result.Total)
+	}
+
+	// Results must be ordered by published_at DESC (newest first), not by bm25 relevance.
+	if result.Items[0].Title != "Kubernetes security best practices" {
+		t.Fatalf("expected newest article first, got %q", result.Items[0].Title)
+	}
+	if result.Items[1].Title != "Kubernetes networking deep dive" {
+		t.Fatalf("expected middle article second, got %q", result.Items[1].Title)
+	}
+	if result.Items[2].Title != "Kubernetes setup guide" {
+		t.Fatalf("expected oldest article last, got %q", result.Items[2].Title)
+	}
+}
+
 // Verify unused helper functions compile (suppress lint warnings).
 var _ = strings.Contains
 var _ = intPtr
