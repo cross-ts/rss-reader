@@ -261,7 +261,8 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
   useEffect(() => {
     if (!menuOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      const target = e.target;
+      if (menuRef.current && target instanceof Node && !menuRef.current.contains(target)) {
         setMenuOpen(false);
       }
     };
@@ -284,6 +285,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
             onClick={() => { setShowAddPanel((p) => !p); setShowSettingsPanel(false); }}
             title="Add feed"
             aria-label="Add feed"
+            aria-pressed={showAddPanel}
             className={[
               'w-7 h-7 flex items-center justify-center rounded-md transition-colors',
               showAddPanel
@@ -301,6 +303,8 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
               onClick={toggleMenu}
               title="More actions"
               aria-label="More actions"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
               className="w-7 h-7 flex items-center justify-center rounded-md text-text-sub hover:text-text-primary hover:bg-surface-2 transition-colors"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -310,8 +314,10 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
               </svg>
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-border rounded-lg shadow-lg py-1 z-50">
+              <div role="menu" className="absolute right-0 top-full mt-1 w-40 bg-white border border-border rounded-lg shadow-lg py-1 z-50">
                 <button
+                  type="button"
+                  role="menuitem"
                   className="w-full text-left px-3 py-2 text-xs text-text-primary hover:bg-surface-2 transition-colors"
                   onClick={() => {
                     setShowSettingsPanel((p) => !p);
