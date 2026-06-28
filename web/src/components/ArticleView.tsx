@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import { type Article } from '../api/client';
 import { relativeTime } from '../utils/time';
@@ -19,11 +19,18 @@ interface Props {
 
 export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead, onPrev, onNext, onNextUnread, starred, onToggleStarred }: Props) {
   // Mark as read when article is opened
+  const markedReadRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (article && !article.isRead) {
+    if (!article) {
+      markedReadRef.current = null;
+      return;
+    }
+    if (!article.isRead && markedReadRef.current !== article.id) {
+      markedReadRef.current = article.id;
       onMarkRead(article.id);
     }
-  }, [article?.id, article?.isRead, onMarkRead]);
+  }, [article?.id, onMarkRead]);
 
   const decodedTitle = useMemo(
     () => (article ? decodeEntities(article.title) : ''),
