@@ -63,6 +63,25 @@ describe('resolveContentLinks', () => {
     expect(result).toContain('src="data:image/png;base64,abc"');
   });
 
+  it('does not convert uppercase JavaScript: hrefs', () => {
+    const html = '<a href="JavaScript:void(0)">Click</a>';
+    const result = resolveContentLinks(html, baseUrl);
+    expect(result).toContain('href="JavaScript:void(0)"');
+    expect(result).not.toContain('target=');
+  });
+
+  it('does not convert href with leading whitespace before javascript:', () => {
+    const html = '<a href=" javascript:alert(1)">Click</a>';
+    const result = resolveContentLinks(html, baseUrl);
+    expect(result).not.toContain('target=');
+  });
+
+  it('does not convert uppercase Data: img src', () => {
+    const html = '<img src="Data:image/png;base64,abc">';
+    const result = resolveContentLinks(html, baseUrl);
+    expect(result).toContain('src="Data:image/png;base64,abc"');
+  });
+
   it('resolves relative path based on article URL', () => {
     const html = '<a href="related">Related</a>';
     const result = resolveContentLinks(html, 'https://example.com/blog/post/1');

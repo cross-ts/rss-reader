@@ -33,6 +33,11 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
     }
   }, [article?.id, onMarkRead]);
 
+  const sanitizedContent = useMemo(
+    () => (article ? DOMPurify.sanitize(resolveContentLinks(article.content, article.url)) : ''),
+    [article?.content, article?.url],
+  );
+
   const decodedTitle = useMemo(
     () => (article ? decodeEntities(article.title) : ''),
     [article],
@@ -192,7 +197,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
         <div
           className="article-view-body max-w-3xl mx-auto"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(resolveContentLinks(article.content, article.url)) }}
+          dangerouslySetInnerHTML={{ __html: sanitizedContent }}
         />
       </div>
     </div>

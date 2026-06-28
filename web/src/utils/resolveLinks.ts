@@ -1,9 +1,10 @@
+const DANGEROUS_SCHEME = /^\s*(javascript|data):/i;
+
 export function resolveContentLinks(html: string, articleUrl: string): string {
   if (!html) return html;
 
-  let baseUrl: URL;
   try {
-    baseUrl = new URL(articleUrl);
+    const baseUrl = new URL(articleUrl);
     if (baseUrl.protocol !== 'http:' && baseUrl.protocol !== 'https:') {
       return html;
     }
@@ -16,7 +17,7 @@ export function resolveContentLinks(html: string, articleUrl: string): string {
 
   doc.querySelectorAll('a[href]').forEach((a) => {
     const href = a.getAttribute('href')!;
-    if (href.startsWith('javascript:') || href.startsWith('data:')) return;
+    if (DANGEROUS_SCHEME.test(href)) return;
     try {
       a.setAttribute('href', new URL(href, articleUrl).href);
     } catch {
@@ -28,7 +29,7 @@ export function resolveContentLinks(html: string, articleUrl: string): string {
 
   doc.querySelectorAll('img[src]').forEach((img) => {
     const src = img.getAttribute('src')!;
-    if (src.startsWith('data:')) return;
+    if (DANGEROUS_SCHEME.test(src)) return;
     try {
       img.setAttribute('src', new URL(src, articleUrl).href);
     } catch {
