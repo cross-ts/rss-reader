@@ -7,6 +7,7 @@ import (
 
 	"github.com/cross-ts/rss-reader/internal/db"
 	"github.com/cross-ts/rss-reader/internal/fetcher"
+	"github.com/cross-ts/rss-reader/internal/opmlsync"
 )
 
 // RunOnce fetches all feed targets and applies the results.
@@ -47,9 +48,14 @@ func RunOnce(database *db.DB, client *http.Client) error {
 }
 
 // Start launches the background poller that runs immediately and then on each tick.
-func Start(database *db.DB, client *http.Client, intervalMinutes uint64) {
+func Start(database *db.DB, client *http.Client, intervalMinutes uint64, syncer *opmlsync.Syncer) {
 	// Run immediately in a goroutine.
 	go func() {
+		if syncer != nil {
+			if err := syncer.SyncIfChanged(); err != nil {
+				slog.Warn("poller: opml sync failed", "error", err)
+			}
+		}
 		if err := RunOnce(database, client); err != nil {
 			slog.Error("poller: initial run failed", "error", err)
 		}
@@ -61,6 +67,11 @@ func Start(database *db.DB, client *http.Client, intervalMinutes uint64) {
 		defer ticker.Stop()
 
 		for range ticker.C {
+			if syncer != nil {
+				if err := syncer.SyncIfChanged(); err != nil {
+					slog.Warn("poller: opml sync failed", "error", err)
+				}
+			}
 			if err := RunOnce(database, client); err != nil {
 				slog.Error("poller: scheduled run failed", "error", err)
 			}

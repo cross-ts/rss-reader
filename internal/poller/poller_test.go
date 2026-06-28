@@ -267,7 +267,7 @@ func TestStart_DBError(t *testing.T) {
 	database.Close()
 
 	// Start should not panic even with a closed DB.
-	Start(database, http.DefaultClient, 60)
+	Start(database, http.DefaultClient, 60, nil)
 }
 
 func TestStart(t *testing.T) {
@@ -283,7 +283,7 @@ func TestStart(t *testing.T) {
 	database := openTestDB(t)
 	seedFeed(t, database, "Test Feed", feedURL)
 
-	Start(database, client, 60)
+	Start(database, client, 60, nil)
 
 	deadline := time.After(10 * time.Second)
 	for {
@@ -301,4 +301,3 @@ func TestStart(t *testing.T) {
 		}
 	}
 }
-

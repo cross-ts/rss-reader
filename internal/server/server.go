@@ -1,21 +1,25 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/cross-ts/rss-reader/internal/config"
 	"github.com/cross-ts/rss-reader/internal/db"
 	"github.com/cross-ts/rss-reader/internal/handlers"
+	"github.com/cross-ts/rss-reader/internal/opmlsync"
 )
 
 // AppState holds shared application state for all request handlers.
 type AppState struct {
 	DB          *db.DB
 	Config      *config.Config
-	FeedClient  *http.Client // redirect disabled, for feed fetching
-	ProxyClient *http.Client // redirect enabled, for frontend proxy
-	FeedsLock   sync.Mutex   // serializes OPML read-modify-write
+	FeedClient  *http.Client     // redirect disabled, for feed fetching
+	ProxyClient *http.Client     // redirect enabled, for frontend proxy
+	FeedsLock   sync.Mutex       // serializes OPML read-modify-write
+	Syncer      *opmlsync.Syncer // detects external OPML changes
 }
 
 // NewServeMux creates and configures the HTTP route multiplexer.
@@ -66,6 +70,19 @@ func CORSMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+// OPMLSyncMiddleware checks for external OPML file changes before serving
+// API requests and reconciles the database when a change is detected.
+func OPMLSyncMiddleware(syncer *opmlsync.Syncer, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if syncer != nil && strings.HasPrefix(r.URL.Path, "/api/") {
+			if err := syncer.SyncIfChanged(); err != nil {
+				slog.Warn("opml sync failed; serving current DB state", "error", err)
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/cross-ts/rss-reader/internal/db"
 	"github.com/cross-ts/rss-reader/internal/feeds"
 	"github.com/cross-ts/rss-reader/internal/fetcher"
+	"github.com/cross-ts/rss-reader/internal/opmlsync"
 	"github.com/cross-ts/rss-reader/internal/poller"
 	"github.com/cross-ts/rss-reader/internal/server"
 )
@@ -66,11 +67,18 @@ func run() error {
 		ProxyClient: proxyClient,
 	}
 
+	syncer := opmlsync.New(database, cfg.FeedsPath, &state.FeedsLock)
+	state.Syncer = syncer
+
+	if err := syncer.MarkSynced(); err != nil {
+		slog.Warn("failed to mark opml baseline", "error", err)
+	}
+
 	// Start background poller (immediate run + interval ticker).
-	poller.Start(database, feedClient, cfg.PollIntervalMinutes)
+	poller.Start(database, feedClient, cfg.PollIntervalMinutes, syncer)
 
 	mux := server.NewServeMux(state)
-	handler := server.CORSMiddleware(mux)
+	handler := server.CORSMiddleware(server.OPMLSyncMiddleware(syncer, mux))
 
 	slog.Info("Listening", "addr", "http://"+bindAddr)
 	if err := http.ListenAndServe(bindAddr, handler); err != nil {
