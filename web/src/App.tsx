@@ -481,7 +481,7 @@ function AppInner() {
 
               {/* Article view (right panel) */}
               {showArticlePane && (
-                <div className="min-w-0 overflow-hidden bg-white flex flex-col">
+                <div className="min-w-0 min-h-0 overflow-hidden bg-white flex flex-col">
                   <ArticleView
                     article={selectedArticle}
                     onClose={handleCloseArticle}
