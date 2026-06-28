@@ -17,7 +17,15 @@ interface Props {
   addPanelFocusToken?: number;
 }
 
-const deleteButtonClassName = 'flex-shrink-0 mr-2 w-6 h-6 flex items-center justify-center text-[11px] text-text-sub opacity-100 md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded hover:bg-surface-2 focus-visible:opacity-100 md:focus-visible:opacity-100 md:focus-visible:pointer-events-auto focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none';
+const deleteButtonClassName = [
+  'flex-shrink-0 mr-2 w-6 h-6 flex items-center justify-center text-[11px] text-text-sub',
+  'opacity-100 md:opacity-0 md:pointer-events-none',
+  'md:group-hover:opacity-100 md:group-hover:pointer-events-auto',
+  'hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed',
+  'transition-all rounded hover:bg-surface-2',
+  'focus-visible:opacity-100 md:focus-visible:pointer-events-auto',
+  'focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
+].join(' ');
 
 export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdding, addPanelFocusToken = 0 }: Props) {
   const qc = useQueryClient();
