@@ -22,7 +22,11 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
   const markedReadRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (article && !article.isRead && markedReadRef.current !== article.id) {
+    if (!article) {
+      markedReadRef.current = null;
+      return;
+    }
+    if (!article.isRead && markedReadRef.current !== article.id) {
       markedReadRef.current = article.id;
       onMarkRead(article.id);
     }
