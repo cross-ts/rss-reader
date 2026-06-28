@@ -448,12 +448,12 @@ function AppInner() {
             />
 
             {/* Content: Article list + Article view */}
-            <div className={['grid flex-1 min-w-0 overflow-hidden', contentGridClass].join(' ')}>
+            <div className={['grid flex-1 min-w-0 min-h-0 overflow-hidden', contentGridClass].join(' ')}>
               {/* Article list */}
               {showListPane && (
                 <div
                   className={[
-                    'min-w-0 overflow-hidden',
+                    'min-w-0 min-h-0 overflow-hidden flex flex-col',
                     showArticlePane ? 'border-r border-border' : '',
                   ].join(' ')}
                 >
@@ -481,7 +481,7 @@ function AppInner() {
 
               {/* Article view (right panel) */}
               {showArticlePane && (
-                <div className="min-w-0 overflow-hidden bg-white flex flex-col">
+                <div className="min-w-0 min-h-0 overflow-hidden bg-white flex flex-col">
                   <ArticleView
                     article={selectedArticle}
                     onClose={handleCloseArticle}
