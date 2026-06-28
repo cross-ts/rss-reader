@@ -34,6 +34,13 @@ export interface ArticleListResponse {
   total: number;
 }
 
+export interface FeedCandidate {
+  feedUrl: string;
+  title: string | null;
+  siteUrl?: string | null;
+  type?: string;
+}
+
 export interface UnreadCounts {
   total: number;
   feeds: Record<string, number>;
@@ -103,7 +110,7 @@ export const api = {
   },
 
   // フィードURL自動検出
-  discoverFeed(url: string): Promise<{ feedUrl: string; title?: string | null }> {
+  discoverFeed(url: string): Promise<FeedCandidate[]> {
     return request('/api/feeds/discover', {
       method: 'POST',
       body: JSON.stringify({ url }),

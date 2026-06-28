@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type Folder, type Feed } from '../api/client';
+import { api, type Folder, type Feed, type FeedCandidate } from '../api/client';
 import { useToast } from './Toast';
 
 export type SidebarSelection =
@@ -30,7 +30,8 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
   const [feedUrl, setFeedUrl] = useState('');
   const [feedFolder, setFeedFolder] = useState('');
   const [newFolderForFeed, setNewFolderForFeed] = useState('');
-  const [discoverPreview, setDiscoverPreview] = useState<{ feedUrl: string; title?: string | null } | null>(null);
+  const [discoverPreview, setDiscoverPreview] = useState<FeedCandidate[] | null>(null);
+  const [selectedCandidateIndex, setSelectedCandidateIndex] = useState(0);
 
   // Folder addition
   const [newFolderName, setNewFolderName] = useState('');
@@ -124,9 +125,10 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
       return data;
     },
     onSuccess: (data) => {
-      if (!data) return;
+      if (!data || data.length === 0) return;
       setDiscoverPreview(data);
-      setFeedUrl(data.feedUrl);
+      setSelectedCandidateIndex(0);
+      setFeedUrl(data[0].feedUrl);
     },
   });
 
@@ -155,7 +157,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
   const handleAddFeed = (e: React.FormEvent) => {
     e.preventDefault();
     if (!feedUrl.trim()) return;
-    onFeedAdding?.(discoverPreview?.title ?? feedUrl.trim());
+    onFeedAdding?.(discoverPreview?.[selectedCandidateIndex]?.title ?? feedUrl.trim());
     addFeed.mutate();
   };
 
@@ -227,7 +229,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
                 type="text"
                 placeholder="Site or feed URL"
                 value={feedUrl}
-                onChange={(e) => { setFeedUrl(e.target.value); setDiscoverPreview(null); discoverFeed.reset(); }}
+                onChange={(e) => { setFeedUrl(e.target.value); setDiscoverPreview(null); setSelectedCandidateIndex(0); discoverFeed.reset(); }}
                 className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
               <button
@@ -240,10 +242,42 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
               </button>
             </div>
 
-            {discoverPreview && (
+            {discoverPreview && discoverPreview.length > 1 && (
+              <div className="flex flex-col gap-1">
+                <p className="text-[11px] text-text-sub">{discoverPreview.length} feeds found — select one:</p>
+                {discoverPreview.map((candidate, i) => (
+                  <button
+                    key={`${i}-${candidate.feedUrl}`}
+                    type="button"
+                    aria-pressed={i === selectedCandidateIndex}
+                    onClick={() => {
+                      setSelectedCandidateIndex(i);
+                      setFeedUrl(candidate.feedUrl);
+                    }}
+                    className={[
+                      'w-full text-left px-2.5 py-2 rounded-md text-xs transition-colors',
+                      i === selectedCandidateIndex
+                        ? 'bg-accent-light border border-accent/20'
+                        : 'bg-white border border-border hover:border-accent/20',
+                    ].join(' ')}
+                  >
+                    <p className="font-semibold truncate">{candidate.title ?? '(Untitled)'}</p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {candidate.type && (
+                        <span className="flex-shrink-0 text-[10px] font-semibold text-accent bg-accent/10 px-1 py-0.5 rounded">
+                          {feedTypeLabel(candidate.type)}
+                        </span>
+                      )}
+                      <span className="truncate text-[11px] text-text-sub">{candidate.feedUrl}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {discoverPreview && discoverPreview.length === 1 && (
               <div className="px-2.5 py-2 bg-accent-light border border-accent/20 rounded-md text-xs">
-                <p className="text-accent font-semibold truncate">{discoverPreview.title ?? '(Untitled)'}</p>
-                <p className="text-text-sub truncate text-[11px]">{discoverPreview.feedUrl}</p>
+                <p className="text-accent font-semibold truncate">{discoverPreview[0].title ?? '(Untitled)'}</p>
+                <p className="text-text-sub truncate text-[11px]">{discoverPreview[0].feedUrl}</p>
               </div>
             )}
             {discoverFeed.isError && (
@@ -473,6 +507,13 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
       )}
     </aside>
   );
+}
+
+function feedTypeLabel(mimeType: string): string {
+  if (mimeType.includes('rss')) return 'RSS';
+  if (mimeType.includes('atom')) return 'Atom';
+  if (mimeType.includes('json')) return 'JSON';
+  return '';
 }
 
 interface FeedRowProps {
