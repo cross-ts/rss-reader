@@ -448,12 +448,12 @@ function AppInner() {
             />
 
             {/* Content: Article list + Article view */}
-            <div className={['grid flex-1 min-w-0 overflow-hidden', contentGridClass].join(' ')}>
+            <div className={['grid flex-1 min-w-0 min-h-0 overflow-hidden', contentGridClass].join(' ')}>
               {/* Article list */}
               {showListPane && (
                 <div
                   className={[
-                    'min-w-0 overflow-hidden',
+                    'min-w-0 min-h-0 overflow-hidden flex flex-col',
                     showArticlePane ? 'border-r border-border' : '',
                   ].join(' ')}
                 >
