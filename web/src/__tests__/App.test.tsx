@@ -5,20 +5,9 @@ import type { Article } from '../api/client';
 
 // ---- Mocks ----
 
-vi.mock('../components/IconRail', () => ({
-  IconRail: (props: any) => (
-    <div data-testid="icon-rail" data-active-view={props.activeView}>
-      <button data-testid="rail-newsfeed" onClick={() => props.onChangeView('newsfeed')} />
-      <button data-testid="rail-search" onClick={() => props.onChangeView('search')} />
-      <button data-testid="rail-add" onClick={() => props.onChangeView('add')} />
-      <button data-testid="rail-settings" onClick={() => props.onChangeView('settings')} />
-    </div>
-  ),
-}));
-
 vi.mock('../components/Sidebar', () => ({
   Sidebar: (props: any) => (
-    <div data-testid="sidebar" data-rail-view={props.railView}>
+    <div data-testid="sidebar" data-open-add-panel-token={props.openAddPanelToken} data-open-settings-panel-token={props.openSettingsPanelToken}>
       <button
         data-testid="sidebar-select-folder"
         onClick={() => props.onSelect({ type: 'folder', folderId: 1, folderName: 'Tech' })}
@@ -224,9 +213,8 @@ describe('App', () => {
     expect(screen.getByTestId('topbar')).toBeInTheDocument();
   });
 
-  it('renders IconRail, Sidebar, Topbar, ArticleList, and ArticleView on desktop', async () => {
+  it('renders Sidebar, Topbar, ArticleList, and ArticleView on desktop', async () => {
     await renderAppWithArticles();
-    expect(screen.getByTestId('icon-rail')).toBeInTheDocument();
     expect(screen.getByTestId('sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('topbar')).toBeInTheDocument();
     expect(screen.getByTestId('article-list')).toBeInTheDocument();
@@ -236,12 +224,6 @@ describe('App', () => {
   it('shows default view title "All Articles"', async () => {
     await renderApp();
     expect(screen.getByTestId('topbar')).toHaveAttribute('data-view-title', 'All Articles');
-  });
-
-  it('sets railView to "newsfeed" by default', async () => {
-    await renderApp();
-    expect(screen.getByTestId('icon-rail')).toHaveAttribute('data-active-view', 'newsfeed');
-    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-rail-view', 'newsfeed');
   });
 
   // -- Article selection --
@@ -294,31 +276,6 @@ describe('App', () => {
     expect(screen.getByTestId('article-3')).toBeInTheDocument();
   });
 
-  // -- Rail view changes --
-
-  it('changes rail view when rail button is clicked', async () => {
-    await renderApp();
-
-    fireEvent.click(screen.getByTestId('rail-search'));
-    expect(screen.getByTestId('icon-rail')).toHaveAttribute('data-active-view', 'search');
-
-    fireEvent.click(screen.getByTestId('rail-add'));
-    expect(screen.getByTestId('icon-rail')).toHaveAttribute('data-active-view', 'add');
-    expect(screen.getByTestId('sidebar')).toHaveAttribute('data-rail-view', 'add');
-  });
-
-  it('resets selection when switching rail to newsfeed', async () => {
-    await renderAppWithArticles();
-
-    // Select an article first
-    fireEvent.click(screen.getByTestId('article-1'));
-    expect(screen.getByTestId('article-view')).toHaveAttribute('data-article-id', '1');
-
-    // Switch rail to newsfeed resets selection
-    fireEvent.click(screen.getByTestId('rail-newsfeed'));
-    expect(screen.getByTestId('article-view')).toHaveAttribute('data-article-id', '');
-  });
-
   // -- Sidebar selection --
 
   it('clears selected article when sidebar selection changes', async () => {
@@ -349,14 +306,13 @@ describe('App', () => {
       Object.defineProperty(window, 'innerWidth', { value: 500, writable: true, configurable: true });
       await renderAppWithArticles();
 
-      // Before selection: icon-rail visible
-      expect(screen.getByTestId('icon-rail')).toBeInTheDocument();
+      // Before selection: article-list visible
+      expect(screen.getByTestId('article-list')).toBeInTheDocument();
 
       // Select article on mobile
       fireEvent.click(screen.getByTestId('article-1'));
 
-      // In fullscreen mode, icon-rail and sidebar are hidden
-      expect(screen.queryByTestId('icon-rail')).not.toBeInTheDocument();
+      // In fullscreen mode, sidebar and article-list are hidden
       expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
       expect(screen.getByTestId('article-view')).toHaveAttribute('data-article-id', '1');
     });
@@ -366,10 +322,9 @@ describe('App', () => {
       await renderAppWithArticles();
 
       fireEvent.click(screen.getByTestId('article-1'));
-      expect(screen.queryByTestId('icon-rail')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('article-list')).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByTestId('close-article'));
-      expect(screen.getByTestId('icon-rail')).toBeInTheDocument();
       expect(screen.getByTestId('article-list')).toBeInTheDocument();
     });
 
@@ -513,15 +468,25 @@ describe('App', () => {
   it('opens add feed panel via article list callback', async () => {
     await renderApp();
 
+    const sidebar = screen.getByTestId('sidebar');
+    const initialToken = sidebar.getAttribute('data-open-add-panel-token');
+
     fireEvent.click(screen.getByTestId('article-list-open-add'));
-    expect(screen.getByTestId('icon-rail')).toHaveAttribute('data-active-view', 'add');
+
+    const newToken = sidebar.getAttribute('data-open-add-panel-token');
+    expect(Number(newToken)).toBeGreaterThan(Number(initialToken));
   });
 
   it('opens OPML/settings panel via article list callback', async () => {
     await renderApp();
 
+    const sidebar = screen.getByTestId('sidebar');
+    const initialToken = sidebar.getAttribute('data-open-settings-panel-token');
+
     fireEvent.click(screen.getByTestId('article-list-open-opml'));
-    expect(screen.getByTestId('icon-rail')).toHaveAttribute('data-active-view', 'settings');
+
+    const newToken = sidebar.getAttribute('data-open-settings-panel-token');
+    expect(Number(newToken)).toBeGreaterThan(Number(initialToken));
   });
 
   // -- Refresh --
@@ -595,7 +560,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByTestId('article-1'));
     // In fullscreen mode
-    expect(screen.queryByTestId('icon-rail')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('article-list')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('toggle-starred'));
     expect(mockToggleStarred).toHaveBeenCalledWith(1, false);

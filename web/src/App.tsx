@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { IconRail } from './components/IconRail';
 import { Sidebar, type SidebarSelection } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { ArticleList } from './components/ArticleList';
@@ -23,7 +22,6 @@ const queryClient = new QueryClient({
 
 const DESKTOP_BREAKPOINT = 1280;
 const TABLET_BREAKPOINT = 900;
-const ICON_RAIL_WIDTH = 56;
 const SIDEBAR_WIDTH = 260;
 const ARTICLE_LIST_MIN_WIDTH = 300;
 const ARTICLE_VIEW_MIN_WIDTH = 560;
@@ -56,7 +54,6 @@ function AppInner() {
   // Navigation state
   const [selection, setSelection] = useState<SidebarSelection>({ type: 'newsfeed' });
   const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null);
-  const [railView, setRailView] = useState<'newsfeed' | 'search' | 'add' | 'settings'>('newsfeed');
 
   // Search state
   const [searchText, setSearchText] = useState('');
@@ -68,6 +65,8 @@ function AppInner() {
   // Feed being added (for fetching indicator)
   const [addingFeedName, setAddingFeedName] = useState<string | null>(null);
   const [addPanelFocusToken, setAddPanelFocusToken] = useState(0);
+  const [openAddPanelToken, setOpenAddPanelToken] = useState(0);
+  const [openSettingsPanelToken, setOpenSettingsPanelToken] = useState(0);
 
   // Last updated time
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -227,30 +226,6 @@ function AppInner() {
     if (layoutMode !== 'desktop') {
       setIsSidebarOpen(false);
     }
-    // When selecting from sidebar, switch rail to newsfeed view
-    if (railView === 'search') {
-      // keep search view
-    } else if (railView !== 'add' && railView !== 'settings') {
-      setRailView('newsfeed');
-    }
-  }, [layoutMode, railView]);
-
-  const handleRailChange = useCallback((view: 'newsfeed' | 'search' | 'add' | 'settings') => {
-    setRailView(view);
-    if (view === 'newsfeed') {
-      setSelection({ type: 'newsfeed' });
-      setSelectedArticleId(null);
-    }
-    if (view === 'search') {
-      // Focus search - no selection change needed
-    }
-    if (layoutMode !== 'desktop') {
-      if (view === 'add' || view === 'settings') {
-        setIsSidebarOpen(true);
-      } else if (view === 'search') {
-        setIsSidebarOpen(false);
-      }
-    }
   }, [layoutMode]);
 
   const handleToggleSidebar = useCallback(() => {
@@ -259,20 +234,20 @@ function AppInner() {
   }, [layoutMode]);
 
   const handleOpenAddFeed = useCallback(() => {
-    setRailView('add');
     setSelectedArticleId(null);
     if (layoutMode !== 'desktop') {
       setIsSidebarOpen(true);
     }
+    setOpenAddPanelToken((prev) => prev + 1);
     setAddPanelFocusToken((prev) => prev + 1);
   }, [layoutMode]);
 
   const handleOpenOpmlGuide = useCallback(() => {
-    setRailView('settings');
     setSelectedArticleId(null);
     if (layoutMode !== 'desktop') {
       setIsSidebarOpen(true);
     }
+    setOpenSettingsPanelToken((prev) => prev + 1);
   }, [layoutMode]);
 
   const handleSearchClear = useCallback(() => {
@@ -373,7 +348,7 @@ function AppInner() {
   const layoutSidebarWidth = layoutMode === 'desktop' ? SIDEBAR_WIDTH : 0;
   const canShowArticleAndList =
     layoutMode !== 'mobile' &&
-    viewportWidth >= ICON_RAIL_WIDTH + layoutSidebarWidth + ARTICLE_LIST_MIN_WIDTH + ARTICLE_VIEW_MIN_WIDTH;
+    viewportWidth >= layoutSidebarWidth + ARTICLE_LIST_MIN_WIDTH + ARTICLE_VIEW_MIN_WIDTH;
   const showArticlePane = layoutMode === 'desktop' || selectedArticle !== null;
   const showListPane = !selectedArticle || layoutMode === 'desktop' || canShowArticleAndList;
   const contentGridClass =
@@ -386,9 +361,10 @@ function AppInner() {
       selection={selection}
       onSelect={handleSelect}
       unreadCounts={unreadCounts}
-      railView={railView}
       onFeedAdding={setAddingFeedName}
       addPanelFocusToken={addPanelFocusToken}
+      openAddPanelToken={openAddPanelToken}
+      openSettingsPanelToken={openSettingsPanelToken}
     />
   );
 
@@ -415,9 +391,6 @@ function AppInner() {
         </div>
       ) : (
         <>
-          {/* Icon Rail */}
-          <IconRail activeView={railView} onChangeView={handleRailChange} />
-
           {/* Sidebar */}
           {layoutMode === 'desktop' && sidebarPanel}
           {layoutMode !== 'desktop' && (
@@ -426,12 +399,12 @@ function AppInner() {
                 <button
                   type="button"
                   aria-label="Close sidebar"
-                  className="absolute inset-y-0 left-14 right-0 z-30 bg-black/20"
+                  className="absolute inset-y-0 left-0 right-0 z-30 bg-black/20"
                   onClick={() => setIsSidebarOpen(false)}
                 />
               )}
               {isSidebarOpen && (
-                <div className="absolute inset-y-0 left-14 z-40 transition-transform duration-200 ease-out">
+                <div className="absolute inset-y-0 left-0 z-40 transition-transform duration-200 ease-out">
                   <div className="h-full shadow-2xl">
                     {sidebarPanel}
                   </div>

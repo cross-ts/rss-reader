@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Folder, type Feed, type FeedCandidate } from '../api/client';
 import { useToast } from './Toast';
@@ -12,9 +12,10 @@ interface Props {
   selection: SidebarSelection;
   onSelect: (sel: SidebarSelection) => void;
   unreadCounts: { feeds: Record<string, number>; folders: Record<string, number>; total: number };
-  railView: 'newsfeed' | 'search' | 'add' | 'settings';
   onFeedAdding?: (feedTitle: string | null) => void;
   addPanelFocusToken?: number;
+  openAddPanelToken?: number;
+  openSettingsPanelToken?: number;
 }
 
 const deleteButtonClassName = [
@@ -27,9 +28,15 @@ const deleteButtonClassName = [
   'focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
 ].join(' ');
 
-export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdding, addPanelFocusToken = 0 }: Props) {
+export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPanelFocusToken = 0, openAddPanelToken = 0, openSettingsPanelToken = 0 }: Props) {
   const qc = useQueryClient();
   const { addToast } = useToast();
+
+  // Local panel visibility state
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const { data: folders = [], isLoading: foldersLoading, isError: foldersError, refetch: refetchFolders } = useQuery({ queryKey: ['folders'], queryFn: api.getFolders });
   const { data: feeds = [], isLoading: feedsLoading, isError: feedsError, refetch: refetchFeeds } = useQuery({ queryKey: ['feeds'], queryFn: api.getFeeds });
@@ -224,22 +231,106 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
     }
   };
 
-  // Show add-feed panel when rail "add" is active
-  const showAddPanel = railView === 'add';
   const isCreatingFeed = addFeed.isPending;
   const isAddFeedBusy = isResolvingFeed || isCreatingFeed;
 
+  // Open add panel when parent increments the token
+  useEffect(() => {
+    if (openAddPanelToken > 0) {
+      setShowAddPanel(true);
+      setShowSettingsPanel(false);
+    }
+  }, [openAddPanelToken]);
+
+  // Open settings panel when parent increments the token
+  useEffect(() => {
+    if (openSettingsPanelToken > 0) {
+      setShowSettingsPanel(true);
+      setShowAddPanel(false);
+    }
+  }, [openSettingsPanelToken]);
+
+  // Focus the add feed input when the panel opens or focus token changes
   useEffect(() => {
     if (showAddPanel) {
       requestAnimationFrame(() => addFeedInputRef.current?.focus());
     }
   }, [showAddPanel, addPanelFocusToken]);
 
+  // Close dropdown menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target;
+      if (menuRef.current && target instanceof Node && !menuRef.current.contains(target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [menuOpen]);
+
+  const toggleMenu = useCallback(() => {
+    setMenuOpen((prev) => !prev);
+  }, []);
+
   return (
     <aside className="w-[260px] bg-surface flex flex-col overflow-hidden h-full border-r border-border flex-shrink-0">
       {/* Header */}
-      <div className="px-4 py-3 flex-shrink-0">
+      <div className="px-4 py-3 flex-shrink-0 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-text-primary tracking-tight">Feeds</h2>
+        <div className="flex items-center gap-1">
+          {/* Add feed button */}
+          <button
+            onClick={() => { setShowAddPanel((p) => !p); setShowSettingsPanel(false); }}
+            title="Add feed"
+            aria-label="Add feed"
+            aria-pressed={showAddPanel}
+            className={[
+              'w-7 h-7 flex items-center justify-center rounded-md transition-colors',
+              showAddPanel
+                ? 'text-accent bg-accent-light'
+                : 'text-text-sub hover:text-text-primary hover:bg-surface-2',
+            ].join(' ')}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+          {/* More actions button */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={toggleMenu}
+              title="More actions"
+              aria-label="More actions"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              className="w-7 h-7 flex items-center justify-center rounded-md text-text-sub hover:text-text-primary hover:bg-surface-2 transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="5" r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+                <circle cx="12" cy="19" r="1.5" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <div role="menu" className="absolute right-0 top-full mt-1 w-40 bg-white border border-border rounded-lg shadow-lg py-1 z-50">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="w-full text-left px-3 py-2 text-xs text-text-primary hover:bg-surface-2 transition-colors"
+                  onClick={() => {
+                    setShowSettingsPanel((p) => !p);
+                    setShowAddPanel(false);
+                    setMenuOpen(false);
+                  }}
+                >
+                  Settings
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Error display */}
@@ -517,7 +608,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, railView, onFeedAdd
       </nav>
 
       {/* Settings info panel */}
-      {railView === 'settings' && (
+      {showSettingsPanel && (
         <div className="px-4 py-3 border-t border-border flex-shrink-0 bg-white">
           <h3 className="text-xs font-semibold text-text-primary mb-1">RSS Reader</h3>
           <p className="text-[11px] text-text-sub leading-relaxed">
