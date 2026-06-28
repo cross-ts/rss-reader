@@ -75,4 +75,6 @@ describe('relativeTime', () => {
   it('handles garbage input gracefully (does not throw)', () => {
     expect(() => relativeTime('xyz')).not.toThrow();
   });
+
+  it.todo('should return empty string for invalid date strings (see #74)');
 });
