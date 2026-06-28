@@ -36,7 +36,7 @@ func testClient(servers ...*httptest.Server) (*http.Client, func(serverURL strin
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			if actual, ok := addrMap[addr]; ok {
-				return net.Dial(network, actual)
+				return (&net.Dialer{}).DialContext(ctx, network, actual)
 			}
 			return nil, fmt.Errorf("unexpected address: %s", addr)
 		},
@@ -268,9 +268,6 @@ func TestStart_DBError(t *testing.T) {
 
 	// Start should not panic even with a closed DB.
 	Start(database, http.DefaultClient, 60)
-
-	// Wait for the initial goroutine to finish (it will log an error).
-	time.Sleep(500 * time.Millisecond)
 }
 
 func TestStart(t *testing.T) {
@@ -286,18 +283,22 @@ func TestStart(t *testing.T) {
 	database := openTestDB(t)
 	seedFeed(t, database, "Test Feed", feedURL)
 
-	// Start with a large interval so only the initial run fires.
 	Start(database, client, 60)
 
-	// Wait a bit for the initial goroutine to complete.
-	time.Sleep(2 * time.Second)
-
-	result, err := database.ListArticles(db.ArticleFilter{Limit: 50})
-	if err != nil {
-		t.Fatalf("list articles: %v", err)
-	}
-	if result.Total < 1 {
-		t.Errorf("expected at least 1 article after Start, got %d", result.Total)
+	deadline := time.After(10 * time.Second)
+	for {
+		result, err := database.ListArticles(db.ArticleFilter{Limit: 50})
+		if err != nil {
+			t.Fatalf("list articles: %v", err)
+		}
+		if result.Total >= 1 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for article to appear after Start")
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 }
 

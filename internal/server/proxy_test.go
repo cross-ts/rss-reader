@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -74,12 +75,17 @@ func TestVerifyProxyOrigin(t *testing.T) {
 
 func TestStaticHandler(t *testing.T) {
 	staticDir := t.TempDir()
-	// Create test files
 	indexContent := "<html>SPA</html>"
-	os.WriteFile(filepath.Join(staticDir, "index.html"), []byte(indexContent), 0o644)
-	os.MkdirAll(filepath.Join(staticDir, "assets"), 0o755)
+	if err := os.WriteFile(filepath.Join(staticDir, "index.html"), []byte(indexContent), 0o644); err != nil {
+		t.Fatalf("write index.html: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(staticDir, "assets"), 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
 	jsContent := "console.log('hello')"
-	os.WriteFile(filepath.Join(staticDir, "assets", "main.js"), []byte(jsContent), 0o644)
+	if err := os.WriteFile(filepath.Join(staticDir, "assets", "main.js"), []byte(jsContent), 0o644); err != nil {
+		t.Fatalf("write main.js: %v", err)
+	}
 
 	state := &AppState{
 		Config: &config.Config{StaticDir: staticDir},
@@ -212,8 +218,15 @@ func TestProxyHandler(t *testing.T) {
 	})
 
 	t.Run("upstream unreachable", func(t *testing.T) {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("listen: %v", err)
+		}
+		addr := ln.Addr().String()
+		ln.Close()
+
 		state := &AppState{
-			Config:      &config.Config{FrontendURL: "http://localhost:59999"},
+			Config:      &config.Config{FrontendURL: "http://" + addr},
 			ProxyClient: &http.Client{},
 		}
 
@@ -293,7 +306,14 @@ func TestProxyFetch(t *testing.T) {
 	})
 
 	t.Run("unreachable server", func(t *testing.T) {
-		_, _, _, ok := proxyFetch(&http.Client{}, "http://localhost:59998")
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("listen: %v", err)
+		}
+		addr := ln.Addr().String()
+		ln.Close()
+
+		_, _, _, ok := proxyFetch(&http.Client{}, "http://"+addr)
 		if ok {
 			t.Error("proxyFetch should return not ok for unreachable server")
 		}

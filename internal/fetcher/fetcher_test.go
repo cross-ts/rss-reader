@@ -29,7 +29,7 @@ func testClient(servers ...*httptest.Server) (*http.Client, func(serverURL strin
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			if actual, ok := addrMap[addr]; ok {
-				return net.Dial(network, actual)
+				return (&net.Dialer{}).DialContext(ctx, network, actual)
 			}
 			return nil, fmt.Errorf("unexpected address: %s", addr)
 		},

@@ -289,7 +289,7 @@ func TestReconcileOnStartup(t *testing.T) {
 
 	t.Run("OPML save error on nonexistent directory", func(t *testing.T) {
 		database := openTestDB(t)
-		opmlPath := "/nonexistent/dir/feeds.opml"
+		opmlPath := filepath.Join(t.TempDir(), "missing", "subdir", "feeds.opml")
 
 		err := reconcileOnStartup(database, opmlPath)
 		if err == nil {
