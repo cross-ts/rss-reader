@@ -60,7 +60,6 @@ const defaultProps = {
     folders: { '100': 5 },
     total: 8,
   },
-  railView: 'newsfeed' as const,
 };
 
 function renderSidebar(props: Partial<React.ComponentProps<typeof Sidebar>> = {}) {
@@ -172,30 +171,33 @@ describe('Sidebar', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
   });
 
-  it('shows add feed panel when railView is "add"', async () => {
-    renderSidebar({ railView: 'add' });
-    // "Add Feed" appears as both the section header and submit button
+  it('shows add feed panel when + button is clicked', async () => {
+    renderSidebar();
+    await screen.findByText('All Articles');
+    fireEvent.click(screen.getByLabelText('Add feed'));
     const addFeedElements = await screen.findAllByText('Add Feed');
     expect(addFeedElements.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByPlaceholderText('Site or feed URL')).toBeInTheDocument();
     expect(screen.getByText('Create Folder')).toBeInTheDocument();
   });
 
-  it('does not show add feed panel when railView is "newsfeed"', async () => {
-    renderSidebar({ railView: 'newsfeed' });
+  it('does not show add feed panel by default', async () => {
+    renderSidebar();
     await screen.findByText('All Articles');
     expect(screen.queryByPlaceholderText('Site or feed URL')).not.toBeInTheDocument();
   });
 
-  it('shows settings panel when railView is "settings"', async () => {
-    renderSidebar({ railView: 'settings' });
+  it('shows settings panel via more actions menu', async () => {
+    renderSidebar();
     await screen.findByText('All Articles');
+    fireEvent.click(screen.getByLabelText('More actions'));
+    fireEvent.click(screen.getByText('Settings'));
     expect(screen.getByText('RSS Reader')).toBeInTheDocument();
     expect(screen.getByText(/Lightweight RSS reader/)).toBeInTheDocument();
   });
 
-  it('does not show settings panel when railView is not "settings"', async () => {
-    renderSidebar({ railView: 'newsfeed' });
+  it('does not show settings panel by default', async () => {
+    renderSidebar();
     await screen.findByText('All Articles');
     expect(screen.queryByText(/Lightweight RSS reader/)).not.toBeInTheDocument();
   });
@@ -233,7 +235,7 @@ describe('Sidebar', () => {
   });
 
   it('shows folder select dropdown in add panel', async () => {
-    renderSidebar({ railView: 'add' });
+    renderSidebar({ openAddPanelToken: 1 });
     await screen.findAllByText('Add Feed');
     const select = screen.getByRole('combobox');
     expect(select).toBeInTheDocument();
@@ -243,7 +245,7 @@ describe('Sidebar', () => {
   });
 
   it('has OPML section in settings panel', async () => {
-    renderSidebar({ railView: 'settings' });
+    renderSidebar({ openSettingsPanelToken: 1 });
     await screen.findByText('RSS Reader');
     expect(screen.getByText('OPML')).toBeInTheDocument();
     expect(screen.getByText('README で手順を見る')).toBeInTheDocument();
@@ -259,7 +261,7 @@ describe('Sidebar', () => {
       siteUrl: 'https://example.com', folder: null, articleCount: 5,
     });
 
-    renderSidebar({ railView: 'add', onFeedAdding });
+    renderSidebar({ openAddPanelToken: 1, onFeedAdding });
     await screen.findAllByText('Add Feed');
 
     const input = screen.getByPlaceholderText('Site or feed URL');
@@ -272,7 +274,7 @@ describe('Sidebar', () => {
   });
 
   it('does not submit add feed form when URL is empty', async () => {
-    renderSidebar({ railView: 'add' });
+    renderSidebar({ openAddPanelToken: 1 });
     await screen.findAllByText('Add Feed');
 
     // Ensure URL input is empty (default state)
@@ -376,7 +378,7 @@ describe('Sidebar', () => {
       { feedUrl: 'https://example.com/atom.xml', title: 'Atom Feed', type: 'application/atom+xml' },
     ]);
 
-    renderSidebar({ railView: 'add' });
+    renderSidebar({ openAddPanelToken: 1 });
     await screen.findAllByText('Add Feed');
 
     const input = screen.getByPlaceholderText('Site or feed URL');
@@ -400,7 +402,7 @@ describe('Sidebar', () => {
       { feedUrl: 'https://example.com/other', title: 'Other Feed', type: 'text/xml' },
     ]);
 
-    renderSidebar({ railView: 'add' });
+    renderSidebar({ openAddPanelToken: 1 });
     await screen.findAllByText('Add Feed');
 
     const input = screen.getByPlaceholderText('Site or feed URL');
