@@ -72,6 +72,7 @@ function AppInner() {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(getViewportWidth);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [seekingUnread, setSeekingUnread] = useState(false);
 
   const layoutMode = useMemo(() => getLayoutMode(viewportWidth), [viewportWidth]);
 
@@ -321,16 +322,44 @@ function AppInner() {
         return;
       }
     }
-  }, [selectedIndex, articles, selectArticleByIndex]);
+    if (hasNextPage) {
+      setSeekingUnread(true);
+    }
+  }, [selectedIndex, articles, selectArticleByIndex, hasNextPage]);
+
+  useEffect(() => {
+    if (!seekingUnread || isFetchingNextPage) return;
+    const unreadIdx = articles.findIndex((a) => !a.isRead);
+    if (unreadIdx >= 0) {
+      setSeekingUnread(false);
+      selectArticleByIndex(unreadIdx);
+    } else if (!hasNextPage) {
+      setSeekingUnread(false);
+    } else {
+      fetchNextPage();
+    }
+  }, [seekingUnread, articles, hasNextPage, isFetchingNextPage, fetchNextPage, selectArticleByIndex]);
+
+  useEffect(() => {
+    setSeekingUnread(false);
+  }, [queryParams]);
 
   // ---- ArticleView navigation callbacks ----
   const handlePrevArticle = selectedIndex > 0 ? goToPrevArticle : null;
   const handleNextArticle = selectedIndex < articles.length - 1 ? goToNextArticle : null;
 
-  // Check if there's a next unread
   const hasNextUnread = useMemo(() => {
-    return articles.some((a) => !a.isRead);
-  }, [articles]);
+    if (articles.some((a) => !a.isRead)) return true;
+    if (!hasNextPage) return false;
+    if (queryParams.q) return true;
+    if (queryParams.feedId != null) {
+      return (unreadCounts.feeds[String(queryParams.feedId)] ?? 0) > 0;
+    }
+    if (queryParams.folderId != null) {
+      return (unreadCounts.folders[String(queryParams.folderId)] ?? 0) > 0;
+    }
+    return (unreadCounts.total ?? 0) > 0;
+  }, [articles, hasNextPage, unreadCounts, queryParams.feedId, queryParams.folderId, queryParams.q]);
   const handleNextUnread = hasNextUnread ? goToNextUnread : null;
 
   const handleToggleSelectedRead = useCallback(() => {
