@@ -167,6 +167,40 @@ func TestReconcile(t *testing.T) {
 		}
 	})
 
+	t.Run("skips feeds with invalid URLs", func(t *testing.T) {
+		database := openTestDB(t)
+		folder := "Tech"
+		subs := &feeds.Subscriptions{
+			Folders: []feeds.FolderEntry{{Name: "Tech"}},
+			Feeds: []feeds.FeedEntry{
+				{Title: "Valid Feed", URL: "https://example.com/feed.xml", Folder: &folder},
+				{Title: "File Feed", URL: "file:///etc/passwd", Folder: &folder},
+				{Title: "FTP Feed", URL: "ftp://example.com/feed", Folder: &folder},
+				{Title: "Localhost Feed", URL: "http://localhost/feed.xml", Folder: &folder},
+			},
+		}
+
+		if err := reconcile(database, subs); err != nil {
+			t.Fatalf("reconcile: %v", err)
+		}
+
+		feedList, err := database.ListFeeds()
+		if err != nil {
+			t.Fatalf("list feeds: %v", err)
+		}
+		if len(feedList) != 1 {
+			t.Fatalf("expected 1 feed, got %d", len(feedList))
+		}
+		if feedList[0].Title != "Valid Feed" {
+			t.Errorf("expected feed title %q, got %q", "Valid Feed", feedList[0].Title)
+		}
+		for _, f := range feedList {
+			if f.Title == "File Feed" || f.Title == "FTP Feed" || f.Title == "Localhost Feed" {
+				t.Errorf("feed %q should have been skipped", f.Title)
+			}
+		}
+	})
+
 	t.Run("with empty subscriptions", func(t *testing.T) {
 		database := openTestDB(t)
 
