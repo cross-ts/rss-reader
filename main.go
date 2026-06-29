@@ -131,7 +131,7 @@ func reconcile(database *db.DB, subs *feeds.Subscriptions) error {
 	var feedDefs []db.FeedDef
 	for _, f := range subs.Feeds {
 		normalized := fetcher.NormalizeURL(f.URL)
-		if err := fetcher.ValidateFeedURL(normalized); err != nil {
+		if err := fetcher.ValidateFeedURLStatic(normalized); err != nil {
 			slog.Warn("skipping feed with invalid URL", "url", f.URL, "title", f.Title, "error", err)
 			continue
 		}

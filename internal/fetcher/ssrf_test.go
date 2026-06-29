@@ -127,6 +127,34 @@ func TestValidateFeedURL(t *testing.T) {
 	}
 }
 
+func TestValidateFeedURLStatic(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{"valid https", "https://example.com/feed.xml", false},
+		{"valid http", "http://example.com/feed.xml", false},
+		{"valid public IP", "http://8.8.8.8/feed", false},
+		{"ftp scheme", "ftp://example.com/file", true},
+		{"file scheme", "file:///etc/passwd", true},
+		{"empty host", "http:///path", true},
+		{"localhost", "http://localhost/feed", true},
+		{"loopback IP", "http://127.0.0.1/feed", true},
+		{"private IP", "http://10.0.0.1/feed", true},
+		{"hostname passes without DNS", "http://nonexistent.invalid/feed", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateFeedURLStatic(tt.url)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateFeedURLStatic(%q) error = %v, wantErr = %v", tt.url, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestCheckIPv4(t *testing.T) {
 	tests := []struct {
 		name    string
