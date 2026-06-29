@@ -508,6 +508,30 @@ func TestListArticles_SearchLike_WithFolderFilter(t *testing.T) {
 	}
 }
 
+func TestListArticles_SearchLike_JapaneseShortQuery(t *testing.T) {
+	d := openTestDB(t)
+	seedFeeds(t, d, nil, []FeedDef{
+		{Title: "Feed", URL: "https://example.com/feed"},
+	})
+	feed, _ := d.GetFeedByURL("https://example.com/feed")
+	seedArticles(t, d, feed.ID, []NewArticle{
+		{GUID: "1", Title: "技術ニュース", URL: "u", Content: "最新の技術情報"},
+		{GUID: "2", Title: "No match", URL: "u2", Content: "Nothing here"},
+	})
+
+	q := "技術"
+	result, err := d.ListArticles(ArticleFilter{Q: &q, Limit: 10})
+	if err != nil {
+		t.Fatalf("like search for Japanese query: %v", err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected 1 LIKE match for 2-char Japanese query, got %d", result.Total)
+	}
+	if result.Items[0].Title != "技術ニュース" {
+		t.Fatalf("expected '技術ニュース', got %q", result.Items[0].Title)
+	}
+}
+
 func TestListArticles_SearchEmptyDB(t *testing.T) {
 	d := openTestDB(t)
 	q := "anything"
