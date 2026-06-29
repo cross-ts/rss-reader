@@ -12,6 +12,7 @@ type FeedEntry struct {
 	URL     string  // xmlUrl
 	Folder  *string // parent folder name, nil if top-level
 	SiteURL *string // htmlUrl, nullable
+	Type    string  // OPML type attribute (e.g. "rss", "atom")
 }
 
 // FolderEntry represents a folder from OPML.
@@ -77,11 +78,17 @@ func collectOutline(outline *opmlOutline, folder *string, subs *Subscriptions) {
 			siteURL = &s
 		}
 
+		feedType := outline.Type
+		if feedType == "" {
+			feedType = "rss"
+		}
+
 		subs.Feeds = append(subs.Feeds, FeedEntry{
 			Title:   title,
 			URL:     outline.XMLURL,
 			Folder:  folder,
 			SiteURL: siteURL,
+			Type:    feedType,
 		})
 		return
 	}
@@ -119,10 +126,14 @@ func feedToOutline(feed *FeedEntry) opmlOutline {
 	if feed.SiteURL != nil {
 		htmlURL = *feed.SiteURL
 	}
+	feedType := feed.Type
+	if feedType == "" {
+		feedType = "rss"
+	}
 	return opmlOutline{
 		Text:    feed.Title,
 		Title:   feed.Title,
-		Type:    "rss",
+		Type:    feedType,
 		XMLURL:  feed.URL,
 		HTMLURL: htmlURL,
 	}

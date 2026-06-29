@@ -486,6 +486,7 @@ func TestFeedToOutline_WithSiteURL(t *testing.T) {
 		Title:   "Test Feed",
 		URL:     "https://example.com/feed.xml",
 		SiteURL: &siteURL,
+		Type:    "rss",
 	}
 
 	outline := feedToOutline(feed)
@@ -511,12 +512,103 @@ func TestFeedToOutline_WithoutSiteURL(t *testing.T) {
 	feed := &FeedEntry{
 		Title: "Test Feed",
 		URL:   "https://example.com/feed.xml",
+		Type:  "rss",
 	}
 
 	outline := feedToOutline(feed)
 
 	if outline.HTMLURL != "" {
 		t.Errorf("HTMLURL = %q, want empty string", outline.HTMLURL)
+	}
+}
+
+func TestFeedToOutline_AtomTypePreserved(t *testing.T) {
+	feed := &FeedEntry{
+		Title: "Atom Feed",
+		URL:   "https://example.com/feed.atom",
+		Type:  "atom",
+	}
+
+	outline := feedToOutline(feed)
+
+	if outline.Type != "atom" {
+		t.Errorf("Type = %q, want %q", outline.Type, "atom")
+	}
+}
+
+func TestFeedToOutline_EmptyTypeDefaultsToRSS(t *testing.T) {
+	feed := &FeedEntry{
+		Title: "No Type Feed",
+		URL:   "https://example.com/feed.xml",
+		Type:  "",
+	}
+
+	outline := feedToOutline(feed)
+
+	if outline.Type != "rss" {
+		t.Errorf("Type = %q, want %q", outline.Type, "rss")
+	}
+}
+
+func TestReadFeedsOPML_AtomTypePreserved(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "feeds.opml")
+
+	opml := `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>Test</title></head>
+  <body>
+    <outline text="Atom Feed" title="Atom Feed" type="atom" xmlUrl="https://example.com/feed.atom"/>
+    <outline text="RSS Feed" title="RSS Feed" type="rss" xmlUrl="https://example.com/feed.xml"/>
+  </body>
+</opml>`
+
+	if err := os.WriteFile(path, []byte(opml), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	subs, err := ReadFeedsOPML(path)
+	if err != nil {
+		t.Fatalf("ReadFeedsOPML() error: %v", err)
+	}
+
+	if len(subs.Feeds) != 2 {
+		t.Fatalf("expected 2 feeds, got %d", len(subs.Feeds))
+	}
+	if subs.Feeds[0].Type != "atom" {
+		t.Errorf("feeds[0].Type = %q, want %q", subs.Feeds[0].Type, "atom")
+	}
+	if subs.Feeds[1].Type != "rss" {
+		t.Errorf("feeds[1].Type = %q, want %q", subs.Feeds[1].Type, "rss")
+	}
+}
+
+func TestReadFeedsOPML_EmptyTypeDefaultsToRSS(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "feeds.opml")
+
+	opml := `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>Test</title></head>
+  <body>
+    <outline text="No Type Feed" xmlUrl="https://example.com/feed.xml"/>
+  </body>
+</opml>`
+
+	if err := os.WriteFile(path, []byte(opml), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	subs, err := ReadFeedsOPML(path)
+	if err != nil {
+		t.Fatalf("ReadFeedsOPML() error: %v", err)
+	}
+
+	if len(subs.Feeds) != 1 {
+		t.Fatalf("expected 1 feed, got %d", len(subs.Feeds))
+	}
+	if subs.Feeds[0].Type != "rss" {
+		t.Errorf("feeds[0].Type = %q, want %q", subs.Feeds[0].Type, "rss")
 	}
 }
 
