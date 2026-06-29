@@ -569,6 +569,9 @@ func TestUpdateFolder_CascadeRenameChildren(t *testing.T) {
 			techID = f.ID
 		}
 	}
+	if techID == 0 {
+		t.Fatal("could not find 'Tech' folder")
+	}
 
 	// Rename "Tech" to "Technology".
 	mux := http.NewServeMux()

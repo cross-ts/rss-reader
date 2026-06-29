@@ -178,11 +178,6 @@ func BuildOPML(subs *Subscriptions) opmlDoc {
 		}
 	}
 
-	knownFolders := make(map[string]struct{}, len(subs.Folders))
-	for _, f := range subs.Folders {
-		knownFolders[f.Name] = struct{}{}
-	}
-
 	var topLevel []opmlOutline
 	for i := range subs.Feeds {
 		feed := &subs.Feeds[i]
