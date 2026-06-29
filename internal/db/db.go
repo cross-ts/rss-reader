@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	_ "modernc.org/sqlite"
 )
@@ -307,7 +308,7 @@ func (d *DB) listArticlesWithSearch(filter ArticleFilter) (*ArticlesResult, erro
 
 	q := *filter.Q
 
-	if len(q) >= 3 {
+	if utf8.RuneCountInString(q) >= 3 {
 		return d.listArticlesFTS(filter, q)
 	}
 	return d.listArticlesLike(filter, q)
