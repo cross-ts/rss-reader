@@ -527,6 +527,9 @@ func TestListArticles_SearchLike_JapaneseShortQuery(t *testing.T) {
 	if result.Total != 1 {
 		t.Fatalf("expected 1 LIKE match for 2-char Japanese query, got %d", result.Total)
 	}
+	if len(result.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(result.Items))
+	}
 	if result.Items[0].Title != "技術ニュース" {
 		t.Fatalf("expected '技術ニュース', got %q", result.Items[0].Title)
 	}
