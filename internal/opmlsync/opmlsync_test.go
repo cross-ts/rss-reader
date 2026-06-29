@@ -216,6 +216,59 @@ func TestSyncIfChanged_FileDeletedDoesNotWipeDB(t *testing.T) {
 	}
 }
 
+func writeOPMLMultiFeeds(t *testing.T, path string, entries []struct{ title, url string }) {
+	t.Helper()
+	body := ""
+	for _, e := range entries {
+		body += `    <outline text="` + e.title + `" title="` + e.title + `" type="rss" xmlUrl="` + e.url + `"></outline>` + "\n"
+	}
+	content := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>rss-reader subscriptions</title></head>
+  <body>
+` + body + `  </body>
+</opml>`)
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write opml: %v", err)
+	}
+}
+
+func TestSyncIfChanged_SkipsInvalidURLs(t *testing.T) {
+	database := openTestDB(t)
+	dir := t.TempDir()
+	opmlPath := filepath.Join(dir, "feeds.opml")
+	mu := &sync.Mutex{}
+
+	writeOPMLMultiFeeds(t, opmlPath, []struct{ title, url string }{
+		{"Valid Feed", "https://example.com/feed.xml"},
+		{"File Feed", "file:///etc/passwd"},
+		{"FTP Feed", "ftp://example.com/feed"},
+		{"Localhost Feed", "http://localhost/feed.xml"},
+	})
+
+	syncer := New(database, opmlPath, mu)
+
+	if err := syncer.SyncIfChanged(); err != nil {
+		t.Fatalf("SyncIfChanged: %v", err)
+	}
+
+	feeds, err := database.ListFeeds()
+	if err != nil {
+		t.Fatalf("ListFeeds: %v", err)
+	}
+	if len(feeds) != 1 {
+		t.Fatalf("expected 1 feed, got %d", len(feeds))
+	}
+	if feeds[0].Title != "Valid Feed" {
+		t.Errorf("expected title 'Valid Feed', got %q", feeds[0].Title)
+	}
+	for _, f := range feeds {
+		if f.Title == "File Feed" || f.Title == "FTP Feed" || f.Title == "Localhost Feed" {
+			t.Errorf("feed %q should have been skipped", f.Title)
+		}
+	}
+}
+
 func TestMarkSynced(t *testing.T) {
 	database := openTestDB(t)
 	dir := t.TempDir()

@@ -128,14 +128,19 @@ func reconcile(database *db.DB, subs *feeds.Subscriptions) error {
 	for i, f := range subs.Folders {
 		folderDefs[i] = db.FolderDef{Name: f.Name}
 	}
-	feedDefs := make([]db.FeedDef, len(subs.Feeds))
-	for i, f := range subs.Feeds {
-		feedDefs[i] = db.FeedDef{
+	var feedDefs []db.FeedDef
+	for _, f := range subs.Feeds {
+		normalized := fetcher.NormalizeURL(f.URL)
+		if err := fetcher.ValidateFeedURLStatic(normalized); err != nil {
+			slog.Warn("skipping feed with invalid URL", "url", f.URL, "title", f.Title, "error", err)
+			continue
+		}
+		feedDefs = append(feedDefs, db.FeedDef{
 			Title:   f.Title,
-			URL:     f.URL,
+			URL:     normalized,
 			Folder:  f.Folder,
 			SiteURL: f.SiteURL,
-		}
+		})
 	}
 	return database.ReconcileSubscriptions(folderDefs, feedDefs)
 }

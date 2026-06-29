@@ -26,15 +26,14 @@ func NormalizeURL(rawURL string) string {
 	return rawURL
 }
 
-// ValidateFeedURL validates that a URL is safe to fetch (SSRF protection).
-// It checks the scheme, host, and all resolved IP addresses.
-func ValidateFeedURL(rawURL string) error {
+// ValidateFeedURLStatic performs URL validation without DNS resolution.
+// It checks scheme, host presence, localhost, and IP literals.
+func ValidateFeedURLStatic(rawURL string) error {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("URL のパースに失敗: %w", err)
 	}
 
-	// Only allow http and https schemes.
 	switch parsed.Scheme {
 	case "http", "https":
 		// OK
@@ -47,17 +46,27 @@ func ValidateFeedURL(rawURL string) error {
 		return fmt.Errorf("ホスト名が取得できません")
 	}
 
-	// Reject localhost immediately (before DNS resolution).
 	if host == "localhost" {
 		return fmt.Errorf("ループバックアドレスへのアクセスは拒否されています: %s", host)
 	}
 
-	// If host is an IP literal, check it directly.
 	if ip := net.ParseIP(host); ip != nil {
 		return checkIP(ip)
 	}
 
-	// DNS resolve and check ALL resolved IPs.
+	return nil
+}
+
+// ValidateFeedURL validates that a URL is safe to fetch (SSRF protection).
+// It checks the scheme, host, and all resolved IP addresses.
+func ValidateFeedURL(rawURL string) error {
+	if err := ValidateFeedURLStatic(rawURL); err != nil {
+		return err
+	}
+
+	parsed, _ := url.Parse(rawURL)
+	host := parsed.Hostname()
+
 	addrs, err := net.DefaultResolver.LookupIPAddr(context.Background(), host)
 	if err != nil {
 		return fmt.Errorf("DNS 解決失敗: %s: %w", host, err)
