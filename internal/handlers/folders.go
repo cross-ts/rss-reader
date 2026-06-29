@@ -200,18 +200,25 @@ func UpdateFolder(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http
 			}
 		}
 
-		// Rename folder in OPML.
+		oldPrefix := oldName + "/"
 		for i := range subs.Folders {
 			if subs.Folders[i].Name == oldName {
 				subs.Folders[i].Name = newName
-				break
+			} else if strings.HasPrefix(subs.Folders[i].Name, oldPrefix) {
+				subs.Folders[i].Name = newName + subs.Folders[i].Name[len(oldName):]
 			}
 		}
 
-		// Update feed references.
 		for i := range subs.Feeds {
-			if subs.Feeds[i].Folder != nil && *subs.Feeds[i].Folder == oldName {
+			if subs.Feeds[i].Folder == nil {
+				continue
+			}
+			f := *subs.Feeds[i].Folder
+			if f == oldName {
 				subs.Feeds[i].Folder = &newName
+			} else if strings.HasPrefix(f, oldPrefix) {
+				updated := newName + f[len(oldName):]
+				subs.Feeds[i].Folder = &updated
 			}
 		}
 
@@ -257,18 +264,21 @@ func DeleteFolder(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http
 			return
 		}
 
-		// Remove folder from OPML.
+		deletedPrefix := folderName + "/"
 		newFolders := make([]feeds.FolderEntry, 0, len(subs.Folders))
 		for _, f := range subs.Folders {
-			if f.Name != folderName {
+			if f.Name != folderName && !strings.HasPrefix(f.Name, deletedPrefix) {
 				newFolders = append(newFolders, f)
 			}
 		}
 		subs.Folders = newFolders
 
-		// Set feed folder references to nil for feeds in this folder.
 		for i := range subs.Feeds {
-			if subs.Feeds[i].Folder != nil && *subs.Feeds[i].Folder == folderName {
+			if subs.Feeds[i].Folder == nil {
+				continue
+			}
+			f := *subs.Feeds[i].Folder
+			if f == folderName || strings.HasPrefix(f, deletedPrefix) {
 				subs.Feeds[i].Folder = nil
 			}
 		}

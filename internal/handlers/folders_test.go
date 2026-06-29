@@ -545,6 +545,166 @@ func TestDeleteFolder_DBError(t *testing.T) {
 	}
 }
 
+func TestUpdateFolder_CascadeRenameChildren(t *testing.T) {
+	database := openTestDB(t)
+	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
+	var mu sync.Mutex
+
+	// Create a folder hierarchy: "Tech" and "Tech/Go" with a feed in "Tech/Go".
+	subs := &feeds.Subscriptions{
+		Folders: []feeds.FolderEntry{{Name: "Tech"}, {Name: "Tech/Go"}},
+		Feeds: []feeds.FeedEntry{
+			{Title: "Go Blog", URL: "https://go.dev/blog/feed.atom", Folder: strPtr("Tech/Go")},
+		},
+	}
+	if err := readAndReconcile(database, feedsPath, subs); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Find the "Tech" folder ID.
+	folders, _ := database.ListFolders()
+	var techID int
+	for _, f := range folders {
+		if f.Name == "Tech" {
+			techID = f.ID
+		}
+	}
+	if techID == 0 {
+		t.Fatal("could not find 'Tech' folder")
+	}
+
+	// Rename "Tech" to "Technology".
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/folders/{id}", UpdateFolder(database, feedsPath, &mu))
+
+	req := httptest.NewRequest("PATCH", "/api/folders/"+itoa(techID), strings.NewReader(`{"name":"Technology"}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify the response has the new name.
+	var resp FolderResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Name != "Technology" {
+		t.Errorf("expected renamed folder 'Technology', got %q", resp.Name)
+	}
+
+	// Verify child folder was also renamed.
+	folders2, _ := database.ListFolders()
+	nameSet := make(map[string]bool)
+	for _, f := range folders2 {
+		nameSet[f.Name] = true
+	}
+	if !nameSet["Technology"] {
+		t.Errorf("expected folder 'Technology' to exist after rename")
+	}
+	if !nameSet["Technology/Go"] {
+		t.Errorf("expected child folder 'Technology/Go' to exist after rename")
+	}
+	if nameSet["Tech"] {
+		t.Errorf("old folder 'Tech' should not exist after rename")
+	}
+	if nameSet["Tech/Go"] {
+		t.Errorf("old child folder 'Tech/Go' should not exist after rename")
+	}
+
+	// Verify feed's folder reference was updated.
+	feedList, _ := database.ListFeeds()
+	if len(feedList) != 1 {
+		t.Fatalf("expected 1 feed, got %d", len(feedList))
+	}
+	if feedList[0].Folder == nil {
+		t.Fatal("expected feed to have a folder, got nil")
+	}
+	if *feedList[0].Folder != "Technology/Go" {
+		t.Errorf("expected feed folder 'Technology/Go', got %q", *feedList[0].Folder)
+	}
+
+	// Verify OPML reflects the rename.
+	opml, err := feeds.ReadFeedsOPML(feedsPath)
+	if err != nil {
+		t.Fatalf("read OPML: %v", err)
+	}
+	opmlFolderNames := make(map[string]bool)
+	for _, f := range opml.Folders {
+		opmlFolderNames[f.Name] = true
+	}
+	if !opmlFolderNames["Technology/Go"] {
+		t.Errorf("expected OPML to contain folder 'Technology/Go'")
+	}
+	if opmlFolderNames["Tech/Go"] {
+		t.Errorf("expected OPML not to contain old folder 'Tech/Go'")
+	}
+}
+
+func TestDeleteFolder_CascadeRemoveChildren(t *testing.T) {
+	database := openTestDB(t)
+	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
+	var mu sync.Mutex
+
+	// Create a folder hierarchy: "Tech", "Tech/Go", and "Tech/Go/SubChild" with feeds.
+	subs := &feeds.Subscriptions{
+		Folders: []feeds.FolderEntry{{Name: "Tech"}, {Name: "Tech/Go"}, {Name: "Tech/Go/SubChild"}},
+		Feeds: []feeds.FeedEntry{
+			{Title: "Go Blog", URL: "https://go.dev/blog/feed.atom", Folder: strPtr("Tech/Go")},
+			{Title: "Sub Feed", URL: "https://example.com/sub.xml", Folder: strPtr("Tech/Go/SubChild")},
+		},
+	}
+	if err := readAndReconcile(database, feedsPath, subs); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Find the "Tech" folder ID.
+	folders, _ := database.ListFolders()
+	var techID int
+	for _, f := range folders {
+		if f.Name == "Tech" {
+			techID = f.ID
+		}
+	}
+	if techID == 0 {
+		t.Fatal("could not find 'Tech' folder")
+	}
+
+	// Delete "Tech".
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/folders/{id}", DeleteFolder(database, feedsPath, &mu))
+
+	req := httptest.NewRequest("DELETE", "/api/folders/"+itoa(techID), nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify all folders (Tech, Tech/Go, Tech/Go/SubChild) are removed.
+	folders2, _ := database.ListFolders()
+	if len(folders2) != 0 {
+		names := make([]string, len(folders2))
+		for i, f := range folders2 {
+			names[i] = f.Name
+		}
+		t.Errorf("expected 0 folders after cascade delete, got %d: %v", len(folders2), names)
+	}
+
+	// Verify feeds still exist but have nil folder references.
+	feedList, _ := database.ListFeeds()
+	if len(feedList) != 2 {
+		t.Fatalf("expected 2 feeds after folder delete, got %d", len(feedList))
+	}
+	for _, feed := range feedList {
+		if feed.Folder != nil {
+			t.Errorf("expected nil folder on feed %q after cascade delete, got %q", feed.Title, *feed.Folder)
+		}
+	}
+}
+
 func TestDeleteFolder_WithMultipleFolders(t *testing.T) {
 	database := openTestDB(t)
 	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")

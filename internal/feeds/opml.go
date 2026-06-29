@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // FeedEntry represents a single feed subscription from OPML.
@@ -53,16 +54,15 @@ type opmlOutline struct {
 }
 
 // collectOutline recursively processes an opmlOutline and populates subs.
+// folder is the full path of the parent folder (e.g. "A/B"), nil if top-level.
 func collectOutline(outline *opmlOutline, folder *string, subs *Subscriptions) {
 	if outline.XMLURL != "" {
-		// It's a feed entry. Deduplicate by URL (first wins).
 		for i := range subs.Feeds {
 			if subs.Feeds[i].URL == outline.XMLURL {
 				return
 			}
 		}
 
-		// Determine title: prefer Title, then Text, then xmlUrl.
 		title := outline.Title
 		if title == "" {
 			title = outline.Text
@@ -71,7 +71,6 @@ func collectOutline(outline *opmlOutline, folder *string, subs *Subscriptions) {
 			title = outline.XMLURL
 		}
 
-		// SiteURL: htmlUrl if non-empty, else nil.
 		var siteURL *string
 		if outline.HTMLURL != "" {
 			s := outline.HTMLURL
@@ -93,30 +92,37 @@ func collectOutline(outline *opmlOutline, folder *string, subs *Subscriptions) {
 		return
 	}
 
-	// It's a folder.
-	var folderName *string
+	var fullPath *string
 	if outline.Text != "" {
-		// Add to folder list if not already present.
-		found := false
-		for i := range subs.Folders {
-			if subs.Folders[i].Name == outline.Text {
-				found = true
-				break
+		var p string
+		if folder != nil {
+			p = *folder + "/" + outline.Text
+		} else {
+			p = outline.Text
+		}
+		fullPath = &p
+
+		// Register all ancestor paths as FolderEntry entries.
+		parts := strings.Split(p, "/")
+		for i := range parts {
+			ancestor := strings.Join(parts[:i+1], "/")
+			found := false
+			for j := range subs.Folders {
+				if subs.Folders[j].Name == ancestor {
+					found = true
+					break
+				}
+			}
+			if !found {
+				subs.Folders = append(subs.Folders, FolderEntry{Name: ancestor})
 			}
 		}
-		if !found {
-			subs.Folders = append(subs.Folders, FolderEntry{Name: outline.Text})
-		}
-		s := outline.Text
-		folderName = &s
 	} else {
-		// Empty name: inherit parent's folder.
-		folderName = folder
+		fullPath = folder
 	}
 
-	// Recurse into children.
 	for i := range outline.Outlines {
-		collectOutline(&outline.Outlines[i], folderName, subs)
+		collectOutline(&outline.Outlines[i], fullPath, subs)
 	}
 }
 
@@ -139,6 +145,21 @@ func feedToOutline(feed *FeedEntry) opmlOutline {
 	}
 }
 
+type folderNode struct {
+	name     string
+	children []*folderNode
+	feeds    []opmlOutline
+}
+
+func (n *folderNode) toOutline() opmlOutline {
+	o := opmlOutline{Text: n.name, Title: n.name}
+	for _, child := range n.children {
+		o.Outlines = append(o.Outlines, child.toOutline())
+	}
+	o.Outlines = append(o.Outlines, n.feeds...)
+	return o
+}
+
 // BuildOPML creates an OPML 2.0 document from Subscriptions.
 func BuildOPML(subs *Subscriptions) opmlDoc {
 	doc := opmlDoc{
@@ -146,39 +167,44 @@ func BuildOPML(subs *Subscriptions) opmlDoc {
 		Head:    opmlHead{Title: "rss-reader subscriptions"},
 	}
 
-	// Build a set of known folder names for quick lookup.
-	knownFolders := make(map[string]struct{}, len(subs.Folders))
+	root := &folderNode{}
+	nodeMap := map[string]*folderNode{}
+
 	for _, f := range subs.Folders {
-		knownFolders[f.Name] = struct{}{}
+		parts := strings.Split(f.Name, "/")
+		for i := range parts {
+			path := strings.Join(parts[:i+1], "/")
+			if _, exists := nodeMap[path]; exists {
+				continue
+			}
+			node := &folderNode{name: parts[i]}
+			nodeMap[path] = node
+			if i == 0 {
+				root.children = append(root.children, node)
+			} else {
+				parentPath := strings.Join(parts[:i], "/")
+				parent := nodeMap[parentPath]
+				parent.children = append(parent.children, node)
+			}
+		}
 	}
 
-	// Group feeds by folder.
-	folderFeeds := make(map[string][]opmlOutline)
 	var topLevel []opmlOutline
-
 	for i := range subs.Feeds {
 		feed := &subs.Feeds[i]
 		outline := feedToOutline(feed)
 		if feed.Folder != nil {
-			if _, ok := knownFolders[*feed.Folder]; ok {
-				folderFeeds[*feed.Folder] = append(folderFeeds[*feed.Folder], outline)
+			if node, ok := nodeMap[*feed.Folder]; ok {
+				node.feeds = append(node.feeds, outline)
 				continue
 			}
 		}
 		topLevel = append(topLevel, outline)
 	}
 
-	// Add folder outlines (in definition order), each containing its feeds.
-	for _, f := range subs.Folders {
-		folderOutline := opmlOutline{
-			Text:     f.Name,
-			Title:    f.Name,
-			Outlines: folderFeeds[f.Name],
-		}
-		doc.Body.Outlines = append(doc.Body.Outlines, folderOutline)
+	for _, child := range root.children {
+		doc.Body.Outlines = append(doc.Body.Outlines, child.toOutline())
 	}
-
-	// Add top-level feeds.
 	doc.Body.Outlines = append(doc.Body.Outlines, topLevel...)
 
 	return doc

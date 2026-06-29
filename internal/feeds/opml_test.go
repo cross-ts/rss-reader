@@ -3,6 +3,7 @@ package feeds
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -186,9 +187,16 @@ func TestReadFeedsOPML_NestedFolders(t *testing.T) {
 	if len(subs.Feeds) != 1 {
 		t.Fatalf("expected 1 feed, got %d", len(subs.Feeds))
 	}
-	// Feed should be in the innermost folder "Child"
-	if subs.Feeds[0].Folder == nil || *subs.Feeds[0].Folder != "Child" {
-		t.Errorf("feed folder = %v, want *Child", subs.Feeds[0].Folder)
+	// Folders should use path-based names
+	wantFolders := []string{"Parent", "Parent/Child"}
+	for i, wf := range wantFolders {
+		if subs.Folders[i].Name != wf {
+			t.Errorf("folders[%d].Name = %q, want %q", i, subs.Folders[i].Name, wf)
+		}
+	}
+	// Feed should be in the innermost folder "Parent/Child"
+	if subs.Feeds[0].Folder == nil || *subs.Feeds[0].Folder != "Parent/Child" {
+		t.Errorf("feed folder = %v, want *Parent/Child", subs.Feeds[0].Folder)
 	}
 }
 
@@ -644,5 +652,225 @@ func TestBuildOPML_MultipleFolders(t *testing.T) {
 	// Top-level feed last
 	if doc.Body.Outlines[2].XMLURL != "https://top.com/feed" {
 		t.Errorf("outline[2].XMLURL = %q, want top-level feed", doc.Body.Outlines[2].XMLURL)
+	}
+}
+
+func TestSaveOPML_NestedRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "feeds.opml")
+
+	techGo := "Tech/Go"
+	original := &Subscriptions{
+		Folders: []FolderEntry{{Name: "Tech"}, {Name: "Tech/Go"}},
+		Feeds: []FeedEntry{
+			{Title: "Go Blog", URL: "https://go.dev/feed", Folder: &techGo},
+		},
+	}
+
+	if err := SaveOPML(path, original); err != nil {
+		t.Fatalf("SaveOPML() error: %v", err)
+	}
+
+	// Verify raw XML contains nested outlines
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read saved file: %v", err)
+	}
+	xmlStr := string(raw)
+	// Should have Tech > Go > feed nesting, not a flat "Tech/Go" folder
+	if !strings.Contains(xmlStr, `text="Tech"`) {
+		t.Error("expected XML to contain outline with text=\"Tech\"")
+	}
+	if !strings.Contains(xmlStr, `text="Go"`) {
+		t.Error("expected XML to contain outline with text=\"Go\"")
+	}
+
+	// Read back
+	loaded, err := ReadFeedsOPML(path)
+	if err != nil {
+		t.Fatalf("ReadFeedsOPML() error: %v", err)
+	}
+
+	// Verify folders
+	wantFolders := []string{"Tech", "Tech/Go"}
+	if len(loaded.Folders) != len(wantFolders) {
+		t.Fatalf("round-trip: expected %d folders, got %d", len(wantFolders), len(loaded.Folders))
+	}
+	for i, wf := range wantFolders {
+		if loaded.Folders[i].Name != wf {
+			t.Errorf("round-trip: folders[%d].Name = %q, want %q", i, loaded.Folders[i].Name, wf)
+		}
+	}
+
+	// Verify feed
+	if len(loaded.Feeds) != 1 {
+		t.Fatalf("round-trip: expected 1 feed, got %d", len(loaded.Feeds))
+	}
+	if loaded.Feeds[0].Folder == nil || *loaded.Feeds[0].Folder != "Tech/Go" {
+		t.Errorf("round-trip: feed folder = %v, want *Tech/Go", loaded.Feeds[0].Folder)
+	}
+}
+
+func TestBuildOPML_NestedFolders(t *testing.T) {
+	tech := "Tech"
+	techGo := "Tech/Go"
+	techRust := "Tech/Rust"
+	subs := &Subscriptions{
+		Folders: []FolderEntry{
+			{Name: "Tech"},
+			{Name: "Tech/Go"},
+			{Name: "Tech/Rust"},
+		},
+		Feeds: []FeedEntry{
+			{Title: "Tech News", URL: "https://tech.com/feed", Folder: &tech},
+			{Title: "Go Blog", URL: "https://go.dev/feed", Folder: &techGo},
+			{Title: "Rust Blog", URL: "https://rust-lang.org/feed", Folder: &techRust},
+		},
+	}
+
+	doc := BuildOPML(subs)
+
+	// Should have 1 top-level outline: "Tech"
+	if len(doc.Body.Outlines) != 1 {
+		t.Fatalf("expected 1 top-level outline, got %d", len(doc.Body.Outlines))
+	}
+
+	techOutline := doc.Body.Outlines[0]
+	if techOutline.Text != "Tech" {
+		t.Errorf("top-level outline text = %q, want Tech", techOutline.Text)
+	}
+
+	// Tech should have 2 child outlines (Go, Rust) + 1 feed
+	// Children come first, then feeds
+	if len(techOutline.Outlines) != 3 {
+		t.Fatalf("expected 3 outlines under Tech (Go + Rust + feed), got %d", len(techOutline.Outlines))
+	}
+
+	// Child folders
+	if techOutline.Outlines[0].Text != "Go" {
+		t.Errorf("Tech child[0].Text = %q, want Go", techOutline.Outlines[0].Text)
+	}
+	if techOutline.Outlines[1].Text != "Rust" {
+		t.Errorf("Tech child[1].Text = %q, want Rust", techOutline.Outlines[1].Text)
+	}
+
+	// Go should have 1 feed
+	if len(techOutline.Outlines[0].Outlines) != 1 {
+		t.Fatalf("expected 1 feed under Go, got %d", len(techOutline.Outlines[0].Outlines))
+	}
+	if techOutline.Outlines[0].Outlines[0].XMLURL != "https://go.dev/feed" {
+		t.Errorf("Go feed URL = %q, want https://go.dev/feed", techOutline.Outlines[0].Outlines[0].XMLURL)
+	}
+
+	// Rust should have 1 feed
+	if len(techOutline.Outlines[1].Outlines) != 1 {
+		t.Fatalf("expected 1 feed under Rust, got %d", len(techOutline.Outlines[1].Outlines))
+	}
+	if techOutline.Outlines[1].Outlines[0].XMLURL != "https://rust-lang.org/feed" {
+		t.Errorf("Rust feed URL = %q, want https://rust-lang.org/feed", techOutline.Outlines[1].Outlines[0].XMLURL)
+	}
+
+	// Tech direct feed
+	if techOutline.Outlines[2].XMLURL != "https://tech.com/feed" {
+		t.Errorf("Tech direct feed URL = %q, want https://tech.com/feed", techOutline.Outlines[2].XMLURL)
+	}
+}
+
+func TestBuildOPML_EmptyIntermediateFolder(t *testing.T) {
+	abc := "A/B/C"
+	subs := &Subscriptions{
+		Folders: []FolderEntry{
+			{Name: "A"},
+			{Name: "A/B"},
+			{Name: "A/B/C"},
+		},
+		Feeds: []FeedEntry{
+			{Title: "Deep Feed", URL: "https://example.com/deep.xml", Folder: &abc},
+		},
+	}
+
+	doc := BuildOPML(subs)
+
+	// Should have 1 top-level outline: "A"
+	if len(doc.Body.Outlines) != 1 {
+		t.Fatalf("expected 1 top-level outline, got %d", len(doc.Body.Outlines))
+	}
+
+	aOutline := doc.Body.Outlines[0]
+	if aOutline.Text != "A" {
+		t.Errorf("top-level outline text = %q, want A", aOutline.Text)
+	}
+
+	// A has 1 child: B
+	if len(aOutline.Outlines) != 1 {
+		t.Fatalf("expected 1 child under A, got %d", len(aOutline.Outlines))
+	}
+	bOutline := aOutline.Outlines[0]
+	if bOutline.Text != "B" {
+		t.Errorf("A child text = %q, want B", bOutline.Text)
+	}
+
+	// B has 1 child: C
+	if len(bOutline.Outlines) != 1 {
+		t.Fatalf("expected 1 child under B, got %d", len(bOutline.Outlines))
+	}
+	cOutline := bOutline.Outlines[0]
+	if cOutline.Text != "C" {
+		t.Errorf("B child text = %q, want C", cOutline.Text)
+	}
+
+	// C has the feed
+	if len(cOutline.Outlines) != 1 {
+		t.Fatalf("expected 1 feed under C, got %d", len(cOutline.Outlines))
+	}
+	if cOutline.Outlines[0].XMLURL != "https://example.com/deep.xml" {
+		t.Errorf("feed URL = %q, want https://example.com/deep.xml", cOutline.Outlines[0].XMLURL)
+	}
+}
+
+func TestReadFeedsOPML_DeeplyNested(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "feeds.opml")
+
+	opml := `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>Test</title></head>
+  <body>
+    <outline text="A">
+      <outline text="B">
+        <outline text="C">
+          <outline text="Deep Feed" type="rss" xmlUrl="https://example.com/deep.xml"/>
+        </outline>
+      </outline>
+    </outline>
+  </body>
+</opml>`
+
+	if err := os.WriteFile(path, []byte(opml), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	subs, err := ReadFeedsOPML(path)
+	if err != nil {
+		t.Fatalf("ReadFeedsOPML() error: %v", err)
+	}
+
+	// Should have 3 folders with path-based names
+	wantFolders := []string{"A", "A/B", "A/B/C"}
+	if len(subs.Folders) != len(wantFolders) {
+		t.Fatalf("expected %d folders, got %d", len(wantFolders), len(subs.Folders))
+	}
+	for i, wf := range wantFolders {
+		if subs.Folders[i].Name != wf {
+			t.Errorf("folders[%d].Name = %q, want %q", i, subs.Folders[i].Name, wf)
+		}
+	}
+
+	// Feed should be in "A/B/C"
+	if len(subs.Feeds) != 1 {
+		t.Fatalf("expected 1 feed, got %d", len(subs.Feeds))
+	}
+	if subs.Feeds[0].Folder == nil || *subs.Feeds[0].Folder != "A/B/C" {
+		t.Errorf("feed folder = %v, want *A/B/C", subs.Feeds[0].Folder)
 	}
 }
