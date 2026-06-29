@@ -324,12 +324,11 @@ function AppInner() {
     }
     if (hasNextPage) {
       setSeekingUnread(true);
-      fetchNextPage();
     }
-  }, [selectedIndex, articles, selectArticleByIndex, hasNextPage, fetchNextPage]);
+  }, [selectedIndex, articles, selectArticleByIndex, hasNextPage]);
 
   useEffect(() => {
-    if (!seekingUnread) return;
+    if (!seekingUnread || isFetchingNextPage) return;
     const unreadIdx = articles.findIndex((a) => !a.isRead);
     if (unreadIdx >= 0) {
       setSeekingUnread(false);
@@ -339,7 +338,11 @@ function AppInner() {
     } else {
       fetchNextPage();
     }
-  }, [seekingUnread, articles, hasNextPage, fetchNextPage, selectArticleByIndex]);
+  }, [seekingUnread, articles, hasNextPage, isFetchingNextPage, fetchNextPage, selectArticleByIndex]);
+
+  useEffect(() => {
+    setSeekingUnread(false);
+  }, [queryParams]);
 
   // ---- ArticleView navigation callbacks ----
   const handlePrevArticle = selectedIndex > 0 ? goToPrevArticle : null;
@@ -348,6 +351,7 @@ function AppInner() {
   const hasNextUnread = useMemo(() => {
     if (articles.some((a) => !a.isRead)) return true;
     if (!hasNextPage) return false;
+    if (queryParams.q) return true;
     if (queryParams.feedId != null) {
       return (unreadCounts.feeds[String(queryParams.feedId)] ?? 0) > 0;
     }
@@ -355,7 +359,7 @@ function AppInner() {
       return (unreadCounts.folders[String(queryParams.folderId)] ?? 0) > 0;
     }
     return (unreadCounts.total ?? 0) > 0;
-  }, [articles, hasNextPage, unreadCounts, queryParams.feedId, queryParams.folderId]);
+  }, [articles, hasNextPage, unreadCounts, queryParams.feedId, queryParams.folderId, queryParams.q]);
   const handleNextUnread = hasNextUnread ? goToNextUnread : null;
 
   const handleToggleSelectedRead = useCallback(() => {
