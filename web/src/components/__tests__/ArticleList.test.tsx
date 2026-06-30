@@ -5,6 +5,7 @@ import type { Article } from '../../api/client';
 
 vi.mock('../../utils/thumbnail', () => ({
   extractThumbnail: () => null,
+  extractTextExcerpt: (_html: string, _maxLen?: number) => 'excerpt text',
 }));
 
 vi.mock('../../utils/time', () => ({
@@ -254,5 +255,92 @@ describe('ArticleList', () => {
     );
     expect(screen.getByText('読み込み中…')).toBeInTheDocument();
     expect(screen.queryByText('もっと読む')).not.toBeInTheDocument();
+  });
+
+  describe('isSingleFeed mode', () => {
+    it('shows author and excerpt instead of feed name', () => {
+      const article = makeArticle({ id: 1, author: 'Jane Doe', feedTitle: 'My Feed' });
+      const { container } = render(
+        <ArticleList {...defaultProps} articles={[article]} isSingleFeed={true} />,
+      );
+      expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+      expect(screen.getByText('excerpt text')).toBeInTheDocument();
+      // feed name should not appear in the meta row
+      const metaRow = container.querySelector('h3 + div')!;
+      expect(metaRow.textContent).not.toContain('My Feed');
+    });
+
+    it('shows feed name when isSingleFeed is false', () => {
+      const article = makeArticle({ id: 1, author: 'Jane Doe', feedTitle: 'My Feed' });
+      const { container } = render(
+        <ArticleList {...defaultProps} articles={[article]} isSingleFeed={false} />,
+      );
+      const metaRow = container.querySelector('h3 + div')!;
+      expect(metaRow.textContent).toContain('My Feed');
+      expect(screen.queryByText('Jane Doe')).not.toBeInTheDocument();
+    });
+
+    it('shows excerpt even without author in single-feed mode', () => {
+      const article = makeArticle({ id: 1, author: null, feedTitle: 'My Feed' });
+      render(
+        <ArticleList {...defaultProps} articles={[article]} isSingleFeed={true} />,
+      );
+      expect(screen.getByText('excerpt text')).toBeInTheDocument();
+    });
+  });
+
+  describe('compact mode', () => {
+    it('applies compact padding when isArticleOpen is true', () => {
+      const article = makeArticle({ id: 1 });
+      const { container } = render(
+        <ArticleList {...defaultProps} articles={[article]} isArticleOpen={true} />,
+      );
+      const button = container.querySelector('[data-article-id="1"]')!;
+      expect(button.className).toContain('py-2');
+      expect(button.className).not.toContain('py-3');
+    });
+
+    it('applies rich padding when isArticleOpen is false', () => {
+      const article = makeArticle({ id: 1 });
+      const { container } = render(
+        <ArticleList {...defaultProps} articles={[article]} isArticleOpen={false} />,
+      );
+      const button = container.querySelector('[data-article-id="1"]')!;
+      expect(button.className).toContain('py-3');
+      expect(button.className).not.toContain('py-2');
+    });
+
+    it('suppresses excerpt in compact single-feed mode', () => {
+      const article = makeArticle({ id: 1, author: 'Jane Doe' });
+      render(
+        <ArticleList
+          {...defaultProps}
+          articles={[article]}
+          isSingleFeed={true}
+          isArticleOpen={true}
+        />,
+      );
+      // excerpt is empty string when compact=true (mock returns 'excerpt text' but
+      // the component passes compact=true, so extractTextExcerpt is called with compact suppression)
+      expect(screen.queryByText('excerpt text')).not.toBeInTheDocument();
+    });
+
+    it('applies single-line title clamp in compact mode', () => {
+      const article = makeArticle({ id: 1 });
+      const { container } = render(
+        <ArticleList {...defaultProps} articles={[article]} isArticleOpen={true} />,
+      );
+      const title = container.querySelector('h3')!;
+      expect(title.className).toContain('line-clamp-1');
+    });
+
+    it('applies two-line title clamp in rich mode', () => {
+      const article = makeArticle({ id: 1 });
+      const { container } = render(
+        <ArticleList {...defaultProps} articles={[article]} isArticleOpen={false} />,
+      );
+      const title = container.querySelector('h3')!;
+      expect(title.className).toContain('line-clamp-2');
+    });
   });
 });

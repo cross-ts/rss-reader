@@ -290,8 +290,8 @@ function ArticleRow({
 
   const faviconUrl = useMemo(() => {
     try {
-      const { hostname } = new URL(article.url);
-      return `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
+      const { origin } = new URL(article.url);
+      return `${origin}/favicon.ico`;
     } catch {
       return null;
     }
