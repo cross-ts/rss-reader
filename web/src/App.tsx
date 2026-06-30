@@ -495,6 +495,8 @@ function AppInner() {
                     onLoadMore={() => fetchNextPage()}
                     hasMore={hasNextPage}
                     isFetchingMore={isFetchingNextPage}
+                    isSingleFeed={selection.type === 'feed'}
+                    isArticleOpen={selectedArticleId !== null}
                   />
                 </div>
               )}

@@ -190,16 +190,17 @@ describe('ArticleList', () => {
     expect(button.className).toContain('bg-accent-light');
   });
 
-  it('applies opacity to read articles', () => {
+  it('applies muted text to read article titles', () => {
     const article = makeArticle({ id: 1, isRead: true });
     const { container } = render(
       <ArticleList {...defaultProps} articles={[article]} />,
     );
-    const button = container.querySelector('[data-article-id="1"]')!;
-    expect(button.className).toContain('opacity-60');
+    const title = container.querySelector('h3')!;
+    expect(title.className).toContain('text-text-muted');
+    expect(title.className).not.toContain('font-semibold');
   });
 
-  it('shows unread dot for unread articles', () => {
+  it('shows unread indicator dot for unread articles', () => {
     const article = makeArticle({ id: 1, isRead: false });
     const { container } = render(
       <ArticleList {...defaultProps} articles={[article]} />,
