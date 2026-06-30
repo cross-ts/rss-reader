@@ -187,21 +187,6 @@ describe('Sidebar', () => {
     expect(screen.queryByPlaceholderText('Site or feed URL')).not.toBeInTheDocument();
   });
 
-  it('shows settings panel via more actions menu', async () => {
-    renderSidebar();
-    await screen.findByText('All Articles');
-    fireEvent.click(screen.getByLabelText('More actions'));
-    fireEvent.click(screen.getByText('Settings'));
-    expect(screen.getByText('RSS Reader')).toBeInTheDocument();
-    expect(screen.getByText(/Lightweight RSS reader/)).toBeInTheDocument();
-  });
-
-  it('does not show settings panel by default', async () => {
-    renderSidebar();
-    await screen.findByText('All Articles');
-    expect(screen.queryByText(/Lightweight RSS reader/)).not.toBeInTheDocument();
-  });
-
   it('shows loading state while feeds/folders are loading', () => {
     mockApi.getFolders.mockReturnValue(new Promise(() => {})); // never resolves
     mockApi.getFeeds.mockReturnValue(new Promise(() => {}));
@@ -242,13 +227,6 @@ describe('Sidebar', () => {
     // Should have "No folder" plus folder options
     const options = within(select).getAllByRole('option');
     expect(options[0]).toHaveTextContent('No folder');
-  });
-
-  it('has OPML section in settings panel', async () => {
-    renderSidebar({ openSettingsPanelToken: 1 });
-    await screen.findByText('RSS Reader');
-    expect(screen.getByText('OPML')).toBeInTheDocument();
-    expect(screen.getByText('README で手順を見る')).toBeInTheDocument();
   });
 
   it('submits add feed form and calls createFeed via discover', async () => {

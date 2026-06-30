@@ -74,13 +74,11 @@ describe('ArticleList', () => {
 
   it('shows onboarding when no feeds', () => {
     const onOpenAddFeed = vi.fn();
-    const onOpenOpmlGuide = vi.fn();
     render(
       <ArticleList
         {...defaultProps}
         hasFeeds={false}
         onOpenAddFeed={onOpenAddFeed}
-        onOpenOpmlGuide={onOpenOpmlGuide}
       />,
     );
     expect(screen.getByText('まだフィードが登録されていません')).toBeInTheDocument();
@@ -88,8 +86,10 @@ describe('ArticleList', () => {
     fireEvent.click(screen.getByText('最初のフィードを追加する'));
     expect(onOpenAddFeed).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText('OPML の使い方を見る'));
-    expect(onOpenOpmlGuide).toHaveBeenCalledTimes(1);
+    const opmlLink = screen.getByText('OPML の使い方を見る');
+    expect(opmlLink.tagName).toBe('A');
+    expect(opmlLink).toHaveAttribute('href', 'https://github.com/cross-ts/rss-reader#feedsopmlssot');
+    expect(opmlLink).toHaveAttribute('target', '_blank');
   });
 
   it('shows "記事がありません" when has feeds but no articles', () => {

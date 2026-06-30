@@ -66,7 +66,6 @@ function AppInner() {
   const [addingFeedName, setAddingFeedName] = useState<string | null>(null);
   const [addPanelFocusToken, setAddPanelFocusToken] = useState(0);
   const [openAddPanelToken, setOpenAddPanelToken] = useState(0);
-  const [openSettingsPanelToken, setOpenSettingsPanelToken] = useState(0);
 
   // Last updated time
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -243,14 +242,6 @@ function AppInner() {
     setAddPanelFocusToken((prev) => prev + 1);
   }, [layoutMode]);
 
-  const handleOpenOpmlGuide = useCallback(() => {
-    setSelectedArticleId(null);
-    if (layoutMode !== 'desktop') {
-      setIsSidebarOpen(true);
-    }
-    setOpenSettingsPanelToken((prev) => prev + 1);
-  }, [layoutMode]);
-
   const handleSearchClear = useCallback(() => {
     setSearchText('');
   }, []);
@@ -393,7 +384,6 @@ function AppInner() {
       onFeedAdding={setAddingFeedName}
       addPanelFocusToken={addPanelFocusToken}
       openAddPanelToken={openAddPanelToken}
-      openSettingsPanelToken={openSettingsPanelToken}
     />
   );
 
@@ -484,7 +474,6 @@ function AppInner() {
                     onRetry={handleRetryArticles}
                     addingFeedName={addingFeedName}
                     onOpenAddFeed={handleOpenAddFeed}
-                    onOpenOpmlGuide={handleOpenOpmlGuide}
                     searchQuery={debouncedQ || undefined}
                     unreadOnly={unreadOnly}
                     totalCount={data?.pages[0]?.total}
