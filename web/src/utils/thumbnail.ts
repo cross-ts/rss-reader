@@ -15,3 +15,15 @@ export function extractThumbnail(html: string): string | null {
     return null;
   }
 }
+
+/** Extract plain-text excerpt from HTML content, trimmed to maxLen chars. */
+export function extractTextExcerpt(html: string, maxLen = 80): string {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const text = (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text.length <= maxLen) return text;
+    return text.slice(0, maxLen).trimEnd() + '…';
+  } catch {
+    return '';
+  }
+}

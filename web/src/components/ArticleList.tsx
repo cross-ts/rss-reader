@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { type Article } from '../api/client';
-import { extractThumbnail } from '../utils/thumbnail';
+import { extractThumbnail, extractTextExcerpt } from '../utils/thumbnail';
 import { relativeTime } from '../utils/time';
 import { decodeEntities } from '../utils/decodeEntities';
 
@@ -24,6 +24,8 @@ interface Props {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isFetchingMore?: boolean;
+  isSingleFeed?: boolean;
+  isArticleOpen?: boolean;
 }
 
 // ---- Skeleton placeholders ----
@@ -61,6 +63,8 @@ export function ArticleList({
   onLoadMore,
   hasMore,
   isFetchingMore,
+  isSingleFeed = false,
+  isArticleOpen = false,
 }: Props) {
   if (isLoading) {
     return (
@@ -217,6 +221,8 @@ export function ArticleList({
           selected={selectedArticleId === article.id}
           read={article.isRead}
           onSelect={() => onSelectArticle(article)}
+          isSingleFeed={isSingleFeed}
+          compact={isArticleOpen}
         />
       ))}
       {hasMore && (
@@ -243,61 +249,128 @@ export function ArticleList({
 
 // ---- List Row ----
 
+const FEED_COLORS = [
+  'bg-blue-500',
+  'bg-emerald-500',
+  'bg-violet-500',
+  'bg-rose-500',
+  'bg-amber-500',
+  'bg-cyan-500',
+  'bg-fuchsia-500',
+  'bg-teal-500',
+];
+
+function feedColor(feedTitle: string): string {
+  let hash = 0;
+  for (let i = 0; i < feedTitle.length; i++) {
+    hash = (hash * 31 + feedTitle.charCodeAt(i)) >>> 0;
+  }
+  return FEED_COLORS[hash % FEED_COLORS.length];
+}
+
 function ArticleRow({
   article,
   selected,
   read,
   onSelect,
+  isSingleFeed,
+  compact,
 }: {
   article: Article;
   selected: boolean;
   read: boolean;
   onSelect: () => void;
+  isSingleFeed: boolean;
+  compact: boolean;
 }) {
   const thumbnail = useMemo(() => extractThumbnail(article.content), [article.content]);
   const [imgError, setImgError] = useState(false);
+  const [faviconError, setFaviconError] = useState(false);
   const showImg = thumbnail && !imgError;
+
+  const faviconUrl = useMemo(() => {
+    try {
+      const { origin } = new URL(article.url);
+      return `${origin}/favicon.ico`;
+    } catch {
+      return null;
+    }
+  }, [article.url]);
+
+  const excerpt = useMemo(
+    () => (isSingleFeed && !compact ? extractTextExcerpt(article.content, 60) : ''),
+    [article.content, isSingleFeed, compact],
+  );
+
   const decodedTitle = useMemo(() => decodeEntities(article.title), [article.title]);
+  const thumbSize = compact ? 'w-10 h-10' : 'w-14 h-14';
 
   return (
     <button
       data-article-id={article.id}
       onClick={onSelect}
       className={[
-        'w-full text-left flex items-center gap-3 px-5 py-3 border-b border-border transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
-        selected
-          ? 'bg-accent-light'
-          : 'hover:bg-bg-alt',
-        read ? 'opacity-60' : '',
+        'w-full text-left flex items-center gap-3 px-5 border-b border-border transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
+        compact ? 'py-2' : 'py-3',
+        selected ? 'bg-accent-light' : 'hover:bg-bg-alt',
       ].join(' ')}
     >
-      {/* Small thumbnail */}
-      {showImg && (
-        <div className="w-14 h-14 rounded-lg bg-bg-alt overflow-hidden flex-shrink-0">
+      {/* Fixed-width thumbnail / favicon / colored initial */}
+      <div className={`relative ${thumbSize} rounded-lg bg-bg-alt overflow-hidden flex-shrink-0`}>
+        {showImg ? (
           <img
             src={thumbnail}
             alt=""
             onError={() => setImgError(true)}
             className="w-full h-full object-cover"
           />
-        </div>
-      )}
-
-      {/* Unread dot */}
-      {!read && (
-        <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" />
-      )}
+        ) : !faviconError && faviconUrl ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <img
+              src={faviconUrl}
+              alt=""
+              onError={() => setFaviconError(true)}
+              className="w-6 h-6 object-contain"
+            />
+          </div>
+        ) : (
+          <div className={`w-full h-full flex items-center justify-center text-white font-bold ${feedColor(article.feedTitle)}`}>
+            <span className={compact ? 'text-sm' : 'text-base'}>
+              {article.feedTitle.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
+        {/* Unread indicator dot on thumbnail corner */}
+        {!read && (
+          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-accent ring-1 ring-white" />
+        )}
+      </div>
 
       {/* Text */}
       <div className="flex-1 min-w-0">
         <h3 className={[
-          'text-[13px] leading-snug truncate',
-          read ? 'font-normal text-text-sub' : 'font-semibold text-text-primary',
+          'leading-snug',
+          compact ? 'text-[12px] line-clamp-1' : 'text-[13px] line-clamp-2',
+          read
+            ? 'font-normal text-text-muted'
+            : 'font-semibold text-text-primary',
         ].join(' ')}>
           {decodedTitle}
         </h3>
-        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-text-sub">
-          <span className="truncate">{article.feedTitle}</span>
+        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-text-sub">
+          {isSingleFeed ? (
+            <>
+              {article.author && (
+                <span className="truncate shrink-0 max-w-[8rem]">{article.author}</span>
+              )}
+              {excerpt && article.author && <span className="text-text-muted">·</span>}
+              {excerpt && (
+                <span className="truncate text-text-muted">{excerpt}</span>
+              )}
+            </>
+          ) : (
+            <span className="truncate">{article.feedTitle}</span>
+          )}
         </div>
       </div>
 

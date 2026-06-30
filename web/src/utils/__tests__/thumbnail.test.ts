@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractThumbnail } from '../thumbnail';
+import { extractThumbnail, extractTextExcerpt } from '../thumbnail';
 
 describe('extractThumbnail', () => {
   it('extracts src from img tag with https URL', () => {
@@ -49,5 +49,35 @@ describe('extractThumbnail', () => {
     expect(extractThumbnail('<img src="HTTPS://example.com/pic.jpg">')).toBe(
       'HTTPS://example.com/pic.jpg',
     );
+  });
+});
+
+describe('extractTextExcerpt', () => {
+  it('strips HTML tags and returns plain text', () => {
+    expect(extractTextExcerpt('<p>Hello world</p>', 100)).toBe('Hello world');
+  });
+
+  it('normalizes whitespace', () => {
+    expect(extractTextExcerpt('<p>foo  \n  bar</p>', 100)).toBe('foo bar');
+  });
+
+  it('truncates to maxLen and appends ellipsis', () => {
+    const result = extractTextExcerpt('<p>abcdefghij</p>', 5);
+    expect(result).toBe('abcde…');
+  });
+
+  it('does not truncate when text is exactly maxLen', () => {
+    expect(extractTextExcerpt('<p>12345</p>', 5)).toBe('12345');
+  });
+
+  it('returns empty string for empty input', () => {
+    expect(extractTextExcerpt('', 80)).toBe('');
+  });
+
+  it('uses default maxLen of 80', () => {
+    const long = 'a'.repeat(100);
+    const result = extractTextExcerpt(`<p>${long}</p>`);
+    expect(result.length).toBeLessThanOrEqual(81); // 80 chars + ellipsis
+    expect(result.endsWith('…')).toBe(true);
   });
 });
