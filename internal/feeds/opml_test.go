@@ -874,3 +874,83 @@ func TestReadFeedsOPML_DeeplyNested(t *testing.T) {
 		t.Errorf("feed folder = %v, want *A/B/C", subs.Feeds[0].Folder)
 	}
 }
+
+func TestReadFeedsOPML_PreservesHeadTitle(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "feeds.opml")
+
+	opml := `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>My Custom OPML</title></head>
+  <body>
+    <outline text="Feed" type="rss" xmlUrl="https://example.com/feed.xml"/>
+  </body>
+</opml>`
+
+	if err := os.WriteFile(path, []byte(opml), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	subs, err := ReadFeedsOPML(path)
+	if err != nil {
+		t.Fatalf("ReadFeedsOPML() error: %v", err)
+	}
+	if subs.HeadTitle != "My Custom OPML" {
+		t.Errorf("HeadTitle = %q, want %q", subs.HeadTitle, "My Custom OPML")
+	}
+}
+
+func TestBuildOPML_UsesHeadTitleWhenSet(t *testing.T) {
+	subs := &Subscriptions{
+		HeadTitle: "External Subscriptions",
+	}
+	doc := BuildOPML(subs)
+	if doc.Head.Title != "External Subscriptions" {
+		t.Errorf("Head.Title = %q, want %q", doc.Head.Title, "External Subscriptions")
+	}
+}
+
+func TestBuildOPML_DefaultTitleWhenHeadTitleEmpty(t *testing.T) {
+	subs := &Subscriptions{}
+	doc := BuildOPML(subs)
+	if doc.Head.Title != "rss-reader subscriptions" {
+		t.Errorf("Head.Title = %q, want %q", doc.Head.Title, "rss-reader subscriptions")
+	}
+}
+
+func TestSaveOPML_PreservesHeadTitleRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "feeds.opml")
+
+	opml := `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>Imported Feeds</title></head>
+  <body>
+    <outline text="Feed" type="rss" xmlUrl="https://example.com/feed.xml"/>
+  </body>
+</opml>`
+
+	if err := os.WriteFile(path, []byte(opml), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	// Simulate a subscription mutation: read, modify, save.
+	subs, err := ReadFeedsOPML(path)
+	if err != nil {
+		t.Fatalf("ReadFeedsOPML() error: %v", err)
+	}
+
+	subs.Folders = append(subs.Folders, FolderEntry{Name: "New Folder"})
+
+	if err := SaveOPML(path, subs); err != nil {
+		t.Fatalf("SaveOPML() error: %v", err)
+	}
+
+	loaded, err := ReadFeedsOPML(path)
+	if err != nil {
+		t.Fatalf("ReadFeedsOPML() after save error: %v", err)
+	}
+	if loaded.HeadTitle != "Imported Feeds" {
+		t.Errorf("HeadTitle after save = %q, want %q", loaded.HeadTitle, "Imported Feeds")
+	}
+}
