@@ -23,8 +23,9 @@ type FolderEntry struct {
 
 // Subscriptions is the parsed internal representation of feeds.opml.
 type Subscriptions struct {
-	Folders []FolderEntry
-	Feeds   []FeedEntry
+	Folders   []FolderEntry
+	Feeds     []FeedEntry
+	HeadTitle string // preserved from the original OPML head/title element
 }
 
 // XML structures for OPML parsing/writing.
@@ -162,9 +163,13 @@ func (n *folderNode) toOutline() opmlOutline {
 
 // BuildOPML creates an OPML 2.0 document from Subscriptions.
 func BuildOPML(subs *Subscriptions) opmlDoc {
+	title := subs.HeadTitle
+	if title == "" {
+		title = "rss-reader subscriptions"
+	}
 	doc := opmlDoc{
 		Version: "2.0",
-		Head:    opmlHead{Title: "rss-reader subscriptions"},
+		Head:    opmlHead{Title: title},
 	}
 
 	root := &folderNode{}
@@ -226,7 +231,7 @@ func ReadFeedsOPML(path string) (*Subscriptions, error) {
 		return nil, err
 	}
 
-	subs := &Subscriptions{}
+	subs := &Subscriptions{HeadTitle: doc.Head.Title}
 	for i := range doc.Body.Outlines {
 		collectOutline(&doc.Body.Outlines[i], nil, subs)
 	}
