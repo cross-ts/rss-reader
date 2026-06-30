@@ -82,27 +82,27 @@ describe('ArticleList', () => {
         onOpenAddFeed={onOpenAddFeed}
       />,
     );
-    expect(screen.getByText('まだフィードが登録されていません')).toBeInTheDocument();
+    expect(screen.getByText('No feeds added yet')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('最初のフィードを追加する'));
+    fireEvent.click(screen.getByText('Add your first feed'));
     expect(onOpenAddFeed).toHaveBeenCalledTimes(1);
 
-    const opmlLink = screen.getByText('OPML の使い方を見る');
+    const opmlLink = screen.getByText('How to use OPML');
     expect(opmlLink.tagName).toBe('A');
     expect(opmlLink).toHaveAttribute('href', 'https://github.com/cross-ts/rss-reader#feedsopmlssot');
     expect(opmlLink).toHaveAttribute('target', '_blank');
   });
 
-  it('shows "記事がありません" when has feeds but no articles', () => {
+  it('shows "No articles" when has feeds but no articles', () => {
     render(<ArticleList {...defaultProps} hasFeeds={true} />);
-    expect(screen.getByText('記事がありません')).toBeInTheDocument();
+    expect(screen.getByText('No articles')).toBeInTheDocument();
   });
 
   it('shows selectionLabel in empty state when provided', () => {
     render(
       <ArticleList {...defaultProps} hasFeeds={true} selectionLabel="Tech News" />,
     );
-    expect(screen.getByText('Tech News に記事がありません')).toBeInTheDocument();
+    expect(screen.getByText('No articles in Tech News')).toBeInTheDocument();
   });
 
   it('shows refresh button in empty state when onRefresh provided', () => {
@@ -110,12 +110,12 @@ describe('ArticleList', () => {
     render(
       <ArticleList {...defaultProps} hasFeeds={true} onRefresh={onRefresh} />,
     );
-    const refreshBtn = screen.getByText('更新');
+    const refreshBtn = screen.getByText('Refresh');
     fireEvent.click(refreshBtn);
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it('shows "未読記事はありません" when unreadOnly with totalCount > 0', () => {
+  it('shows "No unread articles" when unreadOnly with totalCount > 0', () => {
     const onToggleUnreadOnly = vi.fn();
     render(
       <ArticleList
@@ -125,9 +125,9 @@ describe('ArticleList', () => {
         onToggleUnreadOnly={onToggleUnreadOnly}
       />,
     );
-    expect(screen.getByText('未読記事はありません')).toBeInTheDocument();
+    expect(screen.getByText('No unread articles')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('すべての記事を表示'));
+    fireEvent.click(screen.getByText('Show all articles'));
     expect(onToggleUnreadOnly).toHaveBeenCalledTimes(1);
   });
 
@@ -141,10 +141,10 @@ describe('ArticleList', () => {
         selectionLabel="All Articles"
       />,
     );
-    expect(screen.getByText(/に一致する記事はありません/)).toBeInTheDocument();
-    expect(screen.getByText('All Articles を検索')).toBeInTheDocument();
+    expect(screen.getByText(/No articles matching/)).toBeInTheDocument();
+    expect(screen.getByText('Searching in All Articles')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('検索をクリア'));
+    fireEvent.click(screen.getByText('Clear search'));
     expect(onClearSearch).toHaveBeenCalledTimes(1);
   });
 
@@ -155,7 +155,7 @@ describe('ArticleList', () => {
         addingFeedName="My Blog"
       />,
     );
-    expect(screen.getByText('My Blog から記事を取得しています…')).toBeInTheDocument();
+    expect(screen.getByText('Fetching articles from My Blog…')).toBeInTheDocument();
   });
 
   it('renders article rows with title, feedTitle, and time', () => {
@@ -228,24 +228,24 @@ describe('ArticleList', () => {
     expect(star).not.toBeInTheDocument();
   });
 
-  it('shows "もっと読む" button when hasMore is true', () => {
+  it('shows "Load more" button when hasMore is true', () => {
     const onLoadMore = vi.fn();
     const article = makeArticle({ id: 1 });
     render(
       <ArticleList {...defaultProps} articles={[article]} hasMore={true} onLoadMore={onLoadMore} />,
     );
-    const btn = screen.getByText('もっと読む');
+    const btn = screen.getByText('Load more');
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
     expect(onLoadMore).toHaveBeenCalledTimes(1);
   });
 
-  it('does not show "もっと読む" button when hasMore is false', () => {
+  it('does not show "Load more" button when hasMore is false', () => {
     const article = makeArticle({ id: 1 });
     render(
       <ArticleList {...defaultProps} articles={[article]} hasMore={false} />,
     );
-    expect(screen.queryByText('もっと読む')).not.toBeInTheDocument();
+    expect(screen.queryByText('Load more')).not.toBeInTheDocument();
   });
 
   it('shows spinner when isFetchingMore is true', () => {
@@ -253,8 +253,8 @@ describe('ArticleList', () => {
     render(
       <ArticleList {...defaultProps} articles={[article]} hasMore={true} isFetchingMore={true} />,
     );
-    expect(screen.getByText('読み込み中…')).toBeInTheDocument();
-    expect(screen.queryByText('もっと読む')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByText('Load more')).not.toBeInTheDocument();
   });
 
   describe('isSingleFeed mode', () => {

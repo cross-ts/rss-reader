@@ -100,7 +100,7 @@ export function ArticleList({
       <div className="flex-1 overflow-y-auto">
         <div className="flex items-center justify-center gap-2 py-4 text-sm text-text-sub">
           <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          <span>{addingFeedName} から記事を取得しています…</span>
+          <span>Fetching articles from {addingFeedName}…</span>
         </div>
         {Array.from({ length: 5 }, (_, i) => (
           <SkeletonRow key={i} />
@@ -120,10 +120,10 @@ export function ArticleList({
               </svg>
             </div>
             <h2 className="text-2xl font-semibold tracking-tight text-text-primary">
-              まだフィードが登録されていません
+              No feeds added yet
             </h2>
             <p className="mt-3 text-sm leading-6 text-text-sub">
-              最初のフィードを追加すると、ここに最新の記事が並びます。URL を貼って追加するか、OPML を使って既存の購読を移行できます。
+              Add your first feed to start reading. Paste a URL to add a feed, or import an OPML file to migrate your existing subscriptions.
             </p>
             <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <button
@@ -131,7 +131,7 @@ export function ArticleList({
                 className="inline-flex min-w-[240px] items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <span className="text-base leading-none">+</span>
-                最初のフィードを追加する
+                Add your first feed
               </button>
               <a
                 href="https://github.com/cross-ts/rss-reader#feedsopmlssot"
@@ -139,7 +139,7 @@ export function ArticleList({
                 rel="noopener noreferrer"
                 className="inline-flex min-w-[200px] items-center justify-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-medium text-text-primary transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                OPML の使い方を見る
+                How to use OPML
               </a>
             </div>
           </div>
@@ -154,13 +154,13 @@ export function ArticleList({
             <svg className="w-12 h-12 text-text-muted mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-sm text-text-sub">未読記事はありません</p>
+            <p className="text-sm text-text-sub">No unread articles</p>
             {onToggleUnreadOnly && (
               <button
                 onClick={onToggleUnreadOnly}
                 className="text-sm text-accent hover:text-accent-hover transition-colors mt-2 block mx-auto"
               >
-                すべての記事を表示
+                Show all articles
               </button>
             )}
           </div>
@@ -175,16 +175,16 @@ export function ArticleList({
             <svg className="w-12 h-12 text-text-muted mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
-            <p className="text-sm text-text-sub">&ldquo;{searchQuery}&rdquo; に一致する記事はありません</p>
+            <p className="text-sm text-text-sub">No articles matching &ldquo;{searchQuery}&rdquo;</p>
             {selectionLabel && (
-              <p className="text-xs text-text-muted mt-1">{selectionLabel} を検索</p>
+              <p className="text-xs text-text-muted mt-1">Searching in {selectionLabel}</p>
             )}
             {onClearSearch && (
               <button
                 onClick={onClearSearch}
                 className="text-sm text-accent hover:text-accent-hover transition-colors mt-2 block mx-auto"
               >
-                検索をクリア
+                Clear search
               </button>
             )}
           </div>
@@ -198,13 +198,13 @@ export function ArticleList({
           <svg className="w-12 h-12 text-text-muted mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
           </svg>
-          <p className="text-sm text-text-sub">{selectionLabel ? `${selectionLabel} に記事がありません` : '記事がありません'}</p>
+          <p className="text-sm text-text-sub">{selectionLabel ? `No articles in ${selectionLabel}` : 'No articles'}</p>
           {onRefresh && (
             <button
               onClick={onRefresh}
               className="px-4 py-2 bg-accent text-white text-sm rounded-lg hover:bg-accent-hover transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none mt-4"
             >
-              更新
+              Refresh
             </button>
           )}
         </div>
@@ -230,7 +230,7 @@ export function ArticleList({
           {isFetchingMore ? (
             <span className="inline-flex items-center gap-2 text-sm text-text-sub">
               <span className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-              読み込み中…
+              Loading…
             </span>
           ) : (
             <button
@@ -238,7 +238,7 @@ export function ArticleList({
               onClick={() => onLoadMore?.()}
               className="text-sm text-accent hover:text-accent-hover transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
             >
-              もっと読む
+              Load more
             </button>
           )}
         </div>
