@@ -288,8 +288,7 @@ describe('Sidebar', () => {
     expect(screen.queryByText('News Feed')).not.toBeInTheDocument();
   });
 
-  it('deletes a feed after window.confirm returns true', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('deletes a feed after confirming in modal', async () => {
     mockApi.deleteFeed.mockResolvedValue(undefined);
 
     renderSidebar();
@@ -298,14 +297,18 @@ describe('Sidebar', () => {
     const deleteBtn = screen.getByLabelText('Delete feed "Tech Blog"');
     fireEvent.click(deleteBtn);
 
-    expect(window.confirm).toHaveBeenCalledWith('Delete feed "Tech Blog"?');
+    // Modal should appear
+    expect(await screen.findByText('Unsubscribe from this feed?')).toBeInTheDocument();
+
+    // Click confirm button
+    fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe' }));
+
     await waitFor(() => {
       expect(mockApi.deleteFeed).toHaveBeenCalledWith(1);
     });
   });
 
-  it('does not delete a feed when window.confirm returns false', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('does not delete a feed when cancelling in modal', async () => {
     mockApi.deleteFeed.mockClear();
 
     renderSidebar();
@@ -314,12 +317,17 @@ describe('Sidebar', () => {
     const deleteBtn = screen.getByLabelText('Delete feed "Tech Blog"');
     fireEvent.click(deleteBtn);
 
-    expect(window.confirm).toHaveBeenCalled();
+    // Modal should appear
+    expect(await screen.findByText('Unsubscribe from this feed?')).toBeInTheDocument();
+
+    // Click cancel
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByText('Unsubscribe from this feed?')).not.toBeInTheDocument();
     expect(mockApi.deleteFeed).not.toHaveBeenCalled();
   });
 
-  it('deletes a folder after window.confirm returns true', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('deletes a folder after confirming in modal', async () => {
     mockApi.deleteFolder.mockResolvedValue(undefined);
 
     renderSidebar();
@@ -328,16 +336,18 @@ describe('Sidebar', () => {
     const deleteBtn = screen.getByLabelText('Delete folder "Tech"');
     fireEvent.click(deleteBtn);
 
-    expect(window.confirm).toHaveBeenCalledWith(
-      'Delete folder "Tech"?\nFeeds inside will become uncategorized.'
-    );
+    // Modal should appear
+    expect(await screen.findByText('Delete this folder?')).toBeInTheDocument();
+
+    // Click confirm button
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
     await waitFor(() => {
       expect(mockApi.deleteFolder).toHaveBeenCalledWith(100);
     });
   });
 
-  it('does not delete a folder when window.confirm returns false', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('does not delete a folder when cancelling in modal', async () => {
     mockApi.deleteFolder.mockClear();
 
     renderSidebar();
@@ -346,7 +356,13 @@ describe('Sidebar', () => {
     const deleteBtn = screen.getByLabelText('Delete folder "Tech"');
     fireEvent.click(deleteBtn);
 
-    expect(window.confirm).toHaveBeenCalled();
+    // Modal should appear
+    expect(await screen.findByText('Delete this folder?')).toBeInTheDocument();
+
+    // Click cancel
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByText('Delete this folder?')).not.toBeInTheDocument();
     expect(mockApi.deleteFolder).not.toHaveBeenCalled();
   });
 
@@ -407,7 +423,6 @@ describe('Sidebar', () => {
   });
 
   it('FeedRow delete button calls onDelete with stopPropagation', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mockApi.deleteFeed.mockClear();
     mockApi.deleteFeed.mockResolvedValue(undefined);
 
@@ -419,12 +434,15 @@ describe('Sidebar', () => {
     const deleteBtn = screen.getByLabelText('Delete feed "Tech Blog"');
     fireEvent.click(deleteBtn);
 
-    // onDelete should be called (via handleDeleteFeed) but onSelect should NOT be called
+    // Modal should appear; confirm deletion
+    expect(await screen.findByText('Unsubscribe from this feed?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Unsubscribe' }));
+
+    // deleteFeed should be called but onSelect should NOT be called
     // because stopPropagation prevents the click from reaching the parent
     await waitFor(() => {
       expect(mockApi.deleteFeed).toHaveBeenCalledWith(1);
     });
-    // onSelect should not have been called from the delete button click
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
