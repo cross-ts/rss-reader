@@ -14,7 +14,6 @@ interface Props {
   onRetry?: () => void;
   addingFeedName?: string | null;
   onOpenAddFeed?: () => void;
-  onOpenOpmlGuide?: () => void;
   searchQuery?: string;
   unreadOnly?: boolean;
   totalCount?: number;
@@ -52,7 +51,6 @@ export function ArticleList({
   onRetry,
   addingFeedName,
   onOpenAddFeed,
-  onOpenOpmlGuide,
   searchQuery,
   unreadOnly,
   totalCount,
@@ -131,12 +129,14 @@ export function ArticleList({
                 <span className="text-base leading-none">+</span>
                 最初のフィードを追加する
               </button>
-              <button
-                onClick={onOpenOpmlGuide}
+              <a
+                href="https://github.com/cross-ts/rss-reader#feedsopmlssot"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex min-w-[200px] items-center justify-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-medium text-text-primary transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 OPML の使い方を見る
-              </button>
+              </a>
             </div>
           </div>
         </div>

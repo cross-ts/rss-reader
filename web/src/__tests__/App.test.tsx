@@ -7,7 +7,7 @@ import type { Article } from '../api/client';
 
 vi.mock('../components/Sidebar', () => ({
   Sidebar: (props: any) => (
-    <div data-testid="sidebar" data-open-add-panel-token={props.openAddPanelToken} data-open-settings-panel-token={props.openSettingsPanelToken}>
+    <div data-testid="sidebar" data-open-add-panel-token={props.openAddPanelToken}>
       <button
         data-testid="sidebar-select-folder"
         onClick={() => props.onSelect({ type: 'folder', folderId: 1, folderName: 'Tech' })}
@@ -52,7 +52,6 @@ vi.mock('../components/ArticleList', () => ({
       ))}
       <button data-testid="article-list-retry" onClick={props.onRetry} />
       <button data-testid="article-list-open-add" onClick={props.onOpenAddFeed} />
-      <button data-testid="article-list-open-opml" onClick={props.onOpenOpmlGuide} />
       {props.onRefresh && <button data-testid="article-list-refresh" onClick={props.onRefresh} />}
     </div>
   ),
@@ -474,18 +473,6 @@ describe('App', () => {
     fireEvent.click(screen.getByTestId('article-list-open-add'));
 
     const newToken = sidebar.getAttribute('data-open-add-panel-token');
-    expect(Number(newToken)).toBeGreaterThan(Number(initialToken));
-  });
-
-  it('opens OPML/settings panel via article list callback', async () => {
-    await renderApp();
-
-    const sidebar = screen.getByTestId('sidebar');
-    const initialToken = sidebar.getAttribute('data-open-settings-panel-token');
-
-    fireEvent.click(screen.getByTestId('article-list-open-opml'));
-
-    const newToken = sidebar.getAttribute('data-open-settings-panel-token');
     expect(Number(newToken)).toBeGreaterThan(Number(initialToken));
   });
 
