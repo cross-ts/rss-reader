@@ -56,6 +56,13 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
   const [deletingFeedId, setDeletingFeedId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    type: 'feed' | 'folder';
+    id: number;
+    name: string;
+  } | null>(null);
+
   const discoverSeqRef = useRef(0);
   const addFeedInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -208,23 +215,24 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
   };
 
   const handleDeleteFolder = (folder: Folder) => {
-    const ok = window.confirm(
-      `Delete folder "${folder.name}"?\nFeeds inside will become uncategorized.`
-    );
-    if (ok) {
-      setDeleteError(null);
-      setDeletingFolderId(folder.id);
-      deleteFolder.mutate(folder.id);
-    }
+    setConfirmModal({ type: 'folder', id: folder.id, name: folder.name });
   };
 
   const handleDeleteFeed = (feed: Feed) => {
-    const ok = window.confirm(`Delete feed "${feed.title || feed.url}"?`);
-    if (ok) {
-      setDeleteError(null);
-      setDeletingFeedId(feed.id);
-      deleteFeed.mutate(feed.id);
+    setConfirmModal({ type: 'feed', id: feed.id, name: feed.title || feed.url });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!confirmModal) return;
+    setDeleteError(null);
+    if (confirmModal.type === 'folder') {
+      setDeletingFolderId(confirmModal.id);
+      deleteFolder.mutate(confirmModal.id);
+    } else {
+      setDeletingFeedId(confirmModal.id);
+      deleteFeed.mutate(confirmModal.id);
     }
+    setConfirmModal(null);
   };
 
   const isCreatingFeed = addFeed.isPending;
@@ -245,6 +253,15 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
   }, [showAddPanel, addPanelFocusToken]);
 
   return (
+    <>
+    {confirmModal && (
+      <ConfirmDeleteModal
+        type={confirmModal.type}
+        name={confirmModal.name}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmModal(null)}
+      />
+    )}
     <aside className="w-[260px] bg-surface flex flex-col overflow-hidden h-full border-r border-border flex-shrink-0">
       {/* Header */}
       <div className="px-4 py-3 flex-shrink-0 flex items-center justify-between">
@@ -545,6 +562,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
       </nav>
 
     </aside>
+    </>
   );
 }
 
@@ -600,6 +618,67 @@ function FeedRow({ feed, selected, onSelect, onDelete, deleting, unreadCount, in
       >
         {deleting ? '...' : '✕'}
       </button>
+    </div>
+  );
+}
+
+interface ConfirmDeleteModalProps {
+  type: 'feed' | 'folder';
+  name: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmDeleteModal({ type, name, onConfirm, onCancel }: ConfirmDeleteModalProps) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel]);
+
+  const isFeed = type === 'feed';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center help-overlay-backdrop"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+      >
+        <h2 id="confirm-modal-title" className="text-sm font-semibold text-text-primary mb-1">
+          {isFeed ? 'Unsubscribe from this feed?' : 'Delete this folder?'}
+        </h2>
+        <p className="text-xs font-medium text-text-primary mb-3 truncate">
+          {name}
+        </p>
+        <p className="text-xs text-text-sub mb-5">
+          {isFeed
+            ? 'Saved articles and read status will also be deleted. This action cannot be undone.'
+            : 'Feeds inside will become uncategorized. This action cannot be undone.'}
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            autoFocus
+            onClick={onCancel}
+            className="px-4 py-2 text-xs font-semibold text-text-primary bg-white border border-border rounded-lg hover:bg-surface-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-xs font-semibold text-white bg-danger rounded-lg hover:bg-danger-hover transition-colors focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
+          >
+            {isFeed ? 'Unsubscribe' : 'Delete'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
