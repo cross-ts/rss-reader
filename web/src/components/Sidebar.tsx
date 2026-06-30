@@ -651,6 +651,7 @@ function ConfirmDeleteModal({ type, name, onConfirm, onCancel }: ConfirmDeleteMo
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-modal-title"
+        aria-describedby="confirm-modal-desc"
       >
         <h2 id="confirm-modal-title" className="text-sm font-semibold text-text-primary mb-1">
           {isFeed ? 'Unsubscribe from this feed?' : 'Delete this folder?'}
@@ -658,7 +659,7 @@ function ConfirmDeleteModal({ type, name, onConfirm, onCancel }: ConfirmDeleteMo
         <p className="text-xs font-medium text-text-primary mb-3 truncate">
           {name}
         </p>
-        <p className="text-xs text-text-sub mb-5">
+        <p id="confirm-modal-desc" className="text-xs text-text-sub mb-5">
           {isFeed
             ? 'Saved articles and read status will also be deleted. This action cannot be undone.'
             : 'Feeds inside will become uncategorized. This action cannot be undone.'}
