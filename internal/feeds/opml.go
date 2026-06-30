@@ -9,16 +9,18 @@ import (
 
 // FeedEntry represents a single feed subscription from OPML.
 type FeedEntry struct {
-	Title   string
-	URL     string  // xmlUrl
-	Folder  *string // parent folder name, nil if top-level
-	SiteURL *string // htmlUrl, nullable
-	Type    string  // OPML type attribute (e.g. "rss", "atom")
+	Title      string
+	URL        string     // xmlUrl
+	Folder     *string    // parent folder name, nil if top-level
+	SiteURL    *string    // htmlUrl, nullable
+	Type       string     // OPML type attribute (e.g. "rss", "atom")
+	ExtraAttrs []xml.Attr // unknown/custom XML attributes
 }
 
 // FolderEntry represents a folder from OPML.
 type FolderEntry struct {
-	Name string
+	Name       string
+	ExtraAttrs []xml.Attr // unknown/custom XML attributes
 }
 
 // Subscriptions is the parsed internal representation of feeds.opml.
@@ -46,12 +48,13 @@ type opmlBody struct {
 }
 
 type opmlOutline struct {
-	Text     string        `xml:"text,attr"`
-	Title    string        `xml:"title,attr,omitempty"`
-	Type     string        `xml:"type,attr,omitempty"`
-	XMLURL   string        `xml:"xmlUrl,attr,omitempty"`
-	HTMLURL  string        `xml:"htmlUrl,attr,omitempty"`
-	Outlines []opmlOutline `xml:"outline,omitempty"`
+	Text       string        `xml:"text,attr"`
+	Title      string        `xml:"title,attr,omitempty"`
+	Type       string        `xml:"type,attr,omitempty"`
+	XMLURL     string        `xml:"xmlUrl,attr,omitempty"`
+	HTMLURL    string        `xml:"htmlUrl,attr,omitempty"`
+	ExtraAttrs []xml.Attr    `xml:",any,attr"`
+	Outlines   []opmlOutline `xml:"outline,omitempty"`
 }
 
 // collectOutline recursively processes an opmlOutline and populates subs.
@@ -84,11 +87,12 @@ func collectOutline(outline *opmlOutline, folder *string, subs *Subscriptions) {
 		}
 
 		subs.Feeds = append(subs.Feeds, FeedEntry{
-			Title:   title,
-			URL:     outline.XMLURL,
-			Folder:  folder,
-			SiteURL: siteURL,
-			Type:    feedType,
+			Title:      title,
+			URL:        outline.XMLURL,
+			Folder:     folder,
+			SiteURL:    siteURL,
+			Type:       feedType,
+			ExtraAttrs: outline.ExtraAttrs,
 		})
 		return
 	}
@@ -115,7 +119,12 @@ func collectOutline(outline *opmlOutline, folder *string, subs *Subscriptions) {
 				}
 			}
 			if !found {
-				subs.Folders = append(subs.Folders, FolderEntry{Name: ancestor})
+				// ExtraAttrs belong only to the leaf (current outline), not synthesized ancestors.
+				var extra []xml.Attr
+				if i == len(parts)-1 {
+					extra = outline.ExtraAttrs
+				}
+				subs.Folders = append(subs.Folders, FolderEntry{Name: ancestor, ExtraAttrs: extra})
 			}
 		}
 	} else {
@@ -138,22 +147,24 @@ func feedToOutline(feed *FeedEntry) opmlOutline {
 		feedType = "rss"
 	}
 	return opmlOutline{
-		Text:    feed.Title,
-		Title:   feed.Title,
-		Type:    feedType,
-		XMLURL:  feed.URL,
-		HTMLURL: htmlURL,
+		Text:       feed.Title,
+		Title:      feed.Title,
+		Type:       feedType,
+		XMLURL:     feed.URL,
+		HTMLURL:    htmlURL,
+		ExtraAttrs: feed.ExtraAttrs,
 	}
 }
 
 type folderNode struct {
-	name     string
-	children []*folderNode
-	feeds    []opmlOutline
+	name       string
+	children   []*folderNode
+	feeds      []opmlOutline
+	extraAttrs []xml.Attr
 }
 
 func (n *folderNode) toOutline() opmlOutline {
-	o := opmlOutline{Text: n.name, Title: n.name}
+	o := opmlOutline{Text: n.name, Title: n.name, ExtraAttrs: n.extraAttrs}
 	for _, child := range n.children {
 		o.Outlines = append(o.Outlines, child.toOutline())
 	}
@@ -172,6 +183,12 @@ func BuildOPML(subs *Subscriptions) opmlDoc {
 		Head:    opmlHead{Title: title},
 	}
 
+	// Build a map from folder full path to ExtraAttrs for fast lookup.
+	folderAttrs := make(map[string][]xml.Attr, len(subs.Folders))
+	for _, f := range subs.Folders {
+		folderAttrs[f.Name] = f.ExtraAttrs
+	}
+
 	root := &folderNode{}
 	nodeMap := map[string]*folderNode{}
 
@@ -182,7 +199,7 @@ func BuildOPML(subs *Subscriptions) opmlDoc {
 			if _, exists := nodeMap[path]; exists {
 				continue
 			}
-			node := &folderNode{name: parts[i]}
+			node := &folderNode{name: parts[i], extraAttrs: folderAttrs[path]}
 			nodeMap[path] = node
 			if i == 0 {
 				root.children = append(root.children, node)

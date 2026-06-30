@@ -1,6 +1,7 @@
 package feeds
 
 import (
+	"encoding/xml"
 	"os"
 	"path/filepath"
 	"strings"
@@ -952,5 +953,112 @@ func TestSaveOPML_PreservesHeadTitleRoundTrip(t *testing.T) {
 	}
 	if loaded.HeadTitle != "Imported Feeds" {
 		t.Errorf("HeadTitle after save = %q, want %q", loaded.HeadTitle, "Imported Feeds")
+	}
+}
+
+func TestSaveOPML_PreservesExtraAttrs(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "feeds.opml")
+
+	opml := `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>Test</title></head>
+  <body>
+    <outline text="Tech" title="Tech" custom="folder-meta">
+      <outline text="Go Blog" title="Go Blog" type="atom" xmlUrl="https://go.dev/blog/feed.atom" category="keep-me" priority="high"/>
+    </outline>
+    <outline text="Top Feed" title="Top Feed" type="rss" xmlUrl="https://example.com/feed.xml" source="external"/>
+  </body>
+</opml>`
+
+	if err := os.WriteFile(path, []byte(opml), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	subs, err := ReadFeedsOPML(path)
+	if err != nil {
+		t.Fatalf("ReadFeedsOPML() error: %v", err)
+	}
+
+	// Verify extra attrs were captured on feed entries.
+	if len(subs.Feeds) != 2 {
+		t.Fatalf("expected 2 feeds, got %d", len(subs.Feeds))
+	}
+	if len(subs.Feeds[0].ExtraAttrs) != 2 {
+		t.Errorf("feeds[0] extra attrs: got %d, want 2", len(subs.Feeds[0].ExtraAttrs))
+	}
+	if len(subs.Feeds[1].ExtraAttrs) != 1 {
+		t.Errorf("feeds[1] extra attrs: got %d, want 1", len(subs.Feeds[1].ExtraAttrs))
+	}
+
+	// Verify extra attrs were captured on folder.
+	if len(subs.Folders) != 1 {
+		t.Fatalf("expected 1 folder, got %d", len(subs.Folders))
+	}
+	if len(subs.Folders[0].ExtraAttrs) != 1 {
+		t.Errorf("folders[0] extra attrs: got %d, want 1", len(subs.Folders[0].ExtraAttrs))
+	}
+
+	// Save and re-read.
+	if err := SaveOPML(path, subs); err != nil {
+		t.Fatalf("SaveOPML() error: %v", err)
+	}
+
+	reloaded, err := ReadFeedsOPML(path)
+	if err != nil {
+		t.Fatalf("ReadFeedsOPML() after save error: %v", err)
+	}
+
+	// Verify extra attrs survived round-trip.
+	if len(reloaded.Feeds[0].ExtraAttrs) != 2 {
+		t.Errorf("round-trip feeds[0] extra attrs: got %d, want 2", len(reloaded.Feeds[0].ExtraAttrs))
+	}
+	// Check specific attr values.
+	foundCategory := false
+	for _, attr := range reloaded.Feeds[0].ExtraAttrs {
+		if attr.Name.Local == "category" && attr.Value == "keep-me" {
+			foundCategory = true
+		}
+	}
+	if !foundCategory {
+		t.Error("round-trip: category='keep-me' not found on feeds[0]")
+	}
+
+	if len(reloaded.Feeds[1].ExtraAttrs) != 1 {
+		t.Errorf("round-trip feeds[1] extra attrs: got %d, want 1", len(reloaded.Feeds[1].ExtraAttrs))
+	}
+
+	if len(reloaded.Folders[0].ExtraAttrs) != 1 {
+		t.Errorf("round-trip folders[0] extra attrs: got %d, want 1", len(reloaded.Folders[0].ExtraAttrs))
+	}
+	foundCustom := false
+	for _, attr := range reloaded.Folders[0].ExtraAttrs {
+		if attr.Name.Local == "custom" && attr.Value == "folder-meta" {
+			foundCustom = true
+		}
+	}
+	if !foundCustom {
+		t.Error("round-trip: custom='folder-meta' not found on folders[0]")
+	}
+}
+
+func TestFeedToOutline_PreservesExtraAttrs(t *testing.T) {
+	attrs := []xml.Attr{
+		{Name: xml.Name{Local: "category"}, Value: "tech"},
+	}
+	feed := &FeedEntry{
+		Title:      "Test",
+		URL:        "https://example.com/feed.xml",
+		Type:       "rss",
+		ExtraAttrs: attrs,
+	}
+
+	outline := feedToOutline(feed)
+
+	if len(outline.ExtraAttrs) != 1 {
+		t.Fatalf("expected 1 extra attr, got %d", len(outline.ExtraAttrs))
+	}
+	if outline.ExtraAttrs[0].Name.Local != "category" || outline.ExtraAttrs[0].Value != "tech" {
+		t.Errorf("extra attr = %v, want category=tech", outline.ExtraAttrs[0])
 	}
 }
