@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -376,7 +377,7 @@ func TestCreateFolder_ReconcileError(t *testing.T) {
 	}
 }
 
-func TestUpdateFolder_ReconcileError(t *testing.T) {
+func TestUpdateFolder_OPMLMissingBadDir(t *testing.T) {
 	database := openTestDB(t)
 	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
 	var mu sync.Mutex
@@ -403,7 +404,7 @@ func TestUpdateFolder_ReconcileError(t *testing.T) {
 	}
 }
 
-func TestDeleteFolder_ReconcileError(t *testing.T) {
+func TestDeleteFolder_OPMLMissingBadDir(t *testing.T) {
 	database := openTestDB(t)
 	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
 	var mu sync.Mutex
@@ -413,7 +414,7 @@ func TestDeleteFolder_ReconcileError(t *testing.T) {
 	folders, _ := database.ListFolders()
 	folderID := folders[0].ID
 
-	// See TestUpdateFolder_ReconcileError: a non-existent parent dir makes
+	// See TestUpdateFolder_OPMLMissingBadDir: a non-existent parent dir makes
 	// ReadFeedsOPML report the file as absent, and with the DB already
 	// holding a folder/feed, ensureSubscriptions returns ErrOPMLMissing (503).
 	badFeedsPath := filepath.Join(t.TempDir(), "nonexistent", "subdir", "feeds.opml")
@@ -427,6 +428,29 @@ func TestDeleteFolder_ReconcileError(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestReadAndReconcile_OPMLParseErrorNotMisclassifiedAsMissing(t *testing.T) {
+	database := openTestDB(t)
+	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
+
+	seedFeedWithFolder(t, database, feedsPath, "Feed", "https://example.com/feed.xml", "Tech")
+
+	// Overwrite feeds.opml with invalid XML so ReadFeedsOPML returns a real
+	// parse error rather than (nil, nil) for a missing file.
+	if err := os.WriteFile(feedsPath, []byte("<<<not valid xml>>>"), 0o644); err != nil {
+		t.Fatalf("write invalid opml: %v", err)
+	}
+
+	subs := &feeds.Subscriptions{}
+	err := readAndReconcile(database, feedsPath, subs)
+
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if errors.Is(err, ErrOPMLMissing) {
+		t.Fatalf("expected a real parse error, got ErrOPMLMissing: %v", err)
 	}
 }
 

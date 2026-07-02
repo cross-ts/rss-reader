@@ -748,7 +748,7 @@ func TestUpdateFeed_RemoveFolder(t *testing.T) {
 	}
 }
 
-func TestUpdateFeed_ReconcileError(t *testing.T) {
+func TestUpdateFeed_OPMLMissingBadDir(t *testing.T) {
 	database := openTestDB(t)
 	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
 	var mu sync.Mutex
@@ -825,7 +825,7 @@ func TestUpdateFeed_DBError(t *testing.T) {
 	}
 }
 
-func TestDeleteFeed_ReconcileError(t *testing.T) {
+func TestDeleteFeed_OPMLMissingBadDir(t *testing.T) {
 	database := openTestDB(t)
 	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
 	var mu sync.Mutex
@@ -835,7 +835,7 @@ func TestDeleteFeed_ReconcileError(t *testing.T) {
 	feedList, _ := database.ListFeeds()
 	feedID := feedList[0].ID
 
-	// See TestUpdateFeed_ReconcileError: a non-existent parent dir makes
+	// See TestUpdateFeed_OPMLMissingBadDir: a non-existent parent dir makes
 	// ReadFeedsOPML report the file as absent, and with the DB already
 	// holding a feed, ensureSubscriptions returns ErrOPMLMissing (503).
 	badFeedsPath := filepath.Join(t.TempDir(), "nonexistent", "subdir", "feeds.opml")

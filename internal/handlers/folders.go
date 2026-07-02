@@ -51,7 +51,10 @@ func folderToResponse(f *db.Folder) FolderResponse {
 
 // readAndReconcile saves OPML (SSOT), reconciles DB, and rolls back OPML on failure.
 func readAndReconcile(database *db.DB, feedsPath string, subs *feeds.Subscriptions) error {
-	oldOPML, _ := feeds.ReadFeedsOPML(feedsPath)
+	oldOPML, oldErr := feeds.ReadFeedsOPML(feedsPath)
+	if oldErr != nil {
+		return oldErr
+	}
 
 	// Belt-and-suspenders check: if feeds.opml was absent and the DB already
 	// holds subscriptions, refuse to overwrite it with the (possibly empty)
