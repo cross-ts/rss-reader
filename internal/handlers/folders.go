@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -11,6 +12,26 @@ import (
 	"github.com/cross-ts/rss-reader/internal/db"
 	"github.com/cross-ts/rss-reader/internal/feeds"
 )
+
+// ErrOPMLMissing indicates that feeds.opml could not be found on disk while
+// the database already holds subscriptions. This can happen when an
+// external sync tool or git operation transiently renames/removes the file.
+// Treating this as "no subscriptions" would wipe out the existing DB feeds
+// on the next reconcile, so callers must abort instead.
+var ErrOPMLMissing = errors.New("feeds.opml is missing but subscriptions exist in the database")
+
+// writeOPMLError logs err with the given context and writes the appropriate
+// HTTP error response. ErrOPMLMissing maps to 503 (transient, retryable),
+// anything else maps to 500.
+func writeOPMLError(w http.ResponseWriter, context string, err error) {
+	if errors.Is(err, ErrOPMLMissing) {
+		slog.Error(context, "error", err)
+		http.Error(w, "feeds.opml が一時的に見つからないため操作を中止しました。しばらくしてから再度お試しください", http.StatusServiceUnavailable)
+		return
+	}
+	slog.Error(context, "error", err)
+	http.Error(w, "internal server error", http.StatusInternalServerError)
+}
 
 // FolderResponse is the JSON response for a folder.
 type FolderResponse struct {
@@ -31,6 +52,22 @@ func folderToResponse(f *db.Folder) FolderResponse {
 // readAndReconcile saves OPML (SSOT), reconciles DB, and rolls back OPML on failure.
 func readAndReconcile(database *db.DB, feedsPath string, subs *feeds.Subscriptions) error {
 	oldOPML, _ := feeds.ReadFeedsOPML(feedsPath)
+
+	// Belt-and-suspenders check: if feeds.opml was absent and the DB already
+	// holds subscriptions, refuse to overwrite it with the (possibly empty)
+	// in-memory subs. This guards call paths that don't go through
+	// ensureSubscriptions. A general "feed count dropped a lot" guard is
+	// intentionally NOT used here, since that would also block legitimate
+	// deletions.
+	if oldOPML == nil {
+		feedCount, err := database.FeedCount()
+		if err != nil {
+			return err
+		}
+		if feedCount > 0 {
+			return ErrOPMLMissing
+		}
+	}
 
 	if err := feeds.SaveOPML(feedsPath, subs); err != nil {
 		return err
@@ -65,12 +102,23 @@ func readAndReconcile(database *db.DB, feedsPath string, subs *feeds.Subscriptio
 }
 
 // ensureSubscriptions reads existing OPML or creates empty subscriptions.
-func ensureSubscriptions(feedsPath string) (*feeds.Subscriptions, error) {
+// If feeds.opml is absent but the DB already has subscriptions, this is
+// treated as a transient failure (e.g. an external sync tool renamed the
+// file mid-operation) rather than a true first-run, since proceeding would
+// wipe out the existing DB feeds on reconcile.
+func ensureSubscriptions(database *db.DB, feedsPath string) (*feeds.Subscriptions, error) {
 	subs, err := feeds.ReadFeedsOPML(feedsPath)
 	if err != nil {
 		return nil, err
 	}
 	if subs == nil {
+		feedCount, err := database.FeedCount()
+		if err != nil {
+			return nil, err
+		}
+		if feedCount > 0 {
+			return nil, ErrOPMLMissing
+		}
 		subs = &feeds.Subscriptions{}
 	}
 	return subs, nil
@@ -115,10 +163,9 @@ func CreateFolder(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http
 		feedsLock.Lock()
 		defer feedsLock.Unlock()
 
-		subs, err := ensureSubscriptions(feedsPath)
+		subs, err := ensureSubscriptions(database, feedsPath)
 		if err != nil {
-			slog.Error("read OPML", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "read OPML", err)
 			return
 		}
 
@@ -135,8 +182,7 @@ func CreateFolder(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http
 		}
 
 		if err := readAndReconcile(database, feedsPath, subs); err != nil {
-			slog.Error("reconcile after create folder", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "reconcile after create folder", err)
 			return
 		}
 
@@ -183,10 +229,9 @@ func UpdateFolder(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http
 			return
 		}
 
-		subs, err := ensureSubscriptions(feedsPath)
+		subs, err := ensureSubscriptions(database, feedsPath)
 		if err != nil {
-			slog.Error("read OPML", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "read OPML", err)
 			return
 		}
 
@@ -223,8 +268,7 @@ func UpdateFolder(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http
 		}
 
 		if err := readAndReconcile(database, feedsPath, subs); err != nil {
-			slog.Error("reconcile after update folder", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "reconcile after update folder", err)
 			return
 		}
 
@@ -257,10 +301,9 @@ func DeleteFolder(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http
 			return
 		}
 
-		subs, err := ensureSubscriptions(feedsPath)
+		subs, err := ensureSubscriptions(database, feedsPath)
 		if err != nil {
-			slog.Error("read OPML", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "read OPML", err)
 			return
 		}
 
@@ -284,8 +327,7 @@ func DeleteFolder(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http
 		}
 
 		if err := readAndReconcile(database, feedsPath, subs); err != nil {
-			slog.Error("reconcile after delete folder", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "reconcile after delete folder", err)
 			return
 		}
 

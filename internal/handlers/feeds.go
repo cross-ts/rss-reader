@@ -90,11 +90,10 @@ func CreateFeed(database *db.DB, feedsPath string, feedsLock *sync.Mutex, feedCl
 
 		feedsLock.Lock()
 
-		subs, err := ensureSubscriptions(feedsPath)
+		subs, err := ensureSubscriptions(database, feedsPath)
 		if err != nil {
 			feedsLock.Unlock()
-			slog.Error("read OPML", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "read OPML", err)
 			return
 		}
 
@@ -141,8 +140,7 @@ func CreateFeed(database *db.DB, feedsPath string, feedsLock *sync.Mutex, feedCl
 
 		if err := readAndReconcile(database, feedsPath, subs); err != nil {
 			feedsLock.Unlock()
-			slog.Error("reconcile after create feed", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "reconcile after create feed", err)
 			return
 		}
 
@@ -320,10 +318,9 @@ func UpdateFeed(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http.H
 			}
 		}
 
-		subs, err := ensureSubscriptions(feedsPath)
+		subs, err := ensureSubscriptions(database, feedsPath)
 		if err != nil {
-			slog.Error("read OPML", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "read OPML", err)
 			return
 		}
 
@@ -351,8 +348,7 @@ func UpdateFeed(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http.H
 		}
 
 		if err := readAndReconcile(database, feedsPath, subs); err != nil {
-			slog.Error("reconcile after update feed", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "reconcile after update feed", err)
 			return
 		}
 
@@ -385,10 +381,9 @@ func DeleteFeed(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http.H
 			return
 		}
 
-		subs, err := ensureSubscriptions(feedsPath)
+		subs, err := ensureSubscriptions(database, feedsPath)
 		if err != nil {
-			slog.Error("read OPML", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "read OPML", err)
 			return
 		}
 
@@ -402,8 +397,7 @@ func DeleteFeed(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http.H
 		subs.Feeds = newFeeds
 
 		if err := readAndReconcile(database, feedsPath, subs); err != nil {
-			slog.Error("reconcile after delete feed", "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			writeOPMLError(w, "reconcile after delete feed", err)
 			return
 		}
 

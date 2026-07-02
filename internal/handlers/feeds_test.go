@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -682,7 +683,7 @@ func TestUpdateFeed_SetExistingFolder(t *testing.T) {
 
 	// Create feed with folder "FolderA", and also create "FolderB".
 	seedFeedWithFolder(t, database, feedsPath, "Test Feed", "https://example.com/feed.xml", "FolderA")
-	subs, _ := ensureSubscriptions(feedsPath)
+	subs, _ := ensureSubscriptions(database, feedsPath)
 	subs.Folders = append(subs.Folders, folderEntry("FolderB"))
 	if err := readAndReconcile(database, feedsPath, subs); err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -757,7 +758,10 @@ func TestUpdateFeed_ReconcileError(t *testing.T) {
 	feedList, _ := database.ListFeeds()
 	feedID := feedList[0].ID
 
-	// Point to a path where writing will fail (non-existent parent dir).
+	// Point to a path where writing will fail (non-existent parent dir). Since
+	// this path doesn't exist, ReadFeedsOPML reports it as absent, and since
+	// the DB already has a feed, ensureSubscriptions treats this as
+	// ErrOPMLMissing (503) rather than reaching the reconcile step.
 	badFeedsPath := filepath.Join(t.TempDir(), "nonexistent", "subdir", "feeds.opml")
 
 	mux := http.NewServeMux()
@@ -767,8 +771,8 @@ func TestUpdateFeed_ReconcileError(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -831,6 +835,9 @@ func TestDeleteFeed_ReconcileError(t *testing.T) {
 	feedList, _ := database.ListFeeds()
 	feedID := feedList[0].ID
 
+	// See TestUpdateFeed_ReconcileError: a non-existent parent dir makes
+	// ReadFeedsOPML report the file as absent, and with the DB already
+	// holding a feed, ensureSubscriptions returns ErrOPMLMissing (503).
 	badFeedsPath := filepath.Join(t.TempDir(), "nonexistent", "subdir", "feeds.opml")
 
 	mux := http.NewServeMux()
@@ -840,8 +847,8 @@ func TestDeleteFeed_ReconcileError(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -1003,5 +1010,160 @@ func TestDeleteFeed_Success(t *testing.T) {
 	}
 	if len(feedList2) != 0 {
 		t.Errorf("expected 0 feeds after delete, got %d", len(feedList2))
+	}
+}
+
+func TestCreateFeed_OPMLMissingWithExistingFeeds(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		w.Write([]byte(validRSSXML))
+	}))
+	defer ts.Close()
+
+	client, rewrite := testClient(ts)
+	feedURL := rewrite(ts.URL) + "/feed.xml"
+
+	database := openTestDB(t)
+	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
+	var mu sync.Mutex
+
+	seedFeed(t, database, feedsPath, "Existing Feed", "https://existing.example.com/feed.xml")
+
+	// Simulate feeds.opml being transiently removed by an external tool.
+	if err := os.Remove(feedsPath); err != nil {
+		t.Fatalf("remove feeds.opml: %v", err)
+	}
+
+	countBefore, err := database.FeedCount()
+	if err != nil {
+		t.Fatalf("feed count: %v", err)
+	}
+
+	handler := CreateFeed(database, feedsPath, &mu, client)
+	body := `{"url": "` + feedURL + `"}`
+	req := httptest.NewRequest("POST", "/api/feeds", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
+	}
+
+	countAfter, err := database.FeedCount()
+	if err != nil {
+		t.Fatalf("feed count: %v", err)
+	}
+	if countAfter != countBefore {
+		t.Errorf("expected feed count unchanged, before=%d after=%d", countBefore, countAfter)
+	}
+
+	if _, err := os.Stat(feedsPath); !os.IsNotExist(err) {
+		t.Errorf("expected feeds.opml to remain absent, stat err=%v", err)
+	}
+}
+
+func TestUpdateFeed_OPMLMissingWithExistingFeeds(t *testing.T) {
+	database := openTestDB(t)
+	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
+	var mu sync.Mutex
+
+	seedFeed(t, database, feedsPath, "Test Feed", "https://example.com/feed.xml")
+
+	feedList, _ := database.ListFeeds()
+	feedID := feedList[0].ID
+
+	if err := os.Remove(feedsPath); err != nil {
+		t.Fatalf("remove feeds.opml: %v", err)
+	}
+
+	countBefore, err := database.FeedCount()
+	if err != nil {
+		t.Fatalf("feed count: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PATCH /api/feeds/{id}", UpdateFeed(database, feedsPath, &mu))
+
+	req := httptest.NewRequest("PATCH", "/api/feeds/"+itoa(feedID), strings.NewReader(`{"title":"New"}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
+	}
+
+	countAfter, err := database.FeedCount()
+	if err != nil {
+		t.Fatalf("feed count: %v", err)
+	}
+	if countAfter != countBefore {
+		t.Errorf("expected feed count unchanged, before=%d after=%d", countBefore, countAfter)
+	}
+
+	if _, err := os.Stat(feedsPath); !os.IsNotExist(err) {
+		t.Errorf("expected feeds.opml to remain absent, stat err=%v", err)
+	}
+}
+
+func TestDeleteFeed_OPMLMissingWithExistingFeeds(t *testing.T) {
+	database := openTestDB(t)
+	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
+	var mu sync.Mutex
+
+	seedFeed(t, database, feedsPath, "Test Feed", "https://example.com/feed.xml")
+
+	feedList, _ := database.ListFeeds()
+	feedID := feedList[0].ID
+
+	if err := os.Remove(feedsPath); err != nil {
+		t.Fatalf("remove feeds.opml: %v", err)
+	}
+
+	countBefore, err := database.FeedCount()
+	if err != nil {
+		t.Fatalf("feed count: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/feeds/{id}", DeleteFeed(database, feedsPath, &mu))
+
+	req := httptest.NewRequest("DELETE", "/api/feeds/"+itoa(feedID), nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
+	}
+
+	countAfter, err := database.FeedCount()
+	if err != nil {
+		t.Fatalf("feed count: %v", err)
+	}
+	if countAfter != countBefore {
+		t.Errorf("expected feed count unchanged, before=%d after=%d", countBefore, countAfter)
+	}
+
+	if _, err := os.Stat(feedsPath); !os.IsNotExist(err) {
+		t.Errorf("expected feeds.opml to remain absent, stat err=%v", err)
+	}
+}
+
+func TestDeleteFeed_OPMLMissingWithEmptyDB(t *testing.T) {
+	database := openTestDB(t)
+	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
+	var mu sync.Mutex
+
+	// feeds.opml was never created and the DB has no feeds: this is a true
+	// first-run scenario, so the handler should proceed normally (404 for
+	// the requested feed id, not 503).
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/feeds/{id}", DeleteFeed(database, feedsPath, &mu))
+
+	req := httptest.NewRequest("DELETE", "/api/feeds/1", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
