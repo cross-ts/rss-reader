@@ -109,6 +109,14 @@ export const api = {
     return request(`/api/feeds/${id}`, { method: 'DELETE' });
   },
 
+  // フィード更新（タイトル/フォルダ）
+  updateFeed(id: number, patch: { title?: string; folder?: string | null }): Promise<Feed> {
+    return request(`/api/feeds/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+  },
+
   // フィードURL自動検出
   discoverFeed(url: string): Promise<FeedCandidate[]> {
     return request('/api/feeds/discover', {

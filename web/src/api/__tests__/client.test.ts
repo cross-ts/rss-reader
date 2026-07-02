@@ -131,6 +131,32 @@ describe('api client', () => {
     });
   });
 
+  describe('updateFeed', () => {
+    it('calls PUT /api/feeds/:id with folder set to a string', async () => {
+      const feed = { id: 1, title: 'Tech Blog', url: 'https://tech.com/feed', siteUrl: 'https://tech.com', folder: 'Tech', articleCount: 10 };
+      vi.mocked(fetch).mockResolvedValue(mockResponse(feed));
+      const result = await api.updateFeed(1, { folder: 'Tech' });
+      expect(fetch).toHaveBeenCalledWith('/api/feeds/1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: 'Tech' }),
+      });
+      expect(result).toEqual(feed);
+    });
+
+    it('calls PUT /api/feeds/:id with folder set to null', async () => {
+      const feed = { id: 1, title: 'Tech Blog', url: 'https://tech.com/feed', siteUrl: 'https://tech.com', folder: null, articleCount: 10 };
+      vi.mocked(fetch).mockResolvedValue(mockResponse(feed));
+      const result = await api.updateFeed(1, { folder: null });
+      expect(fetch).toHaveBeenCalledWith('/api/feeds/1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: null }),
+      });
+      expect(result).toEqual(feed);
+    });
+  });
+
   describe('discoverFeed', () => {
     it('calls POST /api/feeds/discover with url', async () => {
       const candidates = [{ feedUrl: 'https://example.com/rss', title: 'Blog' }];

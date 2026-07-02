@@ -18,13 +18,14 @@ vi.mock('../../api/client', async () => {
       deleteFeed: vi.fn(),
       deleteFolder: vi.fn(),
       discoverFeed: vi.fn(),
+      updateFeed: vi.fn(),
     },
   };
 });
 
 // Mock useToast
 vi.mock('../Toast', () => ({
-  useToast: () => ({ addToast: vi.fn() }),
+  useToast: vi.fn(() => ({ addToast: vi.fn() })),
 }));
 
 const mockApi = vi.mocked(api);
@@ -61,6 +62,19 @@ const defaultProps = {
     total: 8,
   },
 };
+
+const FEED_DND_TYPE = 'application/x-rss-reader-feed-id';
+
+// Minimal DataTransfer stub for jsdom, which doesn't implement drag & drop.
+function createDataTransferStub() {
+  const store = new Map<string, string>();
+  return {
+    effectAllowed: '',
+    setData: (type: string, value: string) => { store.set(type, value); },
+    getData: (type: string) => store.get(type) ?? '',
+    get types() { return [...store.keys()]; },
+  };
+}
 
 function renderSidebar(props: Partial<React.ComponentProps<typeof Sidebar>> = {}) {
   mockApi.getFolders.mockResolvedValue(testFolders);
@@ -426,5 +440,253 @@ describe('Sidebar', () => {
     });
     // onSelect should not have been called from the delete button click
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  describe('drag & drop move', () => {
+    it('marks feed rows as draggable', async () => {
+      renderSidebar();
+      const feedRow = (await screen.findByText('Tech Blog')).closest('div')!;
+      expect(feedRow).toHaveAttribute('draggable', 'true');
+    });
+
+    it('moves an uncategorized feed into a folder via drop', async () => {
+      mockApi.updateFeed.mockResolvedValue({
+        id: 1, title: 'Tech Blog', url: 'https://tech.com/feed', siteUrl: 'https://tech.com', folder: 'Design', articleCount: 10,
+      });
+      renderSidebar();
+
+      const feedRow = (await screen.findByText('Tech Blog')).closest('div')!;
+      const folderRow = (await screen.findByText('Design')).closest('div')!;
+      const dataTransfer = createDataTransferStub();
+
+      fireEvent.dragStart(feedRow, { dataTransfer });
+      fireEvent.dragOver(folderRow, { dataTransfer });
+      fireEvent.drop(folderRow, { dataTransfer });
+
+      await waitFor(() => {
+        expect(mockApi.updateFeed).toHaveBeenCalledWith(1, { folder: 'Design' });
+      });
+    });
+
+    it('applies drag-over highlight class to folder row and clears it on dragleave', async () => {
+      renderSidebar();
+      const folderNameEl = await screen.findByText('Design');
+      const folderRow = folderNameEl.closest('div')!;
+      const dataTransfer = createDataTransferStub();
+      dataTransfer.setData(FEED_DND_TYPE, '1');
+
+      fireEvent.dragOver(folderRow, { dataTransfer });
+      expect(folderRow.className).toContain('ring-2');
+
+      fireEvent.dragLeave(folderRow, { dataTransfer, relatedTarget: document.body });
+      expect(folderRow.className).not.toContain('ring-2');
+    });
+
+    it('moves a feed from one folder to another via drop', async () => {
+      mockApi.updateFeed.mockResolvedValue({
+        id: 2, title: 'News Feed', url: 'https://news.com/feed', siteUrl: 'https://news.com', folder: 'Design', articleCount: 5,
+      });
+      renderSidebar();
+
+      // Expand "Tech" folder to reveal "News Feed"
+      fireEvent.click(await screen.findByText('Tech'));
+      const feedRow = (await screen.findByText('News Feed')).closest('div')!;
+      const targetFolderRow = (await screen.findByText('Design')).closest('div')!;
+      const dataTransfer = createDataTransferStub();
+
+      fireEvent.dragStart(feedRow, { dataTransfer });
+      fireEvent.drop(targetFolderRow, { dataTransfer });
+
+      await waitFor(() => {
+        expect(mockApi.updateFeed).toHaveBeenCalledWith(2, { folder: 'Design' });
+      });
+    });
+
+    it('moves a feed to "No folder" via the uncategorized drop zone', async () => {
+      mockApi.updateFeed.mockResolvedValue({
+        id: 2, title: 'News Feed', url: 'https://news.com/feed', siteUrl: 'https://news.com', folder: null, articleCount: 5,
+      });
+      renderSidebar();
+
+      fireEvent.click(await screen.findByText('Tech'));
+      const feedRow = (await screen.findByText('News Feed')).closest('div')!;
+      const noFolderHeading = await screen.findByText('No folder');
+      const dataTransfer = createDataTransferStub();
+
+      fireEvent.dragStart(feedRow, { dataTransfer });
+      fireEvent.drop(noFolderHeading, { dataTransfer });
+
+      await waitFor(() => {
+        expect(mockApi.updateFeed).toHaveBeenCalledWith(2, { folder: null });
+      });
+    });
+
+    it('does not call updateFeed when dropping a feed onto its current folder (no-op)', async () => {
+      mockApi.updateFeed.mockClear();
+      renderSidebar();
+
+      // "News Feed" (id 2) already belongs to folder "Tech"; expand it and drop back onto "Tech"
+      const techFolderText = await screen.findByText('Tech');
+      fireEvent.click(techFolderText);
+      const feedRow = (await screen.findByText('News Feed')).closest('div')!;
+      const techFolderRow = techFolderText.closest('div')!;
+      const dataTransfer = createDataTransferStub();
+
+      fireEvent.dragStart(feedRow, { dataTransfer });
+      fireEvent.drop(techFolderRow, { dataTransfer });
+
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockApi.updateFeed).not.toHaveBeenCalled();
+    });
+
+    it('ignores drop when dataTransfer has no feed id data', async () => {
+      mockApi.updateFeed.mockClear();
+      renderSidebar();
+
+      const folderRow = (await screen.findByText('Design')).closest('div')!;
+      const dataTransfer = createDataTransferStub(); // no setData call
+
+      fireEvent.drop(folderRow, { dataTransfer });
+
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockApi.updateFeed).not.toHaveBeenCalled();
+    });
+
+    it('ignores drop when the dragged feed id no longer exists in the feeds list', async () => {
+      mockApi.updateFeed.mockClear();
+      renderSidebar();
+
+      const folderRow = (await screen.findByText('Design')).closest('div')!;
+      const dataTransfer = createDataTransferStub();
+      dataTransfer.setData(FEED_DND_TYPE, '9999');
+
+      fireEvent.drop(folderRow, { dataTransfer });
+
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockApi.updateFeed).not.toHaveBeenCalled();
+    });
+
+    it('shows a success toast when a feed move succeeds', async () => {
+      const addToast = vi.fn();
+      const { useToast } = await import('../Toast');
+      vi.mocked(useToast).mockReturnValue({ addToast });
+      mockApi.updateFeed.mockResolvedValue({
+        id: 1, title: 'Tech Blog', url: 'https://tech.com/feed', siteUrl: 'https://tech.com', folder: 'Design', articleCount: 10,
+      });
+      renderSidebar();
+
+      const feedRow = (await screen.findByText('Tech Blog')).closest('div')!;
+      const folderRow = (await screen.findByText('Design')).closest('div')!;
+      const dataTransfer = createDataTransferStub();
+
+      fireEvent.dragStart(feedRow, { dataTransfer });
+      fireEvent.drop(folderRow, { dataTransfer });
+
+      await waitFor(() => {
+        expect(addToast).toHaveBeenCalledWith('Feed moved', 'success');
+      });
+    });
+
+    it('shows an error toast when a feed move fails', async () => {
+      const addToast = vi.fn();
+      const { useToast } = await import('../Toast');
+      vi.mocked(useToast).mockReturnValue({ addToast });
+      mockApi.updateFeed.mockRejectedValue(new Error('Failed to move feed'));
+      renderSidebar();
+
+      const feedRow = (await screen.findByText('Tech Blog')).closest('div')!;
+      const folderRow = (await screen.findByText('Design')).closest('div')!;
+      const dataTransfer = createDataTransferStub();
+
+      fireEvent.dragStart(feedRow, { dataTransfer });
+      fireEvent.drop(folderRow, { dataTransfer });
+
+      await waitFor(() => {
+        expect(addToast).toHaveBeenCalledWith('Failed to move feed', 'error');
+      });
+    });
+  });
+
+  describe('move to folder select', () => {
+    it('shows a select when the move button is clicked', async () => {
+      renderSidebar();
+      await screen.findByText('Tech Blog');
+
+      const moveBtn = screen.getByLabelText('Move feed "Tech Blog" to folder');
+      fireEvent.click(moveBtn);
+
+      expect(screen.getByRole('combobox', { name: 'Move feed "Tech Blog" to folder' })).toBeInTheDocument();
+    });
+
+    it('calls updateFeed with the selected folder and closes the select', async () => {
+      mockApi.updateFeed.mockResolvedValue({
+        id: 1, title: 'Tech Blog', url: 'https://tech.com/feed', siteUrl: 'https://tech.com', folder: 'Tech', articleCount: 10,
+      });
+      renderSidebar();
+      await screen.findByText('Tech Blog');
+
+      fireEvent.click(screen.getByLabelText('Move feed "Tech Blog" to folder'));
+      const select = screen.getByRole('combobox', { name: 'Move feed "Tech Blog" to folder' });
+      fireEvent.change(select, { target: { value: 'Tech' } });
+
+      await waitFor(() => {
+        expect(mockApi.updateFeed).toHaveBeenCalledWith(1, { folder: 'Tech' });
+      });
+      expect(screen.queryByRole('combobox', { name: 'Move feed "Tech Blog" to folder' })).not.toBeInTheDocument();
+    });
+
+    it('does not call updateFeed when selecting the feed\'s current folder', async () => {
+      mockApi.updateFeed.mockClear();
+      renderSidebar();
+
+      // "News Feed" (id 2) is already in folder "Tech"; expand to reveal it
+      fireEvent.click(await screen.findByText('Tech'));
+      const moveBtn = await screen.findByLabelText('Move feed "News Feed" to folder');
+      fireEvent.click(moveBtn);
+
+      const select = screen.getByRole('combobox', { name: 'Move feed "News Feed" to folder' });
+      fireEvent.change(select, { target: { value: 'Tech' } });
+
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockApi.updateFeed).not.toHaveBeenCalled();
+    });
+
+    it('moves feed to "No folder" when that option is selected', async () => {
+      mockApi.updateFeed.mockResolvedValue({
+        id: 2, title: 'News Feed', url: 'https://news.com/feed', siteUrl: 'https://news.com', folder: null, articleCount: 5,
+      });
+      renderSidebar();
+
+      fireEvent.click(await screen.findByText('Tech'));
+      const moveBtn = await screen.findByLabelText('Move feed "News Feed" to folder');
+      fireEvent.click(moveBtn);
+
+      const select = screen.getByRole('combobox', { name: 'Move feed "News Feed" to folder' });
+      fireEvent.change(select, { target: { value: '' } });
+
+      await waitFor(() => {
+        expect(mockApi.updateFeed).toHaveBeenCalledWith(2, { folder: null });
+      });
+    });
+
+    it('stays closed if a blur event fires after change closed it', async () => {
+      mockApi.updateFeed.mockResolvedValue({
+        id: 1, title: 'Tech Blog', url: 'https://tech.com/feed', siteUrl: 'https://tech.com', folder: 'Tech', articleCount: 10,
+      });
+      renderSidebar();
+      await screen.findByText('Tech Blog');
+
+      fireEvent.click(screen.getByLabelText('Move feed "Tech Blog" to folder'));
+      const select = screen.getByRole('combobox', { name: 'Move feed "Tech Blog" to folder' });
+      fireEvent.change(select, { target: { value: 'Tech' } });
+      // A browser may still dispatch blur on the select after the change
+      // handler already closed it; that must not reopen the select.
+      fireEvent.blur(select);
+
+      await waitFor(() => {
+        expect(mockApi.updateFeed).toHaveBeenCalledWith(1, { folder: 'Tech' });
+      });
+      expect(screen.queryByRole('combobox', { name: 'Move feed "Tech Blog" to folder' })).not.toBeInTheDocument();
+    });
   });
 });
