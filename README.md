@@ -34,7 +34,7 @@ go run .
 
 ### 設定（環境変数）
 
-設定は **環境変数のみ**（`os.Getenv`）と CLI フラグで読み込みます。**`.env` ファイルは使用しません**（dotenv 廃止）。
+設定は **環境変数**（`os.Getenv`）・CLI フラグ・`config.yml` で読み込みます。**`.env` ファイルは使用しません**（dotenv 廃止）。
 
 | 変数 | 既定 | 説明 |
 |---|---|---|
@@ -48,7 +48,7 @@ go run .
 
 ### CLI オプション
 
-環境変数に加え、コマンドライン引数でも設定を指定できます。**優先順位は「CLI 引数 > 環境変数 > 既定値」** です。
+環境変数に加え、コマンドライン引数でも設定を指定できます。**優先順位は「CLI 引数 > 環境変数 > config.yml > 既定値」** です。
 
 | フラグ | 対応 env 変数 | 既定値 | 説明 |
 |---|---|---|---|
@@ -69,6 +69,27 @@ go run . --port 3100 --db /var/data/rss.sqlite
 ```
 
 > パス系オプション（`--feeds`, `--db`）を明示指定した場合、相対パスは cwd 基準で絶対パスに解決されます。絶対パスはそのまま使用されます。明示指定が無い場合のみ XDG 既定パスが使われます。
+
+### 設定ファイル（config.yml）
+
+`$XDG_CONFIG_HOME/rss-reader/config.yml`（未設定時 `~/.config/rss-reader/config.yml`）に YAML で設定を記述できます。ファイルが存在しない場合はスキップされます（エラーにしません）。すべてのキーは任意です。
+
+```yaml
+host: "127.0.0.1"
+port: 3000
+poll_interval_minutes: 15
+db: "/path/to/rss.sqlite"
+feeds: "/path/to/feeds.opml"
+frontend_url: "https://..."
+static_dir: "web/dist"
+```
+
+Web UI（サイドバー下部の歯車アイコン）から次の項目を編集できます。保存すると `config.yml` に永続化され、**サーバーの再起動後に反映されます**（ライブ反映はしません）。
+
+| キー | Web UI から編集可能 | 備考 |
+|---|---|---|
+| `host`, `port`, `poll_interval_minutes`, `frontend_url` | ✅ | 保存後は再起動が必要 |
+| `db`, `feeds`, `static_dir` | ❌（閲覧のみ） | 意図しないパス書き換えを防ぐため編集不可 |
 
 ### バイナリのビルド
 

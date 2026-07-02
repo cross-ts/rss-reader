@@ -248,3 +248,171 @@ func TestParseInvalidFlag(t *testing.T) {
 		t.Fatal("expected error for unknown flag")
 	}
 }
+
+// setConfigHome points XDG_CONFIG_HOME at a fresh temp dir so config.yml
+// reads/writes don't touch the real user config.
+func setConfigHome(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	return tmpDir
+}
+
+func writeConfigYAML(t *testing.T, configHome, content string) {
+	t.Helper()
+	dir := filepath.Join(configHome, "rss-reader")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yml"), []byte(content), 0644); err != nil {
+		t.Fatalf("write config.yml: %v", err)
+	}
+}
+
+func TestParsePriorityFlagOverEnvOverFileOverDefault(t *testing.T) {
+	saveRestoreArgs(t)
+	configHome := setConfigHome(t)
+
+	tmpDir := t.TempDir()
+	writeConfigYAML(t, configHome, "host: \"from-file\"\nport: 4000\n")
+
+	t.Setenv("HOST", "from-env")
+	t.Setenv("PORT", "5000")
+	t.Setenv("POLL_INTERVAL_MINUTES", "20")
+
+	os.Args = []string{"test",
+		"-db", filepath.Join(tmpDir, "test.db"),
+		"-feeds", filepath.Join(tmpDir, "feeds.opml"),
+		"-host", "from-flag",
+	}
+
+	cfg, err := Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if cfg.Host != "from-flag" {
+		t.Fatalf("expected host from flag, got %q", cfg.Host)
+	}
+	if cfg.Sources["host"] != SourceFlag {
+		t.Fatalf("expected host source flag, got %q", cfg.Sources["host"])
+	}
+	if cfg.Port != 5000 {
+		t.Fatalf("expected port from env (5000), got %d", cfg.Port)
+	}
+	if cfg.Sources["port"] != SourceEnv {
+		t.Fatalf("expected port source env, got %q", cfg.Sources["port"])
+	}
+	if cfg.PollIntervalMinutes != 20 {
+		t.Fatalf("expected poll interval from env (20), got %d", cfg.PollIntervalMinutes)
+	}
+}
+
+func TestParseFileValueUsedWhenNoFlagOrEnv(t *testing.T) {
+	saveRestoreArgs(t)
+	configHome := setConfigHome(t)
+
+	tmpDir := t.TempDir()
+	writeConfigYAML(t, configHome, "host: \"from-file\"\nport: 4000\nfrontend_url: \"http://from-file.example\"\n")
+
+	os.Args = []string{"test",
+		"-db", filepath.Join(tmpDir, "test.db"),
+		"-feeds", filepath.Join(tmpDir, "feeds.opml"),
+	}
+
+	cfg, err := Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if cfg.Host != "from-file" {
+		t.Fatalf("expected host from file, got %q", cfg.Host)
+	}
+	if cfg.Sources["host"] != SourceFile {
+		t.Fatalf("expected host source file, got %q", cfg.Sources["host"])
+	}
+	if cfg.Port != 4000 {
+		t.Fatalf("expected port from file (4000), got %d", cfg.Port)
+	}
+	if cfg.FrontendURL != "http://from-file.example" {
+		t.Fatalf("expected frontend url from file, got %q", cfg.FrontendURL)
+	}
+}
+
+func TestParseDefaultSourceWhenNothingSet(t *testing.T) {
+	saveRestoreArgs(t)
+	setConfigHome(t)
+
+	tmpDir := t.TempDir()
+	os.Args = []string{"test",
+		"-db", filepath.Join(tmpDir, "test.db"),
+		"-feeds", filepath.Join(tmpDir, "feeds.opml"),
+	}
+
+	cfg, err := Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	if cfg.Sources["host"] != SourceDefault {
+		t.Fatalf("expected host source default, got %q", cfg.Sources["host"])
+	}
+	if cfg.Sources["port"] != SourceDefault {
+		t.Fatalf("expected port source default, got %q", cfg.Sources["port"])
+	}
+}
+
+func TestParseConfigFileMalformedYAML(t *testing.T) {
+	saveRestoreArgs(t)
+	configHome := setConfigHome(t)
+
+	tmpDir := t.TempDir()
+	writeConfigYAML(t, configHome, "host: [this is not valid\n")
+
+	os.Args = []string{"test",
+		"-db", filepath.Join(tmpDir, "test.db"),
+		"-feeds", filepath.Join(tmpDir, "feeds.opml"),
+	}
+
+	_, err := Parse()
+	if err == nil {
+		t.Fatal("expected error for malformed config.yml")
+	}
+}
+
+func TestParseConfigFileInvalidPort(t *testing.T) {
+	saveRestoreArgs(t)
+	configHome := setConfigHome(t)
+
+	tmpDir := t.TempDir()
+	writeConfigYAML(t, configHome, "port: 99999\n")
+
+	os.Args = []string{"test",
+		"-db", filepath.Join(tmpDir, "test.db"),
+		"-feeds", filepath.Join(tmpDir, "feeds.opml"),
+	}
+
+	_, err := Parse()
+	if err == nil {
+		t.Fatal("expected error for out-of-range port in config.yml")
+	}
+}
+
+func TestParseNoConfigFile(t *testing.T) {
+	saveRestoreArgs(t)
+	setConfigHome(t)
+
+	tmpDir := t.TempDir()
+	os.Args = []string{"test",
+		"-db", filepath.Join(tmpDir, "test.db"),
+		"-feeds", filepath.Join(tmpDir, "feeds.opml"),
+	}
+
+	cfg, err := Parse()
+	if err != nil {
+		t.Fatalf("expected no error when config.yml is absent, got %v", err)
+	}
+	if cfg.Host != defaultHost {
+		t.Fatalf("expected default host, got %q", cfg.Host)
+	}
+}
