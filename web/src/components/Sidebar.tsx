@@ -44,11 +44,18 @@ const FEED_DND_TYPE = 'application/x-rss-reader-feed-id';
 
 type DragOverTarget = { type: 'folder'; name: string } | { type: 'uncategorized' } | null;
 
+// `DataTransfer.types` is a DOMStringList in some browsers (notably Safari),
+// which doesn't implement `Array.prototype.includes`. Go through `Array.from`
+// so the check works everywhere instead of throwing.
+function hasFeedDndType(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types).includes(FEED_DND_TYPE);
+}
+
 // Resolves the feed being dragged from a drop event's dataTransfer, re-reading
 // the current `feeds` list rather than trusting the drag-start snapshot. This
 // avoids acting on stale/deleted feeds if the list changed mid-drag.
 function parseDraggedFeedId(e: React.DragEvent, feeds: Feed[]): Feed | null {
-  if (!e.dataTransfer.types.includes(FEED_DND_TYPE)) return null;
+  if (!hasFeedDndType(e.dataTransfer)) return null;
   const raw = e.dataTransfer.getData(FEED_DND_TYPE);
   if (!raw) return null;
   const id = Number(raw);
@@ -537,7 +544,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
               dragOverTarget?.type === 'uncategorized' ? 'ring-2 ring-accent ring-inset rounded' : '',
             ].join(' ')}
             onDragOver={(e) => {
-              if (!e.dataTransfer.types.includes(FEED_DND_TYPE)) return;
+              if (!hasFeedDndType(e.dataTransfer)) return;
               e.preventDefault();
               setDragOverTarget({ type: 'uncategorized' });
             }}
@@ -605,7 +612,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
                   isDragOver ? 'ring-2 ring-accent ring-inset' : '',
                 ].join(' ')}
                 onDragOver={(e) => {
-                  if (!e.dataTransfer.types.includes(FEED_DND_TYPE)) return;
+                  if (!hasFeedDndType(e.dataTransfer)) return;
                   e.preventDefault();
                   setDragOverTarget({ type: 'folder', name: folder.name });
                 }}
