@@ -48,6 +48,20 @@ export function SettingsModal({ onClose }: Props) {
 
   const handleSave = () => {
     setError(null);
+
+    if (host.trim() === '') {
+      setError('Host must not be empty.');
+      return;
+    }
+    if (!/^\d+$/.test(port.trim()) || Number(port) < 1 || Number(port) > 65535) {
+      setError('Port must be an integer between 1 and 65535.');
+      return;
+    }
+    if (!/^\d+$/.test(pollIntervalMinutes.trim()) || Number(pollIntervalMinutes) < 1) {
+      setError('Poll interval must be an integer of 1 or more.');
+      return;
+    }
+
     updateSettings.mutate({
       host,
       port: Number(port),
@@ -77,17 +91,20 @@ export function SettingsModal({ onClose }: Props) {
 
         {settings && (
           <div className="flex flex-col gap-3">
-            <SettingField label="Host" restartRequired={settings.host.restartRequired}>
+            <SettingField id="settings-host" label="Host" restartRequired={settings.host.restartRequired}>
               <input
+                id="settings-host"
                 type="text"
                 value={host}
                 onChange={(e) => setHost(e.target.value)}
+                autoFocus
                 className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
             </SettingField>
 
-            <SettingField label="Port" restartRequired={settings.port.restartRequired}>
+            <SettingField id="settings-port" label="Port" restartRequired={settings.port.restartRequired}>
               <input
+                id="settings-port"
                 type="number"
                 value={port}
                 onChange={(e) => setPort(e.target.value)}
@@ -95,8 +112,9 @@ export function SettingsModal({ onClose }: Props) {
               />
             </SettingField>
 
-            <SettingField label="Poll interval (minutes)" restartRequired={settings.pollIntervalMinutes.restartRequired}>
+            <SettingField id="settings-poll-interval" label="Poll interval (minutes)" restartRequired={settings.pollIntervalMinutes.restartRequired}>
               <input
+                id="settings-poll-interval"
                 type="number"
                 value={pollIntervalMinutes}
                 onChange={(e) => setPollIntervalMinutes(e.target.value)}
@@ -104,8 +122,9 @@ export function SettingsModal({ onClose }: Props) {
               />
             </SettingField>
 
-            <SettingField label="Frontend URL" restartRequired={settings.frontendUrl.restartRequired}>
+            <SettingField id="settings-frontend-url" label="Frontend URL" restartRequired={settings.frontendUrl.restartRequired}>
               <input
+                id="settings-frontend-url"
                 type="text"
                 value={frontendUrl}
                 onChange={(e) => setFrontendUrl(e.target.value)}
@@ -158,18 +177,25 @@ export function SettingsModal({ onClose }: Props) {
 }
 
 function SettingField({
+  id,
   label,
   restartRequired,
   children,
 }: {
+  id?: string;
   label: string;
   restartRequired: boolean;
   children: React.ReactNode;
 }) {
+  const labelClassName = "text-[11px] font-semibold uppercase tracking-wide text-text-sub";
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-1">
-        <label className="text-[11px] font-semibold uppercase tracking-wide text-text-sub">{label}</label>
+        {id ? (
+          <label htmlFor={id} className={labelClassName}>{label}</label>
+        ) : (
+          <span className={labelClassName}>{label}</span>
+        )}
         {restartRequired && (
           <span className="text-[10px] font-medium text-text-sub bg-surface-2 px-1.5 py-0.5 rounded">
             Requires restart

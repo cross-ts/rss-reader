@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/cross-ts/rss-reader/internal/config"
@@ -65,12 +64,8 @@ type settingsUpdateRequest struct {
 }
 
 func validateFrontendURL(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return fmt.Errorf("invalid frontend URL %q", raw)
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("frontend URL must use http or https scheme, got %q", u.Scheme)
+	if err := config.ValidateFrontendURL(raw); err != nil {
+		return fmt.Errorf("invalid frontend URL: %w", err)
 	}
 	return nil
 }

@@ -73,7 +73,12 @@ func SaveFile(path string, fc *FileConfig) error {
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("renaming temp config file to %q: %w", path, err)
+		// On Windows, os.Rename fails if the destination already exists.
+		// Best-effort fallback: remove the destination and retry.
+		os.Remove(path)
+		if err := os.Rename(tmpPath, path); err != nil {
+			return fmt.Errorf("renaming temp config file to %q: %w", path, err)
+		}
 	}
 
 	return nil

@@ -41,6 +41,22 @@ const (
 	defaultPollInterval = uint64(15)
 )
 
+// ValidateFrontendURL checks that raw parses as a URL with an http or https
+// scheme and a non-empty host.
+func ValidateFrontendURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid frontend URL %q: %w", raw, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("frontend URL must use http or https scheme, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("frontend URL must include a host, got %q", raw)
+	}
+	return nil
+}
+
 // Parse parses configuration from CLI flags, environment variables, and
 // config.yml. Priority: CLI flag > environment variable > config.yml > default.
 func Parse() (*Config, error) {
@@ -86,13 +102,9 @@ func Parse() (*Config, error) {
 	resolvedDB := resolveString(*db, flagSet["db"], "DB_PATH", fileCfg.DB, "", "db", sources)
 	resolvedStaticDir := resolveString(*staticDir, flagSet["static-dir"], "STATIC_DIR", fileCfg.StaticDir, "", "static_dir", sources)
 
-	// Validate FrontendURL: must have http or https scheme.
-	u, err := url.Parse(resolvedFrontendURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid frontend URL %q: %w", resolvedFrontendURL, err)
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("frontend URL must use http or https scheme, got %q", u.Scheme)
+	// Validate FrontendURL: must have http or https scheme and a host.
+	if err := ValidateFrontendURL(resolvedFrontendURL); err != nil {
+		return nil, err
 	}
 
 	if resolvedHost == "" {

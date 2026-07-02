@@ -132,6 +132,22 @@ func TestParseInvalidFrontendURLNoScheme(t *testing.T) {
 	}
 }
 
+func TestParseInvalidFrontendURLMissingHost(t *testing.T) {
+	saveRestoreArgs(t)
+
+	tmpDir := t.TempDir()
+	os.Args = []string{"test",
+		"-db", filepath.Join(tmpDir, "test.db"),
+		"-feeds", filepath.Join(tmpDir, "feeds.opml"),
+		"-frontend-url", "http://",
+	}
+
+	_, err := Parse()
+	if err == nil {
+		t.Fatal("expected error for frontend URL without host")
+	}
+}
+
 func TestParseInvalidFrontendURLFTPScheme(t *testing.T) {
 	saveRestoreArgs(t)
 

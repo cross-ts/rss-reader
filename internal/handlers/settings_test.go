@@ -162,6 +162,20 @@ func TestUpdateSettings_InvalidFrontendURL(t *testing.T) {
 	}
 }
 
+func TestUpdateSettings_FrontendURLMissingHost(t *testing.T) {
+	cfg := testConfig(t)
+
+	handler := UpdateSettings(cfg)
+	body, _ := json.Marshal(map[string]any{"frontendUrl": "http://"})
+	req := httptest.NewRequest("PUT", "/api/settings", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
 func TestUpdateSettings_RejectsNonEditableKeys(t *testing.T) {
 	cfg := testConfig(t)
 
