@@ -27,6 +27,51 @@ const deleteButtonClassName = [
   'focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
 ].join(' ');
 
+const moveButtonClassName = [
+  'flex-shrink-0 mr-1 w-6 h-6 flex items-center justify-center text-[11px] text-text-sub',
+  'opacity-100 md:opacity-0 md:pointer-events-none',
+  'md:group-hover:opacity-100 md:group-hover:pointer-events-auto',
+  'hover:text-accent disabled:opacity-40 disabled:cursor-not-allowed',
+  'transition-all rounded hover:bg-surface-2',
+  'focus-visible:opacity-100 md:focus-visible:pointer-events-auto',
+  'focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
+].join(' ');
+
+// Custom MIME type used for HTML5 drag & drop of feed rows. Using a
+// namespaced type (instead of e.g. "text/plain") lets drop targets
+// distinguish feed drags from unrelated drag sources.
+const FEED_DND_TYPE = 'application/x-rss-reader-feed-id';
+
+type DragOverTarget = { type: 'folder'; name: string } | { type: 'uncategorized' } | null;
+
+// `DataTransfer.types` is a DOMStringList in some browsers (notably Safari),
+// which doesn't implement `Array.prototype.includes`. Go through `Array.from`
+// so the check works everywhere instead of throwing.
+function hasFeedDndType(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types).includes(FEED_DND_TYPE);
+}
+
+// Resolves the feed being dragged from a drop event's dataTransfer, re-reading
+// the current `feeds` list rather than trusting the drag-start snapshot. This
+// avoids acting on stale/deleted feeds if the list changed mid-drag.
+function parseDraggedFeedId(e: React.DragEvent, feeds: Feed[]): Feed | null {
+  if (!hasFeedDndType(e.dataTransfer)) return null;
+  const raw = e.dataTransfer.getData(FEED_DND_TYPE);
+  if (!raw) return null;
+  const id = Number(raw);
+  if (!Number.isInteger(id)) return null;
+  return feeds.find((f) => f.id === id) ?? null;
+}
+
+// Determines whether a dragleave event is a "real" leave of the container,
+// as opposed to the pointer moving between child elements (button/svg/span)
+// inside the same drop target, which would otherwise cause flicker.
+function isRealDragLeave(e: React.DragEvent): boolean {
+  const related = e.relatedTarget as Node | null;
+  if (related && e.currentTarget.contains(related)) return false;
+  return true;
+}
+
 export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPanelFocusToken = 0, openAddPanelToken = 0 }: Props) {
   const qc = useQueryClient();
   const { addToast } = useToast();
@@ -55,6 +100,11 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
   const [deletingFolderId, setDeletingFolderId] = useState<number | null>(null);
   const [deletingFeedId, setDeletingFeedId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Drag & drop / move-to-folder state
+  const [draggedFeedId, setDraggedFeedId] = useState<number | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<DragOverTarget>(null);
+  const [movingFeedId, setMovingFeedId] = useState<number | null>(null);
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -119,6 +169,21 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
       setDeletingFeedId(null);
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete feed');
       addToast('Failed to delete feed', 'error');
+    },
+  });
+
+  const moveFeed = useMutation({
+    mutationFn: ({ feedId, folder }: { feedId: number; folder: string | null }) =>
+      api.updateFeed(feedId, { folder }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['feeds'] });
+      qc.invalidateQueries({ queryKey: ['folders'] });
+      qc.invalidateQueries({ queryKey: ['articles'] });
+      qc.invalidateQueries({ queryKey: ['unreadCounts'] });
+      addToast('Feed moved', 'success');
+    },
+    onError: (err) => {
+      addToast(err instanceof Error ? err.message : 'Failed to move feed', 'error');
     },
   });
 
@@ -233,6 +298,11 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
       deleteFeed.mutate(confirmModal.id);
     }
     setConfirmModal(null);
+  };
+
+  const handleMoveFeed = (feed: Feed, targetFolder: string | null) => {
+    if (feed.folder === targetFolder) return;
+    moveFeed.mutate({ feedId: feed.id, folder: targetFolder });
   };
 
   const isCreatingFeed = addFeed.isPending;
@@ -467,6 +537,33 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
         </button>
 
         {/* Uncategorized feeds */}
+        {(folderMap.get(null) ?? []).length > 0 || draggedFeedId != null ? (
+          <div
+            className={[
+              'px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-sub transition-colors',
+              dragOverTarget?.type === 'uncategorized' ? 'ring-2 ring-accent ring-inset rounded' : '',
+            ].join(' ')}
+            onDragOver={(e) => {
+              if (!hasFeedDndType(e.dataTransfer)) return;
+              e.preventDefault();
+              setDragOverTarget({ type: 'uncategorized' });
+            }}
+            onDragLeave={(e) => {
+              if (!isRealDragLeave(e)) return;
+              setDragOverTarget((prev) => (prev?.type === 'uncategorized' ? null : prev));
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOverTarget(null);
+              setDraggedFeedId(null);
+              const feed = parseDraggedFeedId(e, feeds);
+              if (!feed) return;
+              handleMoveFeed(feed, null);
+            }}
+          >
+            No folder
+          </div>
+        ) : null}
         {(folderMap.get(null) ?? []).map((feed) => (
           <FeedRow
             key={feed.id}
@@ -477,6 +574,21 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
             deleting={deletingFeedId === feed.id}
             unreadCount={unreadCounts.feeds[String(feed.id)] ?? 0}
             indent={false}
+            dragging={draggedFeedId === feed.id}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(FEED_DND_TYPE, String(feed.id));
+              e.dataTransfer.effectAllowed = 'move';
+              setDraggedFeedId(feed.id);
+            }}
+            onDragEnd={() => {
+              setDraggedFeedId(null);
+              setDragOverTarget(null);
+            }}
+            folderNames={[...folderNames]}
+            onMoveToFolder={(targetFolder) => handleMoveFeed(feed, targetFolder)}
+            isMoveSelectOpen={movingFeedId === feed.id}
+            onToggleMoveSelect={() => setMovingFeedId((prev) => (prev === feed.id ? null : feed.id))}
+            onCloseMoveSelect={() => setMovingFeedId((prev) => (prev === feed.id ? null : prev))}
           />
         ))}
 
@@ -487,14 +599,38 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
           const folderSelected = selection.type === 'folder' && selection.folderId === folder.id;
           const folderUnread = unreadCounts.folders[String(folder.id)] ?? 0;
 
+          const isDragOver = dragOverTarget?.type === 'folder' && dragOverTarget.name === folder.name;
+
           return (
             <div key={folder.id}>
-              <div className={[
-                'flex items-center group transition-colors',
-                folderSelected
-                  ? 'bg-accent-light'
-                  : 'hover:bg-surface-2',
-              ].join(' ')}>
+              <div
+                className={[
+                  'flex items-center group transition-colors',
+                  folderSelected
+                    ? 'bg-accent-light'
+                    : 'hover:bg-surface-2',
+                  isDragOver ? 'ring-2 ring-accent ring-inset' : '',
+                ].join(' ')}
+                onDragOver={(e) => {
+                  if (!hasFeedDndType(e.dataTransfer)) return;
+                  e.preventDefault();
+                  setDragOverTarget({ type: 'folder', name: folder.name });
+                }}
+                onDragLeave={(e) => {
+                  if (!isRealDragLeave(e)) return;
+                  setDragOverTarget((prev) =>
+                    prev?.type === 'folder' && prev.name === folder.name ? null : prev
+                  );
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOverTarget(null);
+                  setDraggedFeedId(null);
+                  const feed = parseDraggedFeedId(e, feeds);
+                  if (!feed) return;
+                  handleMoveFeed(feed, folder.name);
+                }}
+              >
                 {/* Expand/collapse chevron */}
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleFolder(folder.name); }}
@@ -553,6 +689,21 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
                   deleting={deletingFeedId === feed.id}
                   unreadCount={unreadCounts.feeds[String(feed.id)] ?? 0}
                   indent={true}
+                  dragging={draggedFeedId === feed.id}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(FEED_DND_TYPE, String(feed.id));
+                    e.dataTransfer.effectAllowed = 'move';
+                    setDraggedFeedId(feed.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedFeedId(null);
+                    setDragOverTarget(null);
+                  }}
+                  folderNames={[...folderNames]}
+                  onMoveToFolder={(targetFolder) => handleMoveFeed(feed, targetFolder)}
+                  isMoveSelectOpen={movingFeedId === feed.id}
+                  onToggleMoveSelect={() => setMovingFeedId((prev) => (prev === feed.id ? null : feed.id))}
+                  onCloseMoveSelect={() => setMovingFeedId((prev) => (prev === feed.id ? null : prev))}
                 />
               ))}
             </div>
@@ -581,16 +732,44 @@ interface FeedRowProps {
   deleting: boolean;
   unreadCount: number;
   indent: boolean;
+  dragging: boolean;
+  onDragStart: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnd: () => void;
+  folderNames: string[];
+  onMoveToFolder: (targetFolder: string | null) => void;
+  isMoveSelectOpen: boolean;
+  onToggleMoveSelect: () => void;
+  onCloseMoveSelect: () => void;
 }
 
-function FeedRow({ feed, selected, onSelect, onDelete, deleting, unreadCount, indent }: FeedRowProps) {
+function FeedRow({
+  feed,
+  selected,
+  onSelect,
+  onDelete,
+  deleting,
+  unreadCount,
+  indent,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  folderNames,
+  onMoveToFolder,
+  isMoveSelectOpen,
+  onToggleMoveSelect,
+  onCloseMoveSelect,
+}: FeedRowProps) {
   return (
     <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       className={[
         'flex items-center group transition-colors',
         selected
           ? 'bg-accent-light'
           : 'hover:bg-surface-2',
+        dragging ? 'opacity-50' : '',
       ].join(' ')}
     >
       <button
@@ -610,6 +789,36 @@ function FeedRow({ feed, selected, onSelect, onDelete, deleting, unreadCount, in
           </span>
         )}
       </button>
+      {isMoveSelectOpen ? (
+        <select
+          autoFocus
+          value={feed.folder ?? ''}
+          onChange={(e) => {
+            const value = e.target.value;
+            onMoveToFolder(value === '' ? null : value);
+            onCloseMoveSelect();
+          }}
+          onBlur={onCloseMoveSelect}
+          aria-label={`Move feed "${feed.title || feed.url}" to folder`}
+          className="flex-shrink-0 mr-2 max-w-[110px] px-1 py-1 bg-white border border-border rounded-md text-[11px] text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+        >
+          <option value="">No folder</option>
+          {folderNames.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
+      ) : (
+        <button
+          className={moveButtonClassName}
+          onClick={(e) => { e.stopPropagation(); onToggleMoveSelect(); }}
+          aria-label={`Move feed "${feed.title || feed.url}" to folder`}
+          title="Move to folder"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+          </svg>
+        </button>
+      )}
       <button
         className={deleteButtonClassName}
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
