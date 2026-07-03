@@ -74,7 +74,7 @@ export function Topbar({
       {/* Controls row */}
       <div className="flex flex-wrap items-center gap-2">
         {/* Search */}
-        <div className="flex w-full md:flex-1 md:min-w-0 md:max-w-md items-center gap-1.5">
+        <div className="flex w-full min-w-0 md:flex-1 md:max-w-md items-center gap-1.5">
           <div className="relative flex-1">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
