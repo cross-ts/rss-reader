@@ -1,5 +1,5 @@
-@import 'tailwindcss';
-@config '../tailwind.config.ts';
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 /* ---- Toast slide-in animation ---- */
 @keyframes slide-in-right {
