@@ -47,6 +47,30 @@ export interface UnreadCounts {
   folders: Record<string, number>;
 }
 
+export interface SettingItem<T = string | number> {
+  value: T;
+  source: 'flag' | 'env' | 'file' | 'default';
+  editable: boolean;
+  restartRequired: boolean;
+}
+
+export interface Settings {
+  host: SettingItem<string>;
+  port: SettingItem<number>;
+  pollIntervalMinutes: SettingItem<number>;
+  frontendUrl: SettingItem<string>;
+  db: SettingItem<string>;
+  feeds: SettingItem<string>;
+  staticDir: SettingItem<string>;
+}
+
+export interface SettingsUpdate {
+  host?: string;
+  port?: number;
+  pollIntervalMinutes?: number;
+  frontendUrl?: string;
+}
+
 export interface ArticleQuery {
   folderId?: number;
   feedId?: number;
@@ -165,5 +189,18 @@ export const api = {
   // 未読数集計（フィード/フォルダ/全体）
   getUnreadCounts(): Promise<UnreadCounts> {
     return request('/api/unread-counts');
+  },
+
+  // 設定取得
+  getSettings(): Promise<Settings> {
+    return request('/api/settings');
+  },
+
+  // 設定更新（編集可能なキーのみ）
+  updateSettings(update: SettingsUpdate): Promise<void> {
+    return request('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify(update),
+    });
   },
 };

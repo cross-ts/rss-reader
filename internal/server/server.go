@@ -48,6 +48,10 @@ func NewServeMux(state *AppState) *http.ServeMux {
 	// Refresh route
 	mux.HandleFunc("POST /api/refresh", handlers.Refresh(state.DB, state.FeedClient))
 
+	// Settings routes
+	mux.HandleFunc("GET /api/settings", handlers.GetSettings(state.Config))
+	mux.HandleFunc("PUT /api/settings", handlers.UpdateSettings(state.Config))
+
 	// Fallback: proxy or static file serving
 	if state.Config.StaticDir != "" {
 		mux.Handle("/", staticHandler(state))
