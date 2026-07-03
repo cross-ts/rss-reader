@@ -134,8 +134,7 @@ func ImportOPML(database *db.DB, feedsPath string, feedsLock *sync.Mutex) http.H
 
 		existingURLs := make(map[string]bool, len(existing.Feeds))
 		for _, f := range existing.Feeds {
-			normalized, _ := normalizeAndValidateFeedURL(f.URL)
-			existingURLs[normalized] = true
+			existingURLs[fetcher.NormalizeURL(f.URL)] = true
 		}
 
 		if dryRun {

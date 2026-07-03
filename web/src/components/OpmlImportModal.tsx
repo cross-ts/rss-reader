@@ -33,6 +33,9 @@ export function OpmlImportModal({ onClose }: Props) {
     onError: (err) => {
       setError(err instanceof Error ? err.message : 'Failed to preview OPML file');
       setXmlText(null);
+      // Clear the input value so re-selecting the same file still fires
+      // onChange (browsers don't fire change events for an unchanged value).
+      if (fileInputRef.current) fileInputRef.current.value = '';
     },
   });
 

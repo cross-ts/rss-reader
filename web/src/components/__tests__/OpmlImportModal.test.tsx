@@ -151,6 +151,22 @@ describe('OpmlImportModal', () => {
     });
   });
 
+  it('clears the file input value when preview fails, so re-selecting the same file re-fires onChange', async () => {
+    mockApi.previewOpmlImport.mockRejectedValue(new Error('invalid OPML'));
+
+    render(<OpmlImportModal onClose={vi.fn()} />, { wrapper: createWrapper() });
+
+    const input = screen.getByLabelText('OPML file') as HTMLInputElement;
+    const file = makeFile('not xml');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('invalid OPML')).toBeInTheDocument();
+    });
+
+    expect(input.value).toBe('');
+  });
+
   it('shows invalid feed count in preview and toast when present', async () => {
     mockApi.previewOpmlImport.mockResolvedValue(testPreviewWithInvalid);
     mockApi.importOpml.mockResolvedValue({ imported: 1, skipped: 1, invalid: 1 });
