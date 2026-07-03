@@ -12,6 +12,8 @@ vi.mock('../../api/client', async () => {
     api: {
       getSettings: vi.fn(),
       updateSettings: vi.fn(),
+      previewOpmlImport: vi.fn(),
+      importOpml: vi.fn(),
     },
   };
 });
@@ -87,6 +89,68 @@ describe('SettingsModal', () => {
       expect(addToastMock).toHaveBeenCalledWith('Saved. Restart the server to apply.', 'success');
     });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('renders OPML import/export controls', async () => {
+    mockApi.getSettings.mockResolvedValue(testSettings);
+
+    render(<SettingsModal onClose={vi.fn()} />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('127.0.0.1')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Import OPML')).toBeInTheDocument();
+    const exportLink = screen.getByText('Export OPML').closest('a');
+    expect(exportLink).toHaveAttribute('href', '/api/opml/export');
+  });
+
+  it('keeps Settings open when the OPML import modal is closed via Escape', async () => {
+    mockApi.getSettings.mockResolvedValue(testSettings);
+    const onClose = vi.fn();
+
+    render(<SettingsModal onClose={onClose} />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('127.0.0.1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Import OPML'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Import OPML' })).toBeInTheDocument();
+    });
+
+    // Escape should close only the import modal, not Settings underneath it.
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Import OPML' })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('keeps Settings open when the OPML import modal backdrop is clicked', async () => {
+    mockApi.getSettings.mockResolvedValue(testSettings);
+    const onClose = vi.fn();
+
+    render(<SettingsModal onClose={onClose} />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('127.0.0.1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Import OPML'));
+
+    const importDialog = await screen.findByRole('dialog', { name: 'Import OPML' });
+    fireEvent.click(importDialog.parentElement as HTMLElement);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Import OPML' })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('shows an error message when saving fails', async () => {

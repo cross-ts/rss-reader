@@ -79,6 +79,28 @@ export interface ArticleQuery {
   offset?: number;
 }
 
+export interface OpmlPreviewFeed {
+  title: string;
+  url: string;
+  folder: string | null;
+  duplicate: boolean;
+  invalid: boolean;
+}
+
+export interface OpmlPreviewFolder {
+  name: string;
+  feedCount: number;
+}
+
+export interface OpmlPreview {
+  totalFeeds: number;
+  newFeeds: number;
+  duplicateFeeds: number;
+  invalidFeeds: number;
+  folders: OpmlPreviewFolder[];
+  feeds: OpmlPreviewFeed[];
+}
+
 // ---- fetch ラッパ ----
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -201,6 +223,24 @@ export const api = {
     return request('/api/settings', {
       method: 'PUT',
       body: JSON.stringify(update),
+    });
+  },
+
+  // OPMLインポートのプレビュー（差分確認のみ、状態変更なし）
+  previewOpmlImport(xml: string): Promise<OpmlPreview> {
+    return request('/api/opml/import?dryRun=true', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/xml' },
+      body: xml,
+    });
+  },
+
+  // OPMLインポート実行
+  importOpml(xml: string): Promise<{ imported: number; skipped: number; invalid: number }> {
+    return request('/api/opml/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/xml' },
+      body: xml,
     });
   },
 };

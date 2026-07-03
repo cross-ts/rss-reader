@@ -39,6 +39,10 @@ func NewServeMux(state *AppState) *http.ServeMux {
 	mux.HandleFunc("PUT /api/feeds/{id}", handlers.UpdateFeed(state.DB, state.Config.FeedsPath, &state.FeedsLock))
 	mux.HandleFunc("DELETE /api/feeds/{id}", handlers.DeleteFeed(state.DB, state.Config.FeedsPath, &state.FeedsLock))
 
+	// OPML import/export routes
+	mux.HandleFunc("GET /api/opml/export", handlers.ExportOPML(state.DB, state.Config.FeedsPath, &state.FeedsLock))
+	mux.HandleFunc("POST /api/opml/import", handlers.ImportOPML(state.DB, state.Config.FeedsPath, &state.FeedsLock))
+
 	// Article routes
 	mux.HandleFunc("GET /api/articles", handlers.ListArticles(state.DB))
 	mux.HandleFunc("PATCH /api/articles/{id}", handlers.UpdateArticle(state.DB))

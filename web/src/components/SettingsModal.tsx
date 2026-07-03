@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type SettingsUpdate } from '../api/client';
 import { useToast } from './Toast';
+import { OpmlImportModal } from './OpmlImportModal';
 
 interface Props {
   onClose: () => void;
@@ -17,6 +18,7 @@ export function SettingsModal({ onClose }: Props) {
   const [pollIntervalMinutes, setPollIntervalMinutes] = useState('');
   const [frontendUrl, setFrontendUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showImportOpml, setShowImportOpml] = useState(false);
 
   useEffect(() => {
     if (!settings) return;
@@ -28,11 +30,14 @@ export function SettingsModal({ onClose }: Props) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // While OpmlImportModal is open, let it handle its own Escape key so
+      // it closes first instead of closing Settings underneath it.
+      if (showImportOpml) return;
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, showImportOpml]);
 
   const updateSettings = useMutation({
     mutationFn: (update: SettingsUpdate) => api.updateSettings(update),
@@ -144,6 +149,31 @@ export function SettingsModal({ onClose }: Props) {
               </p>
             </SettingField>
 
+            <div>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-text-sub">
+                OPML
+              </span>
+              <p className="mt-1 text-xs text-text-sub truncate">
+                Stored at: {settings.feeds.value}
+              </p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowImportOpml(true)}
+                  className="px-3 py-1.5 text-xs font-semibold text-text-primary bg-white border border-border rounded-lg hover:bg-surface-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+                >
+                  Import OPML
+                </button>
+                <a
+                  href="/api/opml/export"
+                  download
+                  className="px-3 py-1.5 text-xs font-semibold text-text-primary bg-white border border-border rounded-lg hover:bg-surface-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none inline-flex items-center"
+                >
+                  Export OPML
+                </a>
+              </div>
+            </div>
+
             <SettingField label="Static directory" restartRequired={settings.staticDir.restartRequired}>
               <p className="w-full px-2.5 py-1.5 bg-surface-2 border border-border rounded-md text-xs text-text-sub truncate">
                 {settings.staticDir.value || '(not set)'}
@@ -172,6 +202,8 @@ export function SettingsModal({ onClose }: Props) {
           </button>
         </div>
       </div>
+
+      {showImportOpml && <OpmlImportModal onClose={() => setShowImportOpml(false)} />}
     </div>
   );
 }

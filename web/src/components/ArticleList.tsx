@@ -14,6 +14,7 @@ interface Props {
   onRetry?: () => void;
   addingFeedName?: string | null;
   onOpenAddFeed?: () => void;
+  onOpenImportOpml?: () => void;
   searchQuery?: string;
   unreadOnly?: boolean;
   totalCount?: number;
@@ -53,6 +54,7 @@ export function ArticleList({
   onRetry,
   addingFeedName,
   onOpenAddFeed,
+  onOpenImportOpml,
   searchQuery,
   unreadOnly,
   totalCount,
@@ -133,6 +135,14 @@ export function ArticleList({
                 <span className="text-base leading-none">+</span>
                 Add your first feed
               </button>
+              {onOpenImportOpml && (
+                <button
+                  onClick={onOpenImportOpml}
+                  className="inline-flex min-w-[200px] items-center justify-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-medium text-text-primary transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  Import OPML
+                </button>
+              )}
               <a
                 href="https://github.com/cross-ts/rss-reader#feedsopmlssot"
                 target="_blank"

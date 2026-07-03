@@ -243,6 +243,11 @@ func ReadFeedsOPML(path string) (*Subscriptions, error) {
 		return nil, err
 	}
 
+	return ParseOPML(data)
+}
+
+// ParseOPML parses OPML XML bytes into Subscriptions.
+func ParseOPML(data []byte) (*Subscriptions, error) {
 	var doc opmlDoc
 	if err := xml.Unmarshal(data, &doc); err != nil {
 		return nil, err

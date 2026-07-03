@@ -4,6 +4,7 @@ import { Sidebar, type SidebarSelection } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { ArticleList } from './components/ArticleList';
 import { ArticleView } from './components/ArticleView';
+import { OpmlImportModal } from './components/OpmlImportModal';
 import { ToastProvider, useToast } from './components/Toast';
 import { useArticleMutations } from './hooks/useArticleMutations';
 import { usePersistedState } from './hooks/usePersistedState';
@@ -66,6 +67,7 @@ function AppInner() {
   const [addingFeedName, setAddingFeedName] = useState<string | null>(null);
   const [addPanelFocusToken, setAddPanelFocusToken] = useState(0);
   const [openAddPanelToken, setOpenAddPanelToken] = useState(0);
+  const [showImportOpml, setShowImportOpml] = useState(false);
 
   // Last updated time
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -474,6 +476,7 @@ function AppInner() {
                     onRetry={handleRetryArticles}
                     addingFeedName={addingFeedName}
                     onOpenAddFeed={handleOpenAddFeed}
+                    onOpenImportOpml={() => setShowImportOpml(true)}
                     searchQuery={debouncedQ || undefined}
                     unreadOnly={unreadOnly}
                     totalCount={data?.pages[0]?.total}
@@ -515,6 +518,8 @@ function AppInner() {
           </div>
         </>
       )}
+
+      {showImportOpml && <OpmlImportModal onClose={() => setShowImportOpml(false)} />}
     </div>
   );
 }
