@@ -11,6 +11,7 @@ const defaultProps = {
   unreadOnly: false,
   onToggleUnreadOnly: vi.fn(),
   onMarkAllRead: vi.fn(),
+  unreadCount: 0,
   onRefresh: vi.fn(),
   isRefreshing: false,
 };
@@ -134,47 +135,102 @@ describe('Topbar', () => {
     });
   });
 
-  describe('unread toggle', () => {
-    it('calls onToggleUnreadOnly when clicked', () => {
-      const onToggleUnreadOnly = vi.fn();
-      renderTopbar({ onToggleUnreadOnly });
-      fireEvent.click(screen.getByText('Unread'));
-      expect(onToggleUnreadOnly).toHaveBeenCalledTimes(1);
-    });
-
-    it('shows "Show all articles" label when unreadOnly is true', () => {
-      renderTopbar({ unreadOnly: true });
+  describe('article filter segmented control', () => {
+    it('renders "All" and "Unread" buttons', () => {
+      renderTopbar();
       expect(screen.getByRole('button', { name: 'Show all articles' })).toBeInTheDocument();
-    });
-
-    it('shows "Show unread only" label when unreadOnly is false', () => {
-      renderTopbar({ unreadOnly: false });
       expect(screen.getByRole('button', { name: 'Show unread only' })).toBeInTheDocument();
     });
 
-    it('has aria-pressed=true when unreadOnly is true', () => {
-      renderTopbar({ unreadOnly: true });
-      expect(screen.getByRole('button', { name: 'Show all articles' })).toHaveAttribute('aria-pressed', 'true');
+    it('calls onToggleUnreadOnly when "Unread" is clicked and unreadOnly is false', () => {
+      const onToggleUnreadOnly = vi.fn();
+      renderTopbar({ onToggleUnreadOnly, unreadOnly: false });
+      fireEvent.click(screen.getByRole('button', { name: 'Show unread only' }));
+      expect(onToggleUnreadOnly).toHaveBeenCalledTimes(1);
     });
 
-    it('has aria-pressed=false when unreadOnly is false', () => {
+    it('does not call onToggleUnreadOnly when "Unread" is clicked while already active', () => {
+      const onToggleUnreadOnly = vi.fn();
+      renderTopbar({ onToggleUnreadOnly, unreadOnly: true });
+      fireEvent.click(screen.getByRole('button', { name: 'Show unread only' }));
+      expect(onToggleUnreadOnly).not.toHaveBeenCalled();
+    });
+
+    it('calls onToggleUnreadOnly when "All" is clicked and unreadOnly is true', () => {
+      const onToggleUnreadOnly = vi.fn();
+      renderTopbar({ onToggleUnreadOnly, unreadOnly: true });
+      fireEvent.click(screen.getByRole('button', { name: 'Show all articles' }));
+      expect(onToggleUnreadOnly).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call onToggleUnreadOnly when "All" is clicked while already active', () => {
+      const onToggleUnreadOnly = vi.fn();
+      renderTopbar({ onToggleUnreadOnly, unreadOnly: false });
+      fireEvent.click(screen.getByRole('button', { name: 'Show all articles' }));
+      expect(onToggleUnreadOnly).not.toHaveBeenCalled();
+    });
+
+    it('"Unread" button has aria-pressed=true when unreadOnly is true', () => {
+      renderTopbar({ unreadOnly: true });
+      expect(screen.getByRole('button', { name: 'Show unread only' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('"Unread" button has aria-pressed=false when unreadOnly is false', () => {
       renderTopbar({ unreadOnly: false });
       expect(screen.getByRole('button', { name: 'Show unread only' })).toHaveAttribute('aria-pressed', 'false');
     });
 
-    it('applies active styling when unreadOnly is true', () => {
+    it('"All" button has aria-pressed=true when unreadOnly is false', () => {
+      renderTopbar({ unreadOnly: false });
+      expect(screen.getByRole('button', { name: 'Show all articles' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('"Unread" button applies active styling when unreadOnly is true', () => {
       renderTopbar({ unreadOnly: true });
+      const btn = screen.getByRole('button', { name: 'Show unread only' });
+      expect(btn.className).toContain('bg-accent');
+    });
+
+    it('"All" button applies active styling when unreadOnly is false', () => {
+      renderTopbar({ unreadOnly: false });
       const btn = screen.getByRole('button', { name: 'Show all articles' });
       expect(btn.className).toContain('bg-accent');
     });
   });
 
   describe('mark all read', () => {
-    it('calls onMarkAllRead when clicked', () => {
+    it('is disabled when unreadCount is 0', () => {
+      renderTopbar({ unreadCount: 0 });
+      expect(screen.getByRole('button', { name: 'Mark all as read' })).toBeDisabled();
+    });
+
+    it('is enabled when unreadCount > 0', () => {
+      renderTopbar({ unreadCount: 5 });
+      expect(screen.getByRole('button', { name: 'Mark 5 as read' })).toBeEnabled();
+    });
+
+    it('shows count in label when unreadCount > 0', () => {
+      renderTopbar({ unreadCount: 8 });
+      expect(screen.getByText('Mark 8 as read')).toBeInTheDocument();
+    });
+
+    it('shows "Mark all as read" label when unreadCount is 0', () => {
+      renderTopbar({ unreadCount: 0 });
+      expect(screen.getByText('Mark all as read')).toBeInTheDocument();
+    });
+
+    it('calls onMarkAllRead when clicked with unreadCount > 0', () => {
       const onMarkAllRead = vi.fn();
-      renderTopbar({ onMarkAllRead });
-      fireEvent.click(screen.getByRole('button', { name: 'Mark all as read' }));
+      renderTopbar({ onMarkAllRead, unreadCount: 3 });
+      fireEvent.click(screen.getByRole('button', { name: 'Mark 3 as read' }));
       expect(onMarkAllRead).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call onMarkAllRead when disabled', () => {
+      const onMarkAllRead = vi.fn();
+      renderTopbar({ onMarkAllRead, unreadCount: 0 });
+      fireEvent.click(screen.getByRole('button', { name: 'Mark all as read' }));
+      expect(onMarkAllRead).not.toHaveBeenCalled();
     });
   });
 

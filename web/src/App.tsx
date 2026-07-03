@@ -173,6 +173,8 @@ function AppInner() {
     return allItems.filter((a) => !a.isRead);
   }, [allItems, unreadOnly]);
 
+  const unreadCount = useMemo(() => allItems.filter((a) => !a.isRead).length, [allItems]);
+
   const selectedArticle = useMemo(() => {
     if (selectedArticleId == null) return null;
     return allItems.find((a) => a.id === selectedArticleId) ?? null;
@@ -444,6 +446,7 @@ function AppInner() {
               unreadOnly={unreadOnly}
               onToggleUnreadOnly={handleToggleUnreadOnly}
               onMarkAllRead={handleMarkAllRead}
+              unreadCount={unreadCount}
               onRefresh={() => refresh.mutate()}
               isRefreshing={refresh.isPending}
               searchHitCount={debouncedQ ? (data?.pages[0]?.total ?? null) : null}
