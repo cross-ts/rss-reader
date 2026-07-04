@@ -49,7 +49,7 @@ function getLayoutMode(width: number): LayoutMode {
 function AppInner() {
   const qc = useQueryClient();
   const { addToast } = useToast();
-  const { markRead, toggleRead, markAllRead, toggleStarred } = useArticleMutations();
+  const { markRead, toggleRead, markAllRead } = useArticleMutations();
 
   // Navigation state
   const [selection, setSelection] = useState<SidebarSelection>({ type: 'newsfeed' });
@@ -402,12 +402,6 @@ function AppInner() {
             onPrev={handlePrevArticle}
             onNext={handleNextArticle}
             onNextUnread={handleNextUnread}
-            starred={selectedArticle?.starred ?? false}
-            onToggleStarred={
-              selectedArticle
-                ? () => toggleStarred(selectedArticle.id, selectedArticle.starred)
-                : undefined
-            }
           />
         </div>
       ) : (
@@ -505,12 +499,6 @@ function AppInner() {
                     onPrev={handlePrevArticle}
                     onNext={handleNextArticle}
                     onNextUnread={handleNextUnread}
-                    starred={selectedArticle?.starred ?? false}
-                    onToggleStarred={
-                      selectedArticle
-                        ? () => toggleStarred(selectedArticle.id, selectedArticle.starred)
-                        : undefined
-                    }
                   />
                 </div>
               )}

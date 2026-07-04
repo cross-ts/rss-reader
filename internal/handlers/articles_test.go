@@ -345,22 +345,6 @@ func TestUpdateArticle_DBError_Read(t *testing.T) {
 	}
 }
 
-func TestUpdateArticle_DBError_Starred(t *testing.T) {
-	database := openTestDB(t)
-	database.Close()
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("PATCH /api/articles/{id}", UpdateArticle(database))
-
-	req := httptest.NewRequest("PATCH", "/api/articles/1", strings.NewReader(`{"starred":true}`))
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
-	}
-}
-
 func TestUpdateArticle_InvalidID(t *testing.T) {
 	database := openTestDB(t)
 
@@ -438,56 +422,6 @@ func TestUpdateArticle_MarkRead(t *testing.T) {
 	mux.HandleFunc("PATCH /api/articles/{id}", UpdateArticle(database))
 
 	req := httptest.NewRequest("PATCH", "/api/articles/"+itoa(artID), strings.NewReader(`{"isRead":true}`))
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestUpdateArticle_SetStarred(t *testing.T) {
-	database := openTestDB(t)
-	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
-	seedFeed(t, database, feedsPath, "Feed", "https://example.com/feed.xml")
-
-	feedList, _ := database.ListFeeds()
-	seedArticles(t, database, feedList[0].ID, []db.NewArticle{
-		{GUID: "g1", Title: "Art 1", URL: "https://example.com/1", Content: "C1"},
-	})
-
-	result, _ := database.ListArticles(db.ArticleFilter{Limit: 10})
-	artID := result.Items[0].ID
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("PATCH /api/articles/{id}", UpdateArticle(database))
-
-	req := httptest.NewRequest("PATCH", "/api/articles/"+itoa(artID), strings.NewReader(`{"starred":true}`))
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestUpdateArticle_BothFields(t *testing.T) {
-	database := openTestDB(t)
-	feedsPath := filepath.Join(t.TempDir(), "feeds.opml")
-	seedFeed(t, database, feedsPath, "Feed", "https://example.com/feed.xml")
-
-	feedList, _ := database.ListFeeds()
-	seedArticles(t, database, feedList[0].ID, []db.NewArticle{
-		{GUID: "g1", Title: "Art 1", URL: "https://example.com/1", Content: "C1"},
-	})
-
-	result, _ := database.ListArticles(db.ArticleFilter{Limit: 10})
-	artID := result.Items[0].ID
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("PATCH /api/articles/{id}", UpdateArticle(database))
-
-	req := httptest.NewRequest("PATCH", "/api/articles/"+itoa(artID), strings.NewReader(`{"isRead":true,"starred":true}`))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 

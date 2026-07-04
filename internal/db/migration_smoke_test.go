@@ -17,10 +17,13 @@ func TestMigrationFreshAndIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("columns: %v", err)
 	}
-	for _, c := range []string{"is_read", "read_at", "starred"} {
+	for _, c := range []string{"is_read", "read_at"} {
 		if !cols[c] {
 			t.Fatalf("missing column %q after migration", c)
 		}
+	}
+	if cols["starred"] {
+		t.Fatal("starred column should not exist on a fresh db")
 	}
 	d.Close()
 
@@ -35,7 +38,8 @@ func TestMigrationFreshAndIdempotent(t *testing.T) {
 func TestMigrationUpgradesLegacyArticles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.db")
 
-	// Simulate a pre-migration articles table (no is_read/read_at/starred).
+	// Simulate a pre-migration articles table (no is_read/read_at, with the
+	// legacy starred column that should be dropped on migration).
 	raw, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatalf("raw open: %v", err)
@@ -43,7 +47,8 @@ func TestMigrationUpgradesLegacyArticles(t *testing.T) {
 	_, err = raw.Exec(`CREATE TABLE articles (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		feed_id INTEGER, guid TEXT, title TEXT, url TEXT, author TEXT,
-		content TEXT, published_at TEXT, fetched_at TEXT)`)
+		content TEXT, published_at TEXT, fetched_at TEXT,
+		starred INTEGER NOT NULL DEFAULT 0)`)
 	if err != nil {
 		t.Fatalf("create legacy: %v", err)
 	}
@@ -58,16 +63,23 @@ func TestMigrationUpgradesLegacyArticles(t *testing.T) {
 	}
 	defer d.Close()
 
-	// Existing rows must default to unread / not starred.
-	var isRead, starred int
+	// Existing rows must default to unread, and the starred column must be gone.
+	var isRead int
 	var readAt sql.NullString
-	err = d.db.QueryRow(`SELECT is_read, read_at, starred FROM articles WHERE title='hi'`).
-		Scan(&isRead, &readAt, &starred)
+	err = d.db.QueryRow(`SELECT is_read, read_at FROM articles WHERE title='hi'`).
+		Scan(&isRead, &readAt)
 	if err != nil {
 		t.Fatalf("scan migrated row: %v", err)
 	}
-	if isRead != 0 || starred != 0 || readAt.Valid {
-		t.Fatalf("unexpected defaults: is_read=%d starred=%d read_at_valid=%v", isRead, starred, readAt.Valid)
+	if isRead != 0 || readAt.Valid {
+		t.Fatalf("unexpected defaults: is_read=%d read_at_valid=%v", isRead, readAt.Valid)
+	}
+	cols, err := tableColumns(d.db, "articles")
+	if err != nil {
+		t.Fatalf("columns: %v", err)
+	}
+	if cols["starred"] {
+		t.Fatal("expected starred column to be dropped")
 	}
 
 	// Unread counts should see the one unread article.

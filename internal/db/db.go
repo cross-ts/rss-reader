@@ -66,7 +66,7 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("create articles table: %w", err)
 	}
 
-	// Migrate read-state columns (is_read, read_at, starred) onto the articles table.
+	// Migrate read-state columns (is_read, read_at) onto the articles table.
 	if err := migrateReadState(sqlDB); err != nil {
 		sqlDB.Close()
 		return nil, fmt.Errorf("migrate read state: %w", err)
@@ -277,7 +277,7 @@ func (d *DB) listArticlesNoSearch(filter ArticleFilter) (*ArticlesResult, error)
 
 	// Fetch items
 	selectQuery := fmt.Sprintf(
-		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC, a.id DESC LIMIT ? OFFSET ?`,
+		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at %s ORDER BY a.published_at IS NULL, a.published_at DESC, a.id DESC LIMIT ? OFFSET ?`,
 		baseQuery,
 	)
 	args = append(args, filter.Limit, filter.Offset)
@@ -351,7 +351,7 @@ func (d *DB) listArticlesFTS(filter ArticleFilter, q string) (*ArticlesResult, e
 
 	// Fetch items
 	selectQuery := fmt.Sprintf(
-		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC, a.id DESC LIMIT ? OFFSET ?`,
+		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at %s ORDER BY a.published_at IS NULL, a.published_at DESC, a.id DESC LIMIT ? OFFSET ?`,
 		baseQuery,
 	)
 	args = append(args, filter.Limit, filter.Offset)
@@ -409,7 +409,7 @@ func (d *DB) listArticlesLike(filter ArticleFilter, q string) (*ArticlesResult, 
 
 	// Fetch items
 	selectQuery := fmt.Sprintf(
-		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at, a.starred %s ORDER BY a.published_at IS NULL, a.published_at DESC, a.id DESC LIMIT ? OFFSET ?`,
+		`SELECT a.id, a.feed_id, COALESCE(f.title, '') AS feed_title, COALESCE(a.title, '') AS title, COALESCE(a.url, '') AS url, a.author, COALESCE(a.content, '') AS content, a.published_at, a.is_read, a.read_at %s ORDER BY a.published_at IS NULL, a.published_at DESC, a.id DESC LIMIT ? OFFSET ?`,
 		baseQuery,
 	)
 	args = append(args, filter.Limit, filter.Offset)
@@ -432,7 +432,7 @@ func scanArticles(rows *sql.Rows) ([]Article, error) {
 	var items []Article
 	for rows.Next() {
 		var a Article
-		if err := rows.Scan(&a.ID, &a.FeedID, &a.FeedTitle, &a.Title, &a.URL, &a.Author, &a.Content, &a.PublishedAt, &a.IsRead, &a.ReadAt, &a.Starred); err != nil {
+		if err := rows.Scan(&a.ID, &a.FeedID, &a.FeedTitle, &a.Title, &a.URL, &a.Author, &a.Content, &a.PublishedAt, &a.IsRead, &a.ReadAt); err != nil {
 			return nil, fmt.Errorf("scan article: %w", err)
 		}
 		items = append(items, a)
@@ -736,34 +736,6 @@ func (d *DB) MarkArticlesRead(ids []int, readAt string) (int64, error) {
 	return affected, nil
 }
 
-// SetArticleStarred sets the starred state of a single article.
-// Returns false if no article matched the id. When the starred state is already
-// in the desired state, it is treated as success.
-func (d *DB) SetArticleStarred(id int, starred bool) (bool, error) {
-	val := 0
-	if starred {
-		val = 1
-	}
-	result, err := d.db.Exec(`UPDATE articles SET starred = ? WHERE id = ?`, val, id)
-	if err != nil {
-		return false, fmt.Errorf("set article starred: %w", err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("rows affected: %w", err)
-	}
-	if affected > 0 {
-		return true, nil
-	}
-	// No rows updated — check whether the article exists (it may already
-	// be in the desired state).
-	var exists bool
-	if err := d.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM articles WHERE id = ?)`, id).Scan(&exists); err != nil {
-		return false, fmt.Errorf("check article exists: %w", err)
-	}
-	return exists, nil
-}
-
 // UnreadCounts holds aggregated unread counts by feed, by folder, and overall.
 type UnreadCounts struct {
 	Total   int64
@@ -826,8 +798,10 @@ func (d *DB) GetUnreadCounts() (*UnreadCounts, error) {
 	return counts, nil
 }
 
-// migrateReadState adds the is_read, read_at, and starred columns to the
-// articles table if they do not already exist. SQLite has no
+// migrateReadState adds the is_read and read_at columns to the articles
+// table if they do not already exist, and drops the legacy starred column
+// (star management was removed; the star state was never authoritative —
+// OPML is the sole source of truth for subscriptions). SQLite has no
 // "ADD COLUMN IF NOT EXISTS", so we inspect the existing columns first.
 func migrateReadState(sqlDB *sql.DB) error {
 	existing, err := tableColumns(sqlDB, "articles")
@@ -842,7 +816,6 @@ func migrateReadState(sqlDB *sql.DB) error {
 	wanted := []column{
 		{"is_read", `ALTER TABLE articles ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0`},
 		{"read_at", `ALTER TABLE articles ADD COLUMN read_at TEXT`},
-		{"starred", `ALTER TABLE articles ADD COLUMN starred INTEGER NOT NULL DEFAULT 0`},
 	}
 
 	for _, c := range wanted {
@@ -852,6 +825,13 @@ func migrateReadState(sqlDB *sql.DB) error {
 		slog.Info("migrating articles read-state column", "column", c.name)
 		if _, err := sqlDB.Exec(c.ddl); err != nil {
 			return fmt.Errorf("add column %q: %w", c.name, err)
+		}
+	}
+
+	if existing["starred"] {
+		slog.Info("dropping removed articles column", "column", "starred")
+		if _, err := sqlDB.Exec(`ALTER TABLE articles DROP COLUMN starred`); err != nil {
+			return fmt.Errorf("drop column %q: %w", "starred", err)
 		}
 	}
 

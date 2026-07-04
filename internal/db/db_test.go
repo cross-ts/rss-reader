@@ -1223,79 +1223,6 @@ func TestMarkArticlesRead_AlreadyRead(t *testing.T) {
 	}
 }
 
-// --- SetArticleStarred ---
-
-func TestSetArticleStarred_Star(t *testing.T) {
-	d := openTestDB(t)
-	seedFeeds(t, d, nil, []FeedDef{{Title: "Feed", URL: "https://example.com/feed"}})
-	feed, _ := d.GetFeedByURL("https://example.com/feed")
-	seedArticles(t, d, feed.ID, []NewArticle{{GUID: "1", Title: "A", URL: "u", Content: "c"}})
-
-	result, _ := d.ListArticles(ArticleFilter{Limit: 10})
-	id := result.Items[0].ID
-
-	ok, err := d.SetArticleStarred(id, true)
-	if err != nil {
-		t.Fatalf("star: %v", err)
-	}
-	if !ok {
-		t.Fatal("expected true")
-	}
-
-	result, _ = d.ListArticles(ArticleFilter{Limit: 10})
-	if !result.Items[0].Starred {
-		t.Fatal("expected starred")
-	}
-}
-
-func TestSetArticleStarred_Unstar(t *testing.T) {
-	d := openTestDB(t)
-	seedFeeds(t, d, nil, []FeedDef{{Title: "Feed", URL: "https://example.com/feed"}})
-	feed, _ := d.GetFeedByURL("https://example.com/feed")
-	seedArticles(t, d, feed.ID, []NewArticle{{GUID: "1", Title: "A", URL: "u", Content: "c"}})
-
-	result, _ := d.ListArticles(ArticleFilter{Limit: 10})
-	id := result.Items[0].ID
-
-	d.SetArticleStarred(id, true)
-	ok, _ := d.SetArticleStarred(id, false)
-	if !ok {
-		t.Fatal("expected true")
-	}
-
-	result, _ = d.ListArticles(ArticleFilter{Limit: 10})
-	if result.Items[0].Starred {
-		t.Fatal("expected not starred")
-	}
-}
-
-func TestSetArticleStarred_AlreadyStarred(t *testing.T) {
-	d := openTestDB(t)
-	seedFeeds(t, d, nil, []FeedDef{{Title: "Feed", URL: "https://example.com/feed"}})
-	feed, _ := d.GetFeedByURL("https://example.com/feed")
-	seedArticles(t, d, feed.ID, []NewArticle{{GUID: "1", Title: "A", URL: "u", Content: "c"}})
-
-	result, _ := d.ListArticles(ArticleFilter{Limit: 10})
-	id := result.Items[0].ID
-
-	d.SetArticleStarred(id, true)
-	ok, _ := d.SetArticleStarred(id, true)
-	if !ok {
-		t.Fatal("expected true for already starred")
-	}
-}
-
-func TestSetArticleStarred_NonExistent(t *testing.T) {
-	d := openTestDB(t)
-	ok, err := d.SetArticleStarred(9999, true)
-	if err != nil {
-		t.Fatalf("star non-existent: %v", err)
-	}
-	if ok {
-		t.Fatal("expected false for non-existent article")
-	}
-}
-
 // --- GetUnreadCounts ---
 
 func TestGetUnreadCounts_Empty(t *testing.T) {
@@ -1449,7 +1376,7 @@ func TestTableColumns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("table columns: %v", err)
 	}
-	expected := []string{"id", "feed_id", "guid", "title", "url", "author", "content", "published_at", "fetched_at", "is_read", "read_at", "starred"}
+	expected := []string{"id", "feed_id", "guid", "title", "url", "author", "content", "published_at", "fetched_at", "is_read", "read_at"}
 	for _, col := range expected {
 		if !cols[col] {
 			t.Errorf("missing column %q", col)
@@ -1716,14 +1643,6 @@ func TestSetArticleRead_MarkUnread_Error(t *testing.T) {
 func TestMarkArticlesRead_Error(t *testing.T) {
 	d := closedTestDB(t)
 	_, err := d.MarkArticlesRead([]int{1, 2}, "2024-01-01")
-	if err == nil {
-		t.Fatal("expected error on closed db")
-	}
-}
-
-func TestSetArticleStarred_Error(t *testing.T) {
-	d := closedTestDB(t)
-	_, err := d.SetArticleStarred(1, true)
 	if err == nil {
 		t.Fatal("expected error on closed db")
 	}
@@ -2061,7 +1980,7 @@ func TestReconcile_FolderResolveError(t *testing.T) {
 	}
 }
 
-// --- SetArticleRead/Starred RowsAffected coverage ---
+// --- SetArticleRead RowsAffected coverage ---
 
 func TestSetArticleRead_MarkRead_NonExistent(t *testing.T) {
 	d := openTestDB(t)
@@ -2071,22 +1990,6 @@ func TestSetArticleRead_MarkRead_NonExistent(t *testing.T) {
 	}
 	if ok {
 		t.Fatal("expected false for non-existent")
-	}
-}
-
-func TestSetArticleStarred_AlreadyUnstarred(t *testing.T) {
-	d := openTestDB(t)
-	seedFeeds(t, d, nil, []FeedDef{{Title: "Feed", URL: "https://example.com/feed"}})
-	feed, _ := d.GetFeedByURL("https://example.com/feed")
-	seedArticles(t, d, feed.ID, []NewArticle{{GUID: "1", Title: "A", URL: "u", Content: "c"}})
-
-	result, _ := d.ListArticles(ArticleFilter{Limit: 10})
-	id := result.Items[0].ID
-
-	// Already unstarred, setting to unstarred.
-	ok, _ := d.SetArticleStarred(id, false)
-	if !ok {
-		t.Fatal("expected true for existing article already unstarred")
 	}
 }
 
@@ -2285,17 +2188,17 @@ func TestMigrateReadState_AddColumnError(t *testing.T) {
 	}
 	defer raw.Close()
 
-	// Create articles table with is_read and feed_id but without read_at and starred.
+	// Create articles table with is_read and feed_id but without read_at.
 	_, _ = raw.Exec(`CREATE TABLE articles (id INTEGER PRIMARY KEY, feed_id INTEGER, is_read INTEGER NOT NULL DEFAULT 0)`)
-	// Now migrate should try to add read_at and starred. It should succeed.
+	// Now migrate should try to add read_at. It should succeed.
 	if err := migrateReadState(raw); err != nil {
 		t.Fatalf("migrate partial columns: %v", err)
 	}
 
-	// Verify columns were added.
+	// Verify column was added.
 	cols, _ := tableColumns(raw, "articles")
-	if !cols["read_at"] || !cols["starred"] {
-		t.Fatalf("expected read_at and starred columns, got %v", cols)
+	if !cols["read_at"] {
+		t.Fatalf("expected read_at column, got %v", cols)
 	}
 }
 
