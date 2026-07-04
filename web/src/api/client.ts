@@ -169,7 +169,7 @@ export const api = {
   // 記事の既読状態を更新
   updateArticle(
     id: number,
-    patch: { isRead?: boolean },
+    patch: { isRead: boolean },
   ): Promise<void> {
     return request(`/api/articles/${id}`, {
       method: 'PATCH',
