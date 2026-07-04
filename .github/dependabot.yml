@@ -8,9 +8,6 @@ updates:
       day: "friday"
       time: "09:00"
       timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
     groups:
       go-dependencies:
         applies-to: "version-updates"
@@ -28,12 +25,9 @@ updates:
       day: "friday"
       time: "09:15"
       timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
     versioning-strategy: "increase-if-necessary"
     cooldown:
-      default-days: 1
-    labels:
-      - "dependencies"
+      default-days: 3
     groups:
       npm-dependencies:
         applies-to: "version-updates"
@@ -51,9 +45,6 @@ updates:
       day: "friday"
       time: "09:30"
       timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
     groups:
       github-actions:
         applies-to: "version-updates"
