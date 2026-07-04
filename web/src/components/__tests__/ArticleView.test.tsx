@@ -27,7 +27,6 @@ function makeArticle(overrides: Partial<Article> = {}): Article {
     publishedAt: '2024-06-15T12:00:00Z',
     isRead: false,
     readAt: null,
-    starred: false,
     ...overrides,
   };
 }
@@ -197,50 +196,11 @@ describe('ArticleView', () => {
     expect(screen.getByText('Unread')).toBeInTheDocument();
   });
 
-  it('shows star/unstar toggle button', () => {
-    const onToggleStarred = vi.fn();
-    const article = makeArticle();
-
-    // Unstarred state
-    const { rerender } = render(
-      <ArticleView
-        {...defaultProps}
-        article={article}
-        starred={false}
-        onToggleStarred={onToggleStarred}
-      />,
-    );
-    expect(screen.getByLabelText('Star')).toBeInTheDocument();
-    expect(screen.getByText('Star')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText('Star'));
-    expect(onToggleStarred).toHaveBeenCalledTimes(1);
-
-    // Starred state
-    rerender(
-      <ArticleView
-        {...defaultProps}
-        article={article}
-        starred={true}
-        onToggleStarred={onToggleStarred}
-      />,
-    );
-    expect(screen.getByLabelText('Unstar')).toBeInTheDocument();
-    expect(screen.getByText('Starred')).toBeInTheDocument();
-  });
-
   it('does not show toggle read button when onToggleRead is not provided', () => {
     const article = makeArticle();
     render(<ArticleView {...defaultProps} article={article} />);
     expect(screen.queryByLabelText('Mark as read')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Mark as unread')).not.toBeInTheDocument();
-  });
-
-  it('does not show star button when onToggleStarred is not provided', () => {
-    const article = makeArticle();
-    render(<ArticleView {...defaultProps} article={article} />);
-    expect(screen.queryByLabelText('Star')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Unstar')).not.toBeInTheDocument();
   });
 
   it('calls onClose when close button is clicked', () => {

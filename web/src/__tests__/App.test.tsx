@@ -65,7 +65,6 @@ vi.mock('../components/ArticleView', () => ({
       {props.onNext && <button data-testid="next-article" onClick={props.onNext} />}
       {props.onNextUnread && <button data-testid="next-unread" onClick={props.onNextUnread} />}
       {props.onToggleRead && <button data-testid="toggle-read" onClick={props.onToggleRead} />}
-      {props.onToggleStarred && <button data-testid="toggle-starred" onClick={props.onToggleStarred} />}
     </div>
   ),
 }));
@@ -78,14 +77,12 @@ vi.mock('../components/Toast', () => ({
 const mockMarkRead = vi.fn();
 const mockToggleRead = vi.fn();
 const mockMarkAllRead = vi.fn();
-const mockToggleStarred = vi.fn();
 
 vi.mock('../hooks/useArticleMutations', () => ({
   useArticleMutations: () => ({
     markRead: mockMarkRead,
     toggleRead: mockToggleRead,
     markAllRead: mockMarkAllRead,
-    toggleStarred: mockToggleStarred,
   }),
 }));
 
@@ -133,7 +130,6 @@ function makeArticle(overrides: Partial<Article> = {}): Article {
     publishedAt: '2024-01-01T00:00:00Z',
     isRead: false,
     readAt: null,
-    starred: false,
     ...overrides,
   };
 }
@@ -442,16 +438,6 @@ describe('App', () => {
     expect(screen.getByTestId('topbar')).toHaveAttribute('data-search-text', '');
   });
 
-  // -- Toggle starred --
-
-  it('calls toggleStarred for the selected article', async () => {
-    await renderAppWithArticles();
-
-    fireEvent.click(screen.getByTestId('article-1'));
-    fireEvent.click(screen.getByTestId('toggle-starred'));
-    expect(mockToggleStarred).toHaveBeenCalledWith(1, false);
-  });
-
   // -- Toggle read --
 
   it('calls toggleRead for the selected article', async () => {
@@ -537,20 +523,6 @@ describe('App', () => {
 
     // Sidebar should close
     expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
-  });
-
-  // -- Mobile fullscreen toggleStarred --
-
-  it('calls toggleStarred in mobile fullscreen mode', async () => {
-    Object.defineProperty(window, 'innerWidth', { value: 500, writable: true, configurable: true });
-    await renderAppWithArticles();
-
-    fireEvent.click(screen.getByTestId('article-1'));
-    // In fullscreen mode
-    expect(screen.queryByTestId('article-list')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('toggle-starred'));
-    expect(mockToggleStarred).toHaveBeenCalledWith(1, false);
   });
 
   // -- Next-unread wrap-around --

@@ -22,7 +22,6 @@ type ArticleResponse struct {
 	PublishedAt *string `json:"publishedAt"`
 	IsRead      bool    `json:"isRead"`
 	ReadAt      *string `json:"readAt"`
-	Starred     bool    `json:"starred"`
 }
 
 // ArticlesListResponse is the JSON response for a paginated list of articles.
@@ -44,7 +43,6 @@ func articleToResponse(a *db.Article) ArticleResponse {
 		PublishedAt: a.PublishedAt,
 		IsRead:      a.IsRead,
 		ReadAt:      a.ReadAt,
-		Starred:     a.Starred,
 	}
 }
 
@@ -124,8 +122,8 @@ func ListArticles(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// UpdateArticle returns an http.HandlerFunc that updates the read and/or
-// starred state of a single article via PATCH /api/articles/{id}.
+// UpdateArticle returns an http.HandlerFunc that updates the read state of a
+// single article via PATCH /api/articles/{id}.
 func UpdateArticle(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -135,40 +133,26 @@ func UpdateArticle(database *db.DB) http.HandlerFunc {
 		}
 
 		var body struct {
-			IsRead  *bool `json:"isRead"`
-			Starred *bool `json:"starred"`
+			IsRead *bool `json:"isRead"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
 		}
 
-		if body.IsRead == nil && body.Starred == nil {
-			http.Error(w, "isRead or starred is required", http.StatusBadRequest)
+		if body.IsRead == nil {
+			http.Error(w, "isRead is required", http.StatusBadRequest)
 			return
 		}
 
-		updated := false
-		if body.IsRead != nil {
-			ok, err := database.SetArticleRead(id, *body.IsRead, time.Now().UTC().Format(time.RFC3339))
-			if err != nil {
-				slog.Error("set article read", "id", id, "error", err)
-				http.Error(w, "internal server error", http.StatusInternalServerError)
-				return
-			}
-			updated = updated || ok
-		}
-		if body.Starred != nil {
-			ok, err := database.SetArticleStarred(id, *body.Starred)
-			if err != nil {
-				slog.Error("set article starred", "id", id, "error", err)
-				http.Error(w, "internal server error", http.StatusInternalServerError)
-				return
-			}
-			updated = updated || ok
+		ok, err := database.SetArticleRead(id, *body.IsRead, time.Now().UTC().Format(time.RFC3339))
+		if err != nil {
+			slog.Error("set article read", "id", id, "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
 		}
 
-		if !updated {
+		if !ok {
 			http.Error(w, "article not found", http.StatusNotFound)
 			return
 		}

@@ -26,7 +26,6 @@ export interface Article {
   publishedAt: string | null; // ISO8601
   isRead: boolean;
   readAt: string | null;
-  starred: boolean;
 }
 
 export interface ArticleListResponse {
@@ -167,10 +166,10 @@ export const api = {
     return request(`/api/refresh${qs}`, { method: 'POST' });
   },
 
-  // 記事の既読/スター状態を更新
+  // 記事の既読状態を更新
   updateArticle(
     id: number,
-    patch: { isRead?: boolean; starred?: boolean },
+    patch: { isRead: boolean },
   ): Promise<void> {
     return request(`/api/articles/${id}`, {
       method: 'PATCH',

@@ -28,7 +28,6 @@ function makeArticle(overrides: Partial<Article> = {}): Article {
     publishedAt: '2024-01-01T00:00:00Z',
     isRead: false,
     readAt: null,
-    starred: false,
     ...overrides,
   };
 }
@@ -208,24 +207,6 @@ describe('ArticleList', () => {
     );
     const dot = container.querySelector('.bg-accent.rounded-full');
     expect(dot).toBeInTheDocument();
-  });
-
-  it('shows star icon for starred articles', () => {
-    const article = makeArticle({ id: 1, starred: true });
-    const { container } = render(
-      <ArticleList {...defaultProps} articles={[article]} />,
-    );
-    const star = container.querySelector('.text-amber-400');
-    expect(star).toBeInTheDocument();
-  });
-
-  it('does not show star icon for non-starred articles', () => {
-    const article = makeArticle({ id: 1, starred: false });
-    const { container } = render(
-      <ArticleList {...defaultProps} articles={[article]} />,
-    );
-    const star = container.querySelector('.text-amber-400');
-    expect(star).not.toBeInTheDocument();
   });
 
   it('shows "Load more" button when hasMore is true', () => {

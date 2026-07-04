@@ -207,11 +207,11 @@ describe('api client', () => {
   describe('updateArticle', () => {
     it('calls PATCH /api/articles/:id with patch body', async () => {
       vi.mocked(fetch).mockResolvedValue(mockResponse(null, 204));
-      await api.updateArticle(42, { isRead: true, starred: false });
+      await api.updateArticle(42, { isRead: true });
       expect(fetch).toHaveBeenCalledWith('/api/articles/42', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isRead: true, starred: false }),
+        body: JSON.stringify({ isRead: true }),
       });
     });
   });

@@ -27,7 +27,6 @@ function createArticle(overrides: Partial<Article> = {}): Article {
     publishedAt: '2024-01-01T00:00:00Z',
     isRead: false,
     readAt: null,
-    starred: false,
     ...overrides,
   };
 }
@@ -276,93 +275,6 @@ describe('useArticleMutations', () => {
           queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
         expect(cached?.pages[0].items[0].isRead).toBe(false);
         expect(cached?.pages[0].items[1].isRead).toBe(false);
-      });
-    });
-  });
-
-  describe('toggleStarred', () => {
-    it('toggles starred from false to true', async () => {
-      const article = createArticle({ id: 1, starred: false });
-      seedArticlesCache(queryClient, [article]);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.toggleStarred(1, false);
-      });
-
-      await waitFor(() => {
-        expect(mockUpdateArticle).toHaveBeenCalledWith(1, { starred: true });
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].starred).toBe(true);
-      });
-    });
-
-    it('toggles starred from true to false', async () => {
-      const article = createArticle({ id: 1, starred: true });
-      seedArticlesCache(queryClient, [article]);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.toggleStarred(1, true);
-      });
-
-      await waitFor(() => {
-        expect(mockUpdateArticle).toHaveBeenCalledWith(1, { starred: false });
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].starred).toBe(false);
-      });
-    });
-
-    it('rolls back on error', async () => {
-      mockUpdateArticle.mockRejectedValueOnce(new Error('fail'));
-
-      const article = createArticle({ id: 1, starred: false });
-      seedArticlesCache(queryClient, [article]);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.toggleStarred(1, false);
-      });
-
-      await waitFor(() => {
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].starred).toBe(false);
-      });
-    });
-
-    it('does not affect other articles in cache', async () => {
-      const articles = [
-        createArticle({ id: 1, starred: false }),
-        createArticle({ id: 2, starred: true }),
-      ];
-      seedArticlesCache(queryClient, articles);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.toggleStarred(1, false);
-      });
-
-      await waitFor(() => {
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].starred).toBe(true);
-        // Article 2 should be unchanged
-        expect(cached?.pages[0].items[1].starred).toBe(true);
       });
     });
   });

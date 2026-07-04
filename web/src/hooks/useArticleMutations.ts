@@ -95,39 +95,9 @@ export function useArticleMutations() {
     },
   });
 
-  const toggleStarredMutation = useMutation({
-    mutationFn: ({ id, currentStarred }: { id: number; currentStarred: boolean }) =>
-      api.updateArticle(id, { starred: !currentStarred }),
-    onMutate: async ({ id, currentStarred }) => {
-      await queryClient.cancelQueries({ queryKey: ['articles'] });
-      const previousQueries = queryClient.getQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] });
-      queryClient.setQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] }, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page) => ({
-            ...page,
-            items: page.items.map((a) => (a.id === id ? { ...a, starred: !currentStarred } : a)),
-          })),
-        };
-      });
-      return { previousQueries };
-    },
-    onError: (_err, _vars, context) => {
-      context?.previousQueries.forEach(([queryKey, data]) => {
-        queryClient.setQueryData(queryKey, data);
-      });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
-      queryClient.invalidateQueries({ queryKey: ['unreadCounts'] });
-    },
-  });
-
   const markRead = useCallback((id: number) => markReadMutation.mutate(id), [markReadMutation.mutate]);
   const toggleRead = useCallback((id: number, currentIsRead: boolean) => toggleReadMutation.mutate({ id, currentIsRead }), [toggleReadMutation.mutate]);
   const markAllRead = useCallback((ids: number[]) => markAllReadMutation.mutate(ids), [markAllReadMutation.mutate]);
-  const toggleStarred = useCallback((id: number, currentStarred: boolean) => toggleStarredMutation.mutate({ id, currentStarred }), [toggleStarredMutation.mutate]);
 
-  return { markRead, toggleRead, markAllRead, toggleStarred };
+  return { markRead, toggleRead, markAllRead };
 }
