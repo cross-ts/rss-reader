@@ -1,6 +1,7 @@
+---
 version: 2
 updates:
-  - package-ecosystem: "cargo"
+  - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -11,10 +12,14 @@ updates:
     labels:
       - "dependencies"
     groups:
-      cargo-minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
+      go-dependencies:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+      go-security-updates:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/web"
@@ -25,13 +30,19 @@ updates:
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 5
     versioning-strategy: "increase-if-necessary"
+    cooldown:
+      default-days: 1
     labels:
       - "dependencies"
     groups:
-      npm-minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
+      npm-dependencies:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+      npm-security-updates:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -45,5 +56,10 @@ updates:
       - "dependencies"
     groups:
       github-actions:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+      github-actions-security-updates:
+        applies-to: "security-updates"
         patterns:
           - "*"
