@@ -4,7 +4,12 @@ import { ArticleView } from '../ArticleView';
 import type { Article } from '../../api/client';
 
 vi.mock('dompurify', () => ({
-  default: { sanitize: (html: string) => html },
+  default: {
+    sanitize: (html: string, options?: { ADD_ATTR?: string[] }) =>
+      options?.ADD_ATTR?.includes('target')
+        ? html
+        : html.replace(/ target="_blank"/g, ''),
+  },
 }));
 
 vi.mock('../../utils/time', () => ({
@@ -72,6 +77,20 @@ describe('ArticleView', () => {
     const body = container.querySelector('.article-view-body');
     expect(body).toBeInTheDocument();
     expect(body!.innerHTML).toBe('<p>Sanitized content</p>');
+  });
+
+  it('renders content links with target="_blank" and rel="noopener noreferrer"', () => {
+    const article = makeArticle({
+      content: '<p>See <a href="https://example.com/other">this link</a></p>',
+      url: 'https://example.com/article',
+    });
+    const { container } = render(
+      <ArticleView {...defaultProps} article={article} />,
+    );
+    const link = container.querySelector('.article-view-body a');
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
   it('shows navigation buttons', () => {
