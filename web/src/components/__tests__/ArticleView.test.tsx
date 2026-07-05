@@ -74,6 +74,20 @@ describe('ArticleView', () => {
     expect(body!.innerHTML).toBe('<p>Sanitized content</p>');
   });
 
+  it('renders content links with target="_blank" and rel="noopener noreferrer"', () => {
+    const article = makeArticle({
+      content: '<p>See <a href="https://example.com/other">this link</a></p>',
+      url: 'https://example.com/article',
+    });
+    const { container } = render(
+      <ArticleView {...defaultProps} article={article} />,
+    );
+    const link = container.querySelector('.article-view-body a');
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
   it('shows navigation buttons', () => {
     const article = makeArticle();
     render(

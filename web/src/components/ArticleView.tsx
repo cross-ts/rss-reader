@@ -32,7 +32,10 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
   }, [article?.id, onMarkRead]);
 
   const sanitizedContent = useMemo(
-    () => (article ? DOMPurify.sanitize(resolveContentLinks(article.content, article.url)) : ''),
+    () =>
+      article
+        ? DOMPurify.sanitize(resolveContentLinks(article.content, article.url), { ADD_ATTR: ['target'] })
+        : '',
     [article?.content, article?.url],
   );
 
