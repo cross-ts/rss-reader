@@ -4,7 +4,12 @@ import { ArticleView } from '../ArticleView';
 import type { Article } from '../../api/client';
 
 vi.mock('dompurify', () => ({
-  default: { sanitize: (html: string) => html },
+  default: {
+    sanitize: (html: string, options?: { ADD_ATTR?: string[] }) =>
+      options?.ADD_ATTR?.includes('target')
+        ? html
+        : html.replace(/ target="_blank"/g, ''),
+  },
 }));
 
 vi.mock('../../utils/time', () => ({
