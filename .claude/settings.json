@@ -1,0 +1,6 @@
+{
+  "agent": "Orchestrator",
+  "permissions": {
+    "defaultMode": "auto"
+  }
+}
