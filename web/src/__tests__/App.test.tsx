@@ -271,6 +271,67 @@ describe('App', () => {
     expect(screen.getByTestId('article-3')).toBeInTheDocument();
   });
 
+  // -- Unread filter keeps selected (now-read) article visible (issue #139) --
+
+  describe('unread filter keeps selected article visible', () => {
+    it('keeps the selected article in the list even though it is read', async () => {
+      await renderAppWithArticles();
+
+      // Select article 2, which is already read (sampleArticles[1].isRead = true)
+      fireEvent.click(screen.getByTestId('article-2'));
+      expect(screen.getByTestId('article-view')).toHaveAttribute('data-article-id', '2');
+
+      // Toggling unreadOnly does not clear selection, so article 2 becomes
+      // "read but selected" under the filter.
+      fireEvent.click(screen.getByTestId('topbar-toggle-unread'));
+
+      // Without the fix, article 2 would be filtered out here.
+      expect(screen.getByTestId('article-1')).toBeInTheDocument();
+      expect(screen.getByTestId('article-2')).toBeInTheDocument();
+      expect(screen.getByTestId('article-3')).toBeInTheDocument();
+    });
+
+    it('keeps prev/next navigation working with the selected read article in the list', async () => {
+      await renderAppWithArticles();
+
+      fireEvent.click(screen.getByTestId('article-2'));
+      fireEvent.click(screen.getByTestId('topbar-toggle-unread'));
+
+      // selectedIndex should remain valid (1), so both prev and next exist.
+      expect(screen.getByTestId('prev-article')).toBeInTheDocument();
+      expect(screen.getByTestId('next-article')).toBeInTheDocument();
+
+      // Navigating to prev should land on article 1.
+      fireEvent.click(screen.getByTestId('prev-article'));
+      expect(screen.getByTestId('article-view')).toHaveAttribute('data-article-id', '1');
+    });
+
+    it('removes the previously selected read article once navigating away', async () => {
+      await renderAppWithArticles();
+
+      fireEvent.click(screen.getByTestId('article-2'));
+      fireEvent.click(screen.getByTestId('topbar-toggle-unread'));
+      expect(screen.getByTestId('article-2')).toBeInTheDocument();
+
+      // Move to the next article (3); article 2 is no longer selected and
+      // should now be excluded by the unread filter.
+      fireEvent.click(screen.getByTestId('next-article'));
+      expect(screen.getByTestId('article-view')).toHaveAttribute('data-article-id', '3');
+      expect(screen.queryByTestId('article-2')).not.toBeInTheDocument();
+    });
+
+    it('removes the selected read article from the list once it is closed', async () => {
+      await renderAppWithArticles();
+
+      fireEvent.click(screen.getByTestId('article-2'));
+      fireEvent.click(screen.getByTestId('topbar-toggle-unread'));
+      expect(screen.getByTestId('article-2')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('close-article'));
+      expect(screen.queryByTestId('article-2')).not.toBeInTheDocument();
+    });
+  });
+
   // -- Sidebar selection --
 
   it('clears selected article when sidebar selection changes', async () => {

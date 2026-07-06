@@ -167,11 +167,13 @@ function AppInner() {
     },
   });
 
-  // Filter articles by read state if unreadOnly
+  // Filter articles by read state if unreadOnly. The currently selected
+  // article is kept even after it becomes read, so navigation stays stable
+  // while it's open; it drops out once selection moves elsewhere or closes.
   const articles = useMemo(() => {
     if (!unreadOnly) return allItems;
-    return allItems.filter((a) => !a.isRead);
-  }, [allItems, unreadOnly]);
+    return allItems.filter((a) => !a.isRead || a.id === selectedArticleId);
+  }, [allItems, unreadOnly, selectedArticleId]);
 
   const unreadCount = useMemo(() => allItems.filter((a) => !a.isRead).length, [allItems]);
 
