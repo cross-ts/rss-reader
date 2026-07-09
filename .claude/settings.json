@@ -1,6 +1,7 @@
 {
-  "agent": "Orchestrator",
-  "permissions": {
-    "defaultMode": "auto"
-  }
+  "enabledPlugins": {
+    "go-lsp@cross-ts-dotfiles": true,
+    "typescript-lsp@cross-ts-dotfiles": true
+  },
+  "agent": "Orchestrator"
 }
