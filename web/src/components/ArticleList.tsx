@@ -370,7 +370,7 @@ function ArticleRow({
 
           {/* Tier 2: meta line (feed/author + published time) */}
           <div className="flex items-center gap-1.5 mt-0.5 text-[12px] text-text-muted">
-            <span className="truncate">{metaLabel}</span>
+            <span className="truncate min-w-0 flex-1">{metaLabel}</span>
             <span className="flex-shrink-0">·</span>
             <span className="flex-shrink-0">{publishedLabel}</span>
           </div>
