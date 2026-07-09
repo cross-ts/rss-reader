@@ -73,6 +73,14 @@ function isRealDragLeave(e: React.DragEvent): boolean {
   return true;
 }
 
+// Extracts a human-readable message from an error, stripping the
+// "HTTP <status>: " prefix that api/client.ts prepends so the raw
+// status code doesn't leak into the inline error UI.
+function describeError(err: unknown, fallback: string): string {
+  const message = err instanceof Error ? err.message : fallback;
+  return message.replace(/^HTTP \d+:\s*/, '') || fallback;
+}
+
 export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPanelFocusToken = 0, openAddPanelToken = 0 }: Props) {
   const qc = useQueryClient();
   const { addToast } = useToast();
@@ -94,6 +102,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState(0);
   const [addFeedResult, setAddFeedResult] = useState<Feed | null>(null);
   const [isResolvingFeed, setIsResolvingFeed] = useState(false);
+  const [addFeedError, setAddFeedError] = useState<string | null>(null);
 
   // Folder addition
   const [newFolderName, setNewFolderName] = useState('');
@@ -128,6 +137,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
       qc.invalidateQueries({ queryKey: ['feeds'] });
       qc.invalidateQueries({ queryKey: ['folders'] });
       setAddFeedResult(feed);
+      setAddFeedError(null);
       setFeedUrl('');
       setFeedFolder('');
       setNewFolderForFeed('');
@@ -141,7 +151,9 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
     },
     onError: (err) => {
       onFeedAdding?.(null);
-      addToast(err instanceof Error ? err.message : 'Failed to add feed', 'error');
+      const message = describeError(err, 'Failed to add feed');
+      setAddFeedError(message);
+      addToast(message, 'error');
     },
   });
 
@@ -231,15 +243,38 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
     });
   };
 
+  // Finds an already-subscribed feed matching the given feed URL, so we can
+  // short-circuit before calling createFeed. The backend returns 201 with
+  // the existing feed on duplicates, which is indistinguishable from a real
+  // create, so duplicate detection has to happen client-side.
+  const findExistingFeedByUrl = (url: string): Feed | undefined =>
+    feeds.find((f) => f.url === url);
+
   const handleAddFeed = (e: React.FormEvent) => {
     e.preventDefault();
     const inputURL = feedUrl.trim();
     if (!inputURL) return;
+    setAddFeedError(null);
+
+    // Duplicate detection relies on the `feeds` list; while it's still
+    // loading it's empty, so a real duplicate would slip through as a
+    // fresh create. Block submission until feeds have loaded.
+    if (feedsLoading) {
+      setAddFeedError('Loading feeds, please try again in a moment.');
+      return;
+    }
 
     if (discoverPreview && discoverPreview.length > 1) {
       const selectedCandidate = discoverPreview[selectedCandidateIndex];
       if (!selectedCandidate) return;
       setAddFeedResult(null);
+
+      const existing = findExistingFeedByUrl(selectedCandidate.feedUrl);
+      if (existing) {
+        setAddFeedError(`This feed is already subscribed${existing.title ? ` ("${existing.title}")` : ''}.`);
+        return;
+      }
+
       addFeed.mutate({
         candidateURL: selectedCandidate.feedUrl,
         candidateTitle: selectedCandidate.title ?? selectedCandidate.feedUrl,
@@ -262,16 +297,26 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
         }
 
         const candidate = candidates[0];
+        const candidateURL = candidate?.feedUrl ?? inputURL;
         setIsResolvingFeed(false);
+
+        const existing = findExistingFeedByUrl(candidateURL);
+        if (existing) {
+          setAddFeedError(`This feed is already subscribed${existing.title ? ` ("${existing.title}")` : ''}.`);
+          return;
+        }
+
         addFeed.mutate({
-          candidateURL: candidate?.feedUrl ?? inputURL,
+          candidateURL,
           candidateTitle: candidate?.title ?? inputURL,
         });
       })
       .catch((err: unknown) => {
         if (seq !== discoverSeqRef.current) return;
         setIsResolvingFeed(false);
-        addToast(err instanceof Error ? err.message : 'Failed to detect feed', 'error');
+        const message = describeError(err, 'Failed to detect feed');
+        setAddFeedError(message);
+        addToast(message, 'error');
       });
   };
 
@@ -402,6 +447,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
                   setDiscoverPreview(null);
                   setSelectedCandidateIndex(0);
                   setAddFeedResult(null);
+                  setAddFeedError(null);
                   setIsResolvingFeed(false);
                   if (!addFeed.isPending) {
                     addFeed.reset();
@@ -443,6 +489,18 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
                 ))}
               </div>
             )}
+            {addFeedError && (
+              <div role="alert" aria-live="assertive" className="px-2.5 py-2 bg-red-50 border border-red-200 rounded-md text-xs text-danger">
+                {addFeedError}
+                <button
+                  type="button"
+                  onClick={() => setAddFeedError(null)}
+                  className="ml-2 text-text-sub hover:text-text-primary"
+                >
+                  dismiss
+                </button>
+              </div>
+            )}
             {addFeedResult && (
               <div className="px-2.5 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-xs">
                 <p className="text-emerald-800 font-semibold truncate">{addFeedResult.title || addFeedResult.url}</p>
@@ -450,6 +508,29 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
                 <p className="text-emerald-800 mt-1">
                   {addFeedResult.articleCount} article{addFeedResult.articleCount === 1 ? '' : 's'} fetched
                 </p>
+                <div className="flex gap-1.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelect({ type: 'feed', feedId: addFeedResult.id });
+                      setShowAddPanel(false);
+                      setAddFeedResult(null);
+                    }}
+                    className="px-2.5 py-1 bg-accent text-white rounded-md text-[11px] font-semibold hover:bg-accent-hover transition-colors"
+                  >
+                    Read articles
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddFeedResult(null);
+                      requestAnimationFrame(() => addFeedInputRef.current?.focus());
+                    }}
+                    className="px-2.5 py-1 bg-white border border-border rounded-md text-[11px] text-text-sub hover:text-text-primary hover:border-accent transition-colors"
+                  >
+                    Add another
+                  </button>
+                </div>
               </div>
             )}
 
@@ -475,11 +556,16 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
             <button
               type="submit"
               disabled={isAddFeedBusy}
-              className="px-3 py-1.5 bg-accent text-white rounded-md text-xs font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 bg-accent text-white rounded-md text-xs font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-1.5"
             >
+              {isAddFeedBusy && (
+                <svg aria-hidden="true" focusable="false" className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
               {isAddFeedBusy ? 'Adding...' : discoverPreview && discoverPreview.length > 1 ? 'Add Selected Feed' : 'Add Feed'}
             </button>
-            {addFeed.isError && <p className="text-danger text-xs">Failed to add feed</p>}
           </form>
 
           {/* Folder creation */}
