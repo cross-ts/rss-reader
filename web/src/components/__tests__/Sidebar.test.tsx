@@ -421,6 +421,141 @@ describe('Sidebar', () => {
     expect(screen.getByText('JSON')).toBeInTheDocument();
   });
 
+  it('shows inline error with specific message when discover fails', async () => {
+    mockApi.discoverFeed.mockRejectedValue(new Error('HTTP 422: no feed found at this URL'));
+
+    renderSidebar({ openAddPanelToken: 1 });
+    await screen.findAllByText('Add Feed');
+
+    const input = screen.getByPlaceholderText('Site or feed URL');
+    fireEvent.change(input, { target: { value: 'https://example.com' } });
+    fireEvent.submit(input.closest('form')!);
+
+    expect(await screen.findByText('no feed found at this URL')).toBeInTheDocument();
+  });
+
+  it('shows inline error with specific message when addFeed fails', async () => {
+    mockApi.discoverFeed.mockResolvedValue([
+      { feedUrl: 'https://example.com/feed.xml', title: 'Example Feed' },
+    ]);
+    mockApi.createFeed.mockRejectedValue(new Error('HTTP 500: something went wrong upstream'));
+
+    renderSidebar({ openAddPanelToken: 1 });
+    await screen.findAllByText('Add Feed');
+
+    const input = screen.getByPlaceholderText('Site or feed URL');
+    fireEvent.change(input, { target: { value: 'https://example.com/feed.xml' } });
+    fireEvent.submit(input.closest('form')!);
+
+    expect(await screen.findByText('something went wrong upstream')).toBeInTheDocument();
+  });
+
+  it('dismisses the inline add-feed error', async () => {
+    mockApi.discoverFeed.mockRejectedValue(new Error('HTTP 422: bad url'));
+
+    renderSidebar({ openAddPanelToken: 1 });
+    await screen.findAllByText('Add Feed');
+
+    const input = screen.getByPlaceholderText('Site or feed URL');
+    fireEvent.change(input, { target: { value: 'https://example.com' } });
+    fireEvent.submit(input.closest('form')!);
+
+    expect(await screen.findByText('bad url')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('dismiss'));
+    expect(screen.queryByText('bad url')).not.toBeInTheDocument();
+  });
+
+  it('shows "Read articles" and "Add another" after a successful add, and Read articles selects the feed', async () => {
+    const onSelect = vi.fn();
+    mockApi.discoverFeed.mockResolvedValue([
+      { feedUrl: 'https://example.com/feed.xml', title: 'Example Feed' },
+    ]);
+    mockApi.createFeed.mockResolvedValue({
+      id: 99, title: 'Example Feed', url: 'https://example.com/feed.xml',
+      siteUrl: 'https://example.com', folder: null, articleCount: 5,
+    });
+
+    renderSidebar({ openAddPanelToken: 1, onSelect });
+    await screen.findAllByText('Add Feed');
+
+    const input = screen.getByPlaceholderText('Site or feed URL');
+    fireEvent.change(input, { target: { value: 'https://example.com/feed.xml' } });
+    fireEvent.submit(input.closest('form')!);
+
+    expect(await screen.findByText('Read articles')).toBeInTheDocument();
+    expect(screen.getByText('Add another')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Read articles'));
+    expect(onSelect).toHaveBeenCalledWith({ type: 'feed', feedId: 99 });
+
+    // Panel should close and success state clear
+    expect(screen.queryByText('Read articles')).not.toBeInTheDocument();
+  });
+
+  it('"Add another" clears the success state and keeps the panel open', async () => {
+    mockApi.discoverFeed.mockResolvedValue([
+      { feedUrl: 'https://example.com/feed.xml', title: 'Example Feed' },
+    ]);
+    mockApi.createFeed.mockResolvedValue({
+      id: 99, title: 'Example Feed', url: 'https://example.com/feed.xml',
+      siteUrl: 'https://example.com', folder: null, articleCount: 5,
+    });
+
+    renderSidebar({ openAddPanelToken: 1 });
+    await screen.findAllByText('Add Feed');
+
+    const input = screen.getByPlaceholderText('Site or feed URL');
+    fireEvent.change(input, { target: { value: 'https://example.com/feed.xml' } });
+    fireEvent.submit(input.closest('form')!);
+
+    expect(await screen.findByText('Add another')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Add another'));
+
+    expect(screen.queryByText('Read articles')).not.toBeInTheDocument();
+    // Panel is still open
+    expect(screen.getByPlaceholderText('Site or feed URL')).toBeInTheDocument();
+  });
+
+  it('detects a duplicate feed URL (single candidate) without calling createFeed', async () => {
+    mockApi.discoverFeed.mockResolvedValue([
+      { feedUrl: 'https://tech.com/feed', title: 'Tech Blog Feed' },
+    ]);
+    mockApi.createFeed.mockClear();
+
+    renderSidebar({ openAddPanelToken: 1 });
+    await screen.findAllByText('Add Feed');
+
+    const input = screen.getByPlaceholderText('Site or feed URL');
+    fireEvent.change(input, { target: { value: 'https://tech.com/feed' } });
+    fireEvent.submit(input.closest('form')!);
+
+    expect(await screen.findByText(/already subscribed/)).toBeInTheDocument();
+    expect(mockApi.createFeed).not.toHaveBeenCalled();
+  });
+
+  it('detects a duplicate feed URL (multiple candidates, selected) without calling createFeed', async () => {
+    mockApi.discoverFeed.mockResolvedValue([
+      { feedUrl: 'https://tech.com/feed', title: 'Tech Blog Feed', type: 'application/rss+xml' },
+      { feedUrl: 'https://example.com/atom.xml', title: 'Atom Feed', type: 'application/atom+xml' },
+    ]);
+    mockApi.createFeed.mockClear();
+
+    renderSidebar({ openAddPanelToken: 1 });
+    await screen.findAllByText('Add Feed');
+
+    const input = screen.getByPlaceholderText('Site or feed URL');
+    fireEvent.change(input, { target: { value: 'https://example.com' } });
+    fireEvent.submit(input.closest('form')!);
+
+    // Wait for candidates, then select the first (duplicate) candidate and submit again.
+    expect(await screen.findByText('Tech Blog Feed')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Tech Blog Feed'));
+    fireEvent.submit(input.closest('form')!);
+
+    expect(await screen.findByText(/already subscribed/)).toBeInTheDocument();
+    expect(mockApi.createFeed).not.toHaveBeenCalled();
+  });
+
   it('selects feed inside expanded folder', async () => {
     const onSelect = vi.fn();
     renderSidebar({ onSelect });
