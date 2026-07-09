@@ -3,5 +3,5 @@
     "go-lsp@cross-ts-dotfiles": true,
     "typescript-lsp@cross-ts-dotfiles": true
   },
-  "agent": "Orchestrator"
+  "agent": "orchestrator"
 }
