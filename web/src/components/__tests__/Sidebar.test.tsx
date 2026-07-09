@@ -556,6 +556,36 @@ describe('Sidebar', () => {
     expect(mockApi.createFeed).not.toHaveBeenCalled();
   });
 
+  it('blocks add-feed submission while feeds are still loading and shows inline message', async () => {
+    mockApi.getFolders.mockResolvedValue(testFolders);
+    mockApi.getFeeds.mockReturnValue(new Promise(() => {})); // never resolves
+    mockApi.discoverFeed.mockClear();
+
+    render(<Sidebar {...defaultProps} openAddPanelToken={1} />, { wrapper: createWrapper() });
+    await screen.findAllByText('Add Feed');
+
+    const input = screen.getByPlaceholderText('Site or feed URL');
+    fireEvent.change(input, { target: { value: 'https://example.com' } });
+    fireEvent.submit(input.closest('form')!);
+
+    expect(await screen.findByText('Loading feeds, please try again in a moment.')).toBeInTheDocument();
+    expect(mockApi.discoverFeed).not.toHaveBeenCalled();
+  });
+
+  it('renders the inline add-feed error with role="alert"', async () => {
+    mockApi.discoverFeed.mockRejectedValue(new Error('HTTP 422: bad url'));
+
+    renderSidebar({ openAddPanelToken: 1 });
+    await screen.findAllByText('Add Feed');
+
+    const input = screen.getByPlaceholderText('Site or feed URL');
+    fireEvent.change(input, { target: { value: 'https://example.com' } });
+    fireEvent.submit(input.closest('form')!);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('bad url');
+  });
+
   it('selects feed inside expanded folder', async () => {
     const onSelect = vi.fn();
     renderSidebar({ onSelect });

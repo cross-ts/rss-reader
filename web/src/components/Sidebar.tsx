@@ -256,6 +256,14 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
     if (!inputURL) return;
     setAddFeedError(null);
 
+    // Duplicate detection relies on the `feeds` list; while it's still
+    // loading it's empty, so a real duplicate would slip through as a
+    // fresh create. Block submission until feeds have loaded.
+    if (feedsLoading) {
+      setAddFeedError('Loading feeds, please try again in a moment.');
+      return;
+    }
+
     if (discoverPreview && discoverPreview.length > 1) {
       const selectedCandidate = discoverPreview[selectedCandidateIndex];
       if (!selectedCandidate) return;
@@ -482,7 +490,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
               </div>
             )}
             {addFeedError && (
-              <div className="px-2.5 py-2 bg-red-50 border border-red-200 rounded-md text-xs text-danger">
+              <div role="alert" aria-live="assertive" className="px-2.5 py-2 bg-red-50 border border-red-200 rounded-md text-xs text-danger">
                 {addFeedError}
                 <button
                   type="button"
@@ -551,7 +559,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
               className="px-3 py-1.5 bg-accent text-white rounded-md text-xs font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-1.5"
             >
               {isAddFeedBusy && (
-                <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                <svg aria-hidden="true" focusable="false" className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
