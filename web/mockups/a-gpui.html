@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Mockup A — gpui / Zed style</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg: #16161d;
+    --panel: #1b1b23;
+    --panel-2: #21212b;
+    --border: #2a2a36;
+    --text: #d6d6dd;
+    --text-dim: #8f8fa3;
+    --text-mute: #5c5c70;
+    --accent: #74ade8;
+    --accent-dim: rgba(116,173,232,.12);
+    --unread: #e0af68;
+    --font: "Zed Plex Sans","IBM Plex Sans",-apple-system,"Segoe UI",sans-serif;
+    --mono: "Zed Plex Mono","IBM Plex Mono",ui-monospace,monospace;
+  }
+  body { font-family:var(--font); background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; font-size:13px; -webkit-font-smoothing:antialiased; }
+
+  /* Title bar */
+  .titlebar { height:34px; background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 12px; gap:12px; flex-shrink:0; }
+  .traffic { display:flex; gap:8px; }
+  .traffic span { width:12px; height:12px; border-radius:50%; background:#3a3a46; }
+  .titlebar .crumb { font-family:var(--mono); font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:6px; }
+  .crumb b { color:var(--text); font-weight:500; }
+  .crumb .sep { color:var(--text-mute); }
+  .titlebar .right { margin-left:auto; display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:11px; color:var(--text-mute); }
+  .kbd { border:1px solid var(--border); border-radius:4px; padding:1px 5px; font-family:var(--mono); font-size:10px; color:var(--text-dim); background:var(--panel-2); }
+
+  .main { flex:1; display:flex; min-height:0; }
+
+  /* Sidebar */
+  .sidebar { width:230px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+  .sidebar .search { margin:8px; padding:5px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text-mute); font-family:var(--mono); font-size:11px; display:flex; justify-content:space-between; align-items:center; }
+  .tree { flex:1; overflow:hidden; padding:2px 4px; }
+  .row { display:flex; align-items:center; gap:7px; padding:3px 8px; border-radius:5px; color:var(--text-dim); cursor:default; line-height:1.5; }
+  .row.sel { background:var(--accent-dim); color:var(--accent); }
+  .row:hover:not(.sel) { background:var(--panel-2); }
+  .row .icon { width:13px; text-align:center; opacity:.8; font-size:11px; }
+  .row .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .count { font-family:var(--mono); font-size:10px; color:var(--text-mute); }
+  .row.sel .count { color:var(--accent); }
+  .section { padding:10px 10px 3px; font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-mute); }
+  .indent { padding-left:24px; }
+  .statusline { height:26px; border-top:1px solid var(--border); display:flex; align-items:center; padding:0 10px; gap:10px; font-family:var(--mono); font-size:10px; color:var(--text-mute); }
+  .dot-ok { width:6px; height:6px; border-radius:50%; background:#87c05f; }
+
+  /* List */
+  .list { width:340px; border-right:1px solid var(--border); display:flex; flex-direction:column; background:var(--bg); flex-shrink:0; }
+  .list-head { height:34px; border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 12px; gap:8px; flex-shrink:0; }
+  .list-head .title { font-weight:600; font-size:12px; }
+  .list-head .n { font-family:var(--mono); font-size:10px; color:var(--text-mute); }
+  .list-head .spacer { flex:1; }
+  .chip { font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:4px; border:1px solid var(--border); color:var(--text-dim); }
+  .chip.on { border-color:var(--accent); color:var(--accent); background:var(--accent-dim); }
+  .items { flex:1; overflow:hidden; }
+  .item { padding:8px 12px; border-bottom:1px solid #1e1e27; display:flex; gap:9px; }
+  .item .u { width:7px; height:7px; border-radius:50%; margin-top:5px; flex-shrink:0; background:var(--unread); }
+  .item.read .u { background:transparent; border:1px solid var(--border); }
+  .item.sel { background:var(--accent-dim); box-shadow:inset 2px 0 0 var(--accent); }
+  .item h4 { font-size:12.5px; font-weight:500; line-height:1.4; margin-bottom:2px; }
+  .item.read h4 { color:var(--text-dim); font-weight:400; }
+  .item .meta { font-family:var(--mono); font-size:10px; color:var(--text-mute); display:flex; gap:8px; }
+  .item .meta .src { color:var(--text-dim); }
+  .item p { font-size:11px; color:var(--text-mute); line-height:1.5; margin-top:3px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+  /* Reader */
+  .reader { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .reader-head { height:34px; border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 14px; gap:10px; font-family:var(--mono); font-size:11px; color:var(--text-mute); flex-shrink:0; }
+  .reader-head .actions { margin-left:auto; display:flex; gap:6px; }
+  .btn { border:1px solid var(--border); background:var(--panel); color:var(--text-dim); border-radius:5px; padding:3px 9px; font-family:var(--mono); font-size:10px; }
+  .btn.primary { border-color:var(--accent); color:var(--accent); background:var(--accent-dim); }
+  .article { flex:1; overflow:hidden; padding:36px 48px; max-width:780px; }
+  .article .feedname { font-family:var(--mono); font-size:11px; color:var(--accent); margin-bottom:10px; }
+  .article h1 { font-size:22px; font-weight:600; line-height:1.35; margin-bottom:10px; letter-spacing:-.01em; }
+  .article .byline { font-family:var(--mono); font-size:11px; color:var(--text-mute); margin-bottom:26px; padding-bottom:14px; border-bottom:1px solid var(--border); }
+  .article p { font-size:14px; line-height:1.75; color:#c2c2cc; margin-bottom:16px; }
+  .article pre { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:12px 14px; font-family:var(--mono); font-size:12px; color:#9ece6a; margin-bottom:16px; }
+</style>
+</head>
+<body>
+  <div class="titlebar">
+    <div class="traffic"><span></span><span></span><span></span></div>
+    <div class="crumb"><b>rss-reader</b><span class="sep">›</span>Tech<span class="sep">›</span>The Rust Blog</div>
+    <div class="right"><span class="kbd">⌘K</span><span>command palette</span></div>
+  </div>
+  <div class="main">
+    <aside class="sidebar">
+      <div class="search"><span>Search articles…</span><span class="kbd">/</span></div>
+      <div class="tree">
+        <div class="row"><span class="icon">☰</span><span class="name">All Articles</span><span class="count">128</span></div>
+        <div class="section">Folders</div>
+        <div class="row"><span class="icon">▾</span><span class="name">Tech</span><span class="count">86</span></div>
+        <div class="row sel indent"><span class="icon">●</span><span class="name">The Rust Blog</span><span class="count">12</span></div>
+        <div class="row indent"><span class="icon">●</span><span class="name">Zed Blog</span><span class="count">4</span></div>
+        <div class="row indent"><span class="icon">●</span><span class="name">Hacker News</span><span class="count">58</span></div>
+        <div class="row indent"><span class="icon">●</span><span class="name">lobste.rs</span><span class="count">12</span></div>
+        <div class="row"><span class="icon">▸</span><span class="name">Design</span><span class="count">23</span></div>
+        <div class="row"><span class="icon">▸</span><span class="name">News</span><span class="count">19</span></div>
+        <div class="section">No Folder</div>
+        <div class="row"><span class="icon">●</span><span class="name">Simon Willison's Weblog</span></div>
+        <div class="row"><span class="icon">●</span><span class="name">daring fireball</span></div>
+      </div>
+      <div class="statusline"><span class="dot-ok"></span><span>synced 12:04</span><span style="margin-left:auto">18 feeds</span></div>
+    </aside>
+
+    <section class="list">
+      <div class="list-head">
+        <span class="title">The Rust Blog</span><span class="n">12 unread</span>
+        <span class="spacer"></span>
+        <span class="chip on">unread</span><span class="chip">mark all</span>
+      </div>
+      <div class="items">
+        <div class="item sel">
+          <span class="u"></span>
+          <div><h4>Announcing Rust 1.88.0</h4>
+          <div class="meta"><span class="src">The Rust Blog</span><span>2h ago</span></div>
+          <p>The Rust team is happy to announce a new version of Rust, 1.88.0. Rust is a programming language empowering everyone…</p></div>
+        </div>
+        <div class="item">
+          <span class="u"></span>
+          <div><h4>Async closures stabilized in the 2024 edition</h4>
+          <div class="meta"><span class="src">The Rust Blog</span><span>5h ago</span></div>
+          <p>Async closures have been one of the most requested features. Today we're stabilizing `async || {}` syntax…</p></div>
+        </div>
+        <div class="item">
+          <span class="u"></span>
+          <div><h4>cargo-script: RFC merged</h4>
+          <div class="meta"><span class="src">The Rust Blog</span><span>8h ago</span></div>
+          <p>Single-file Rust programs with embedded manifests are coming to stable cargo…</p></div>
+        </div>
+        <div class="item read">
+          <span class="u"></span>
+          <div><h4>This Week in Rust #556</h4>
+          <div class="meta"><span class="src">The Rust Blog</span><span>1d ago</span></div>
+          <p>Hello and welcome to another issue of This Week in Rust! Rust is a systems language pursuing the trifecta…</p></div>
+        </div>
+        <div class="item read">
+          <span class="u"></span>
+          <div><h4>Improving borrow checker diagnostics</h4>
+          <div class="meta"><span class="src">The Rust Blog</span><span>2d ago</span></div>
+          <p>Error messages around lifetimes have long been a pain point. The new polonius-based analysis…</p></div>
+        </div>
+        <div class="item">
+          <span class="u"></span>
+          <div><h4>GATs in practice: two years later</h4>
+          <div class="meta"><span class="src">The Rust Blog</span><span>3d ago</span></div>
+          <p>Generic associated types shipped in 1.65. Here's how the ecosystem has adopted them…</p></div>
+        </div>
+        <div class="item read">
+          <span class="u"></span>
+          <div><h4>Rust Foundation annual report</h4>
+          <div class="meta"><span class="src">The Rust Blog</span><span>4d ago</span></div>
+          <p>A look back at the past year of the Rust Foundation's work supporting maintainers…</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="reader">
+      <div class="reader-head">
+        <span>j/k navigate</span><span>·</span><span>o open</span><span>·</span><span>m read</span>
+        <div class="actions"><span class="btn">↗ open</span><span class="btn">✓ read</span><span class="btn primary">next unread ⇥</span></div>
+      </div>
+      <div class="article">
+        <div class="feedname">The Rust Blog</div>
+        <h1>Announcing Rust 1.88.0</h1>
+        <div class="byline">rust-lang.org · 2026-07-14 10:02 · 4 min read</div>
+        <p>The Rust team is happy to announce a new version of Rust, 1.88.0. Rust is a programming language empowering everyone to build reliable and efficient software.</p>
+        <p>If you have a previous version of Rust installed via rustup, you can get 1.88.0 with:</p>
+        <pre>$ rustup update stable</pre>
+        <p>This release brings let-chains to the 2024 edition, naked functions, and a number of quality-of-life improvements to cargo. Let-chains allow you to combine multiple <code>let</code> bindings and boolean conditions in a single <code>if</code> expression, removing a long-standing papercut.</p>
+        <p>As always, this release also includes stabilized APIs, performance improvements across the compiler, and updated tooling. See the detailed release notes for the full list of changes.</p>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
