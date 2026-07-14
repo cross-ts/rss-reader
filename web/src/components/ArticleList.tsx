@@ -112,9 +112,9 @@ export function ArticleList({
   if (articles.length === 0) {
     if (!hasFeeds) {
       return (
-        <div className="flex-1 flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.12),_transparent_40%),linear-gradient(180deg,_#ffffff_0%,_#fff9f0_100%)]">
+        <div className="flex-1 flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(116,173,232,0.10),_transparent_45%),linear-gradient(180deg,_#16161d_0%,_#1b1b23_100%)]">
           <div className="w-full max-w-xl px-8 text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-accent/15">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface shadow-card ring-1 ring-accent/15">
               <svg className="h-8 w-8 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h8m3 0v6m0 0h6m-6 0l6-6M9 10h4M9 14h6" />
               </svg>
@@ -312,7 +312,7 @@ function ArticleRow({
       className={[
         'w-full text-left flex items-center gap-3 px-5 border-b border-border transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
         compact ? 'py-2' : 'py-3',
-        selected ? 'bg-accent-light' : 'hover:bg-bg-alt',
+        selected ? 'bg-accent-light shadow-[inset_2px_0_0_#74ade8]' : 'hover:bg-surface-2',
       ].join(' ')}
     >
       {/* Fixed-width thumbnail / favicon / colored initial */}
@@ -342,7 +342,7 @@ function ArticleRow({
         )}
         {/* Unread indicator dot on thumbnail corner */}
         {!read && (
-          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-accent ring-1 ring-white" />
+          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-unread ring-1 ring-bg" />
         )}
       </div>
 
@@ -357,7 +357,7 @@ function ArticleRow({
         ].join(' ')}>
           {decodedTitle}
         </h3>
-        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-text-sub">
+        <div className="flex items-center gap-1.5 mt-0.5 font-mono text-[10px] text-text-sub">
           {isSingleFeed ? (
             <>
               {article.author && (
@@ -375,7 +375,7 @@ function ArticleRow({
       </div>
 
       {/* Date */}
-      <span className="flex-shrink-0 text-[11px] text-text-muted">
+      <span className="flex-shrink-0 font-mono text-[10px] text-text-muted">
         {relativeTime(article.publishedAt)}
       </span>
     </button>

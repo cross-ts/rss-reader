@@ -75,7 +75,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
   const isValidUrl = /^https?:\/\//i.test(article.url);
 
   return (
-    <div className="flex-1 flex flex-col bg-white overflow-hidden">
+    <div className="flex-1 flex flex-col bg-bg overflow-hidden">
       {/* Article header */}
       <div className="flex-shrink-0 border-b border-border px-4 py-4 sm:px-6 sm:py-4 lg:px-8">
         <div className="max-w-3xl mx-auto">
@@ -151,7 +151,7 @@ export function ArticleView({ article, onClose, onMarkRead, isRead, onToggleRead
           </h1>
 
           {/* Row 3: Meta info + Open original */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm mt-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs mt-2">
             <span className="text-accent font-medium">{article.feedTitle}</span>
             {article.author && (
               <>
