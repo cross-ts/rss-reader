@@ -422,7 +422,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
 
       {/* Error display */}
       {deleteError && (
-        <div className="mx-3 mb-2 px-3 py-2 bg-danger/10 border border-danger/30 rounded-lg text-xs text-danger">
+        <div className="mx-3 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-danger">
           {deleteError}
           <button onClick={() => setDeleteError(null)} className="ml-2 text-text-sub hover:text-text-primary">dismiss</button>
         </div>
@@ -454,7 +454,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
                   }
                 }}
                 disabled={isCreatingFeed}
-                className="flex-1 min-w-0 px-2.5 py-1.5 bg-bg border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+                className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
             </div>
 
@@ -473,7 +473,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
                       'w-full text-left px-2.5 py-2 rounded-md text-xs transition-colors',
                       i === selectedCandidateIndex
                         ? 'bg-accent-light border border-accent/20'
-                        : 'bg-bg border border-border hover:border-accent/20',
+                        : 'bg-white border border-border hover:border-accent/20',
                     ].join(' ')}
                   >
                     <p className="font-semibold truncate">{candidate.title ?? '(Untitled)'}</p>
@@ -490,7 +490,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
               </div>
             )}
             {addFeedError && (
-              <div role="alert" aria-live="assertive" className="px-2.5 py-2 bg-danger/10 border border-danger/30 rounded-md text-xs text-danger">
+              <div role="alert" aria-live="assertive" className="px-2.5 py-2 bg-red-50 border border-red-200 rounded-md text-xs text-danger">
                 {addFeedError}
                 <button
                   type="button"
@@ -502,10 +502,10 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
               </div>
             )}
             {addFeedResult && (
-              <div className="px-2.5 py-2 bg-accent-light border border-accent/30 rounded-md text-xs">
-                <p className="text-text-primary font-semibold truncate">{addFeedResult.title || addFeedResult.url}</p>
-                <p className="text-text-sub truncate text-[11px]">{addFeedResult.url}</p>
-                <p className="text-text-primary mt-1">
+              <div className="px-2.5 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-xs">
+                <p className="text-emerald-800 font-semibold truncate">{addFeedResult.title || addFeedResult.url}</p>
+                <p className="text-emerald-700/80 truncate text-[11px]">{addFeedResult.url}</p>
+                <p className="text-emerald-800 mt-1">
                   {addFeedResult.articleCount} article{addFeedResult.articleCount === 1 ? '' : 's'} fetched
                 </p>
                 <div className="flex gap-1.5 mt-2">
@@ -526,7 +526,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
                       setAddFeedResult(null);
                       requestAnimationFrame(() => addFeedInputRef.current?.focus());
                     }}
-                    className="px-2.5 py-1 bg-bg border border-border rounded-md text-[11px] text-text-sub hover:text-text-primary hover:border-accent transition-colors"
+                    className="px-2.5 py-1 bg-white border border-border rounded-md text-[11px] text-text-sub hover:text-text-primary hover:border-accent transition-colors"
                   >
                     Add another
                   </button>
@@ -538,7 +538,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
               value={feedFolder}
               onChange={(e) => setFeedFolder(e.target.value)}
               disabled={isCreatingFeed}
-              className="w-full px-2.5 py-1.5 bg-bg border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+              className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
             >
               <option value="">No folder</option>
               {[...folderNames].map((name) => (
@@ -551,7 +551,7 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
               value={newFolderForFeed}
               onChange={(e) => setNewFolderForFeed(e.target.value)}
               disabled={isCreatingFeed}
-              className="w-full px-2.5 py-1.5 bg-bg border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+              className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
             />
             <button
               type="submit"
@@ -580,12 +580,12 @@ export function Sidebar({ selection, onSelect, unreadCounts, onFeedAdding, addPa
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 required
-                className="flex-1 min-w-0 px-2.5 py-1.5 bg-bg border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+                className="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
               <button
                 type="submit"
                 disabled={addFolder.isPending}
-                className="px-3 py-1.5 bg-bg border border-border rounded-md text-xs text-text-sub hover:text-text-primary hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-1.5 bg-white border border-border rounded-md text-xs text-text-sub hover:text-text-primary hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {addFolder.isPending ? '...' : 'Create'}
               </button>
@@ -885,7 +885,7 @@ function FeedRow({
         onClick={onSelect}
         aria-current={selected ? 'page' : undefined}
       >
-        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-unread" />
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-orange-400" />
         <span className="truncate">{feed.title || feed.url}</span>
         {unreadCount > 0 && (
           <span className="flex-shrink-0 text-text-sub text-[10px] font-medium ml-auto mr-1">
@@ -904,7 +904,7 @@ function FeedRow({
           }}
           onBlur={onCloseMoveSelect}
           aria-label={`Move feed "${feed.title || feed.url}" to folder`}
-          className="flex-shrink-0 mr-2 max-w-[110px] px-1 py-1 bg-bg border border-border rounded-md text-[11px] text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+          className="flex-shrink-0 mr-2 max-w-[110px] px-1 py-1 bg-white border border-border rounded-md text-[11px] text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
         >
           <option value="">No folder</option>
           {folderNames.map((name) => (
@@ -959,7 +959,7 @@ function ConfirmDeleteModal({ type, name, onConfirm, onCancel }: ConfirmDeleteMo
       onClick={onCancel}
     >
       <div
-        className="bg-surface border border-border rounded-lg shadow-xl p-6 max-w-sm w-full mx-4"
+        className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -981,7 +981,7 @@ function ConfirmDeleteModal({ type, name, onConfirm, onCancel }: ConfirmDeleteMo
           <button
             autoFocus
             onClick={onCancel}
-            className="px-4 py-2 text-xs font-semibold text-text-primary bg-surface-2 border border-border rounded-lg hover:bg-surface-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            className="px-4 py-2 text-xs font-semibold text-text-primary bg-white border border-border rounded-lg hover:bg-surface-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
           >
             Cancel
           </button>

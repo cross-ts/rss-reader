@@ -48,13 +48,13 @@ export function Topbar({
   };
 
   return (
-    <div className="px-5 py-3 border-b border-border bg-surface flex-shrink-0">
+    <div className="px-5 py-3 border-b border-border bg-white flex-shrink-0">
       {/* Top row: title + last updated */}
       <div className="flex flex-wrap items-center gap-3 mb-3">
         {canToggleSidebar && onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface text-text-sub transition-colors hover:border-accent hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white text-text-sub transition-colors hover:border-accent hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
             aria-label={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
             aria-pressed={isSidebarOpen}
           >
@@ -65,7 +65,7 @@ export function Topbar({
         )}
         <h1 className="min-w-0 text-base font-semibold text-text-primary truncate">{viewTitle}</h1>
         {lastUpdated && (
-          <span className="flex-shrink-0 font-mono text-[10px] text-text-muted" title="Last updated">
+          <span className="flex-shrink-0 text-[11px] text-text-muted" title="Last updated">
             Updated {lastUpdated}
           </span>
         )}
@@ -102,7 +102,7 @@ export function Topbar({
           </div>
           {/* Search hit count + scope */}
           {hasActiveSearch && (
-            <div className="flex items-center gap-1.5 font-mono text-[10px] text-text-sub flex-shrink-0">
+            <div className="flex items-center gap-1.5 text-[11px] text-text-sub flex-shrink-0">
               {searchHitCount != null && (
                 <span className="font-medium">{searchHitCount} hit{searchHitCount !== 1 ? 's' : ''}</span>
               )}
@@ -125,7 +125,7 @@ export function Topbar({
               'px-3 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
               !unreadOnly
                 ? 'bg-accent text-white'
-                : 'bg-surface text-text-sub hover:bg-surface-2 hover:text-text-primary',
+                : 'bg-white text-text-sub hover:bg-surface-2 hover:text-text-primary',
             ].join(' ')}
             aria-label="Show all articles"
             aria-pressed={!unreadOnly}
@@ -138,7 +138,7 @@ export function Topbar({
               'px-3 py-1.5 text-xs font-medium transition-colors border-l border-border focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
               unreadOnly
                 ? 'bg-accent text-white'
-                : 'bg-surface text-text-sub hover:bg-surface-2 hover:text-text-primary',
+                : 'bg-white text-text-sub hover:bg-surface-2 hover:text-text-primary',
             ].join(' ')}
             aria-label="Show unread only"
             aria-pressed={unreadOnly}
@@ -151,7 +151,7 @@ export function Topbar({
         <button
           onClick={onMarkAllRead}
           disabled={unreadCount === 0}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface text-text-sub border border-border hover:border-danger hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px] focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-text-sub border border-border hover:border-danger hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px] focus-visible:ring-2 focus-visible:ring-danger focus-visible:outline-none"
           aria-label={unreadCount > 0 ? `Mark ${unreadCount} as read` : 'Mark all as read'}
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -164,7 +164,7 @@ export function Topbar({
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface text-text-sub border border-border hover:border-accent hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[36px] focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white text-text-sub border border-border hover:border-accent hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[36px] focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
           aria-label="Refresh feeds"
         >
           <svg className={['w-3.5 h-3.5', isRefreshing ? 'animate-spin' : ''].join(' ')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

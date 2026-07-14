@@ -22,7 +22,7 @@
   100% { background-position: 200% 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #1b1b23 25%, #21212b 50%, #1b1b23 75%);
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 6px;
@@ -30,7 +30,7 @@
 
 /* ---- Help overlay backdrop ---- */
 .help-overlay-backdrop {
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 /* ---- Global resets ---- */
@@ -38,13 +38,12 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  font-family: "Zed Plex Sans", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background: #16161d;
-  color: #d6d6dd;
-  -webkit-font-smoothing: antialiased;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: #ffffff;
+  color: #1f2937;
 }
 
-/* ---- Scrollbar styling (dark theme) ---- */
+/* ---- Scrollbar styling (light theme) ---- */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -53,11 +52,11 @@ html, body, #root {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a36;
+  background: #d1d5db;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a46;
+  background: #9ca3af;
 }
 
 /* ---- article-view-body (sanitized HTML content) ---- */
@@ -65,7 +64,7 @@ html, body, #root {
   font-size: 16px;
   line-height: 1.8;
   word-break: break-word;
-  color: #c2c2cc;
+  color: #374151;
 }
 
 .article-view-body > h1:first-child,
@@ -91,7 +90,7 @@ html, body, #root {
   margin: 1.4em 0 0.6em;
   font-weight: 700;
   line-height: 1.4;
-  color: #d6d6dd;
+  color: #1f2937;
 }
 
 .article-view-body h1 { font-size: 1.5em; }
@@ -99,45 +98,43 @@ html, body, #root {
 .article-view-body h3 { font-size: 1.15em; }
 
 .article-view-body a {
-  color: #74ade8;
+  color: #2563eb;
   text-decoration: none;
 }
 
 .article-view-body a:hover {
   text-decoration: underline;
-  color: #8fbef0;
+  color: #1d4ed8;
 }
 
 .article-view-body pre {
-  background: #1b1b23;
+  background: #f3f4f6;
   padding: 14px 18px;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow-x: auto;
   font-size: 13px;
   margin: 1em 0;
-  border: 1px solid #2a2a36;
-  color: #9ece6a;
-  font-family: "Zed Plex Mono", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, "Cascadia Code", Consolas, monospace;
+  border: 1px solid #e5e7eb;
+  font-family: ui-monospace, "SF Mono", Menlo, "Cascadia Code", Consolas, monospace;
 }
 
 .article-view-body code {
-  background: #1b1b23;
+  background: #f3f4f6;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.9em;
-  font-family: "Zed Plex Mono", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, "Cascadia Code", Consolas, monospace;
+  font-family: ui-monospace, "SF Mono", Menlo, "Cascadia Code", Consolas, monospace;
 }
 
 .article-view-body pre code {
   background: none;
   padding: 0;
-  color: inherit;
 }
 
 .article-view-body blockquote {
-  border-left: 3px solid #2a2a36;
+  border-left: 3px solid #d1d5db;
   padding-left: 16px;
-  color: #8f8fa3;
+  color: #6b7280;
   margin: 1em 0;
   font-style: italic;
 }
@@ -160,12 +157,12 @@ html, body, #root {
 
 .article-view-body th,
 .article-view-body td {
-  border: 1px solid #2a2a36;
+  border: 1px solid #e5e7eb;
   padding: 8px 12px;
   text-align: left;
 }
 
 .article-view-body th {
-  background: #1b1b23;
+  background: #f7f8fa;
   font-weight: 600;
 }

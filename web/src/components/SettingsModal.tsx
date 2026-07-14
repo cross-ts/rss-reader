@@ -76,7 +76,7 @@ export function SettingsModal({ onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-surface border border-border rounded-lg shadow-card-hover p-6 max-w-md w-full mx-4"
+        className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -98,7 +98,7 @@ export function SettingsModal({ onClose }: Props) {
                 value={host}
                 onChange={(e) => setHost(e.target.value)}
                 autoFocus
-                className="w-full px-2.5 py-1.5 bg-bg border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+                className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
             </SettingField>
 
@@ -108,7 +108,7 @@ export function SettingsModal({ onClose }: Props) {
                 type="number"
                 value={port}
                 onChange={(e) => setPort(e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-bg border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+                className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
             </SettingField>
 
@@ -118,7 +118,7 @@ export function SettingsModal({ onClose }: Props) {
                 type="number"
                 value={pollIntervalMinutes}
                 onChange={(e) => setPollIntervalMinutes(e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-bg border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+                className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
             </SettingField>
 
@@ -128,7 +128,7 @@ export function SettingsModal({ onClose }: Props) {
                 type="text"
                 value={frontendUrl}
                 onChange={(e) => setFrontendUrl(e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-bg border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+                className="w-full px-2.5 py-1.5 bg-white border border-border rounded-md text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
               />
             </SettingField>
 
@@ -159,7 +159,7 @@ export function SettingsModal({ onClose }: Props) {
         <div className="flex justify-end gap-2 mt-5">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-text-primary bg-surface-2 border border-border rounded-lg hover:bg-surface-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+            className="px-4 py-2 text-xs font-semibold text-text-primary bg-white border border-border rounded-lg hover:bg-surface-2 transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
           >
             Cancel
           </button>

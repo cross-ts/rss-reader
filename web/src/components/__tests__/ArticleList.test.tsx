@@ -205,7 +205,7 @@ describe('ArticleList', () => {
     const { container } = render(
       <ArticleList {...defaultProps} articles={[article]} />,
     );
-    const dot = container.querySelector('.bg-unread.rounded-full');
+    const dot = container.querySelector('.bg-accent.rounded-full');
     expect(dot).toBeInTheDocument();
   });
 
