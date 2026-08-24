@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // NormalizeURL prepends "https://" if the URL has no scheme.
@@ -79,6 +80,81 @@ func ValidateFeedURL(rawURL string) error {
 	}
 
 	return nil
+}
+
+// lookupIPAddr resolves a hostname to IP addresses. It is a package-level
+// variable (rather than a direct call to net.DefaultResolver.LookupIPAddr) so
+// that tests can substitute a fake resolver without real DNS access.
+var lookupIPAddr = net.DefaultResolver.LookupIPAddr
+
+// safeDialContext is a dial-time SSRF guard intended to be used as an
+// http.Transport's DialContext. It closes the DNS-rebinding TOCTOU gap left
+// by pre-flight checks such as ValidateFeedURL: those checks resolve the
+// hostname and validate the result, but the actual connection is made later
+// by a separate, unvalidated DNS resolution inside the transport. Here we
+// resolve (or parse an IP literal), validate every resolved address against
+// checkIP, and then dial one of the already-validated literal IP addresses
+// directly instead of the original hostname, so there is no second,
+// unchecked resolution step between validation and connection.
+//
+// Note: since the literal IP (not the hostname) is dialed, TLS SNI/certificate
+// verification is unaffected because http.Transport uses the request URL's
+// hostname for that regardless of which literal address was actually dialed.
+func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, fmt.Errorf("アドレスのパースに失敗: %w", err)
+	}
+
+	var validIPs []net.IP
+	if literal := net.ParseIP(host); literal != nil {
+		if err := checkIP(literal); err != nil {
+			return nil, err
+		}
+		validIPs = []net.IP{literal}
+	} else {
+		addrs, err := lookupIPAddr(ctx, host)
+		if err != nil {
+			return nil, fmt.Errorf("DNS 解決失敗: %s: %w", host, err)
+		}
+		if len(addrs) == 0 {
+			return nil, fmt.Errorf("DNS 解決結果が空です: %s", host)
+		}
+		for _, a := range addrs {
+			// Reject the whole resolution if ANY resolved address is unsafe —
+			// mirrors ValidateFeedURL's existing all-must-pass semantics, and
+			// prevents an attacker from hiding a private-IP dial target behind
+			// one public-looking address in the same DNS answer.
+			if err := checkIP(a.IP); err != nil {
+				return nil, err
+			}
+			validIPs = append(validIPs, a.IP)
+		}
+	}
+
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	// Dial the literal, pre-validated IPs — NOT the original hostname — so no
+	// second, unvalidated DNS resolution happens between check and connect
+	// (this is what closes the DNS-rebinding TOCTOU gap).
+	return dialFirstReachable(ctx, dialer, network, validIPs, port)
+}
+
+// dialFirstReachable dials each of the given (already-validated) IPs in order
+// on the given port, returning the first successful connection. This restores
+// the multi-address fallback behavior that dialing a hostname directly would
+// normally provide (Go's transport tries subsequent A/AAAA records if the
+// first is unreachable), which would otherwise be lost by pinning the dial to
+// a single literal IP. Returns the last encountered error if none succeed.
+func dialFirstReachable(ctx context.Context, dialer *net.Dialer, network string, ips []net.IP, port string) (net.Conn, error) {
+	var lastErr error
+	for _, ip := range ips {
+		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 // checkIP dispatches to checkIPv4 or checkIPv6 based on IP version.

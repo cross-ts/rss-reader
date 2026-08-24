@@ -68,6 +68,25 @@ func TestNewFeedClient(t *testing.T) {
 	}
 }
 
+// TestNewFeedClient_ProxyDisabled ensures the feed client's transport ignores
+// HTTP_PROXY/HTTPS_PROXY-style environment proxy configuration. If it didn't,
+// DialContext would validate/dial the proxy's address instead of the actual
+// feed target's address, letting the proxy resolve and connect to the real
+// target outside of safeDialContext's validation — silently bypassing the
+// SSRF guard.
+func TestNewFeedClient_ProxyDisabled(t *testing.T) {
+	client := NewFeedClient()
+
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", client.Transport)
+	}
+
+	if transport.Proxy != nil {
+		t.Error("expected feed client transport.Proxy to be nil (environment proxy must not be used)")
+	}
+}
+
 func TestNewProxyClient(t *testing.T) {
 	client := NewProxyClient()
 
@@ -77,6 +96,41 @@ func TestNewProxyClient(t *testing.T) {
 
 	if client.CheckRedirect != nil {
 		t.Error("expected CheckRedirect to be nil for proxy client")
+	}
+}
+
+// TestNewProxyClient_NoSSRFGuard ensures the proxy client does NOT use the
+// SSRF-guarded transport. Its only consumer proxies to the server-configured,
+// trusted FrontendURL (typically a localhost dev server), never to
+// user/request-supplied targets, so applying the loopback/private-range
+// denylist here would break that legitimate use case.
+func TestNewProxyClient_NoSSRFGuard(t *testing.T) {
+	client := NewProxyClient()
+
+	if client.Transport != nil {
+		t.Errorf("expected proxy client to use the default transport (nil), got %T", client.Transport)
+	}
+}
+
+// TestNewProxyClient_CanReachLoopback is a functional check confirming the
+// proxy client can actually connect to a loopback address, unlike the
+// SSRF-guarded feed client which would reject it.
+func TestNewProxyClient_CanReachLoopback(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+	defer ts.Close()
+
+	client := NewProxyClient()
+	resp, err := client.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("expected proxy client to reach loopback server, got error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 OK, got %d", resp.StatusCode)
 	}
 }
 

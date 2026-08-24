@@ -34,10 +34,28 @@ type FetchResult struct {
 	LastModified *string
 }
 
+// newSafeTransport returns an http.Transport that dials via safeDialContext,
+// which validates resolved IPs against the SSRF denylist at dial time (not
+// just during the pre-flight ValidateFeedURL check), closing the DNS-rebinding
+// TOCTOU gap between check and connect.
+func newSafeTransport() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.DialContext = safeDialContext
+	// Disable environment-based proxying (HTTP_PROXY/HTTPS_PROXY/etc). If a
+	// proxy were used, DialContext would see and validate the proxy's address
+	// instead of the actual feed target's address — the proxy would then
+	// resolve and connect to the real target with its own, unvalidated DNS
+	// resolution, silently bypassing the SSRF guard entirely.
+	t.Proxy = nil
+	return t
+}
+
 // NewFeedClient creates an HTTP client for feed fetching with redirect disabled.
+// It uses the SSRF-guarded transport because it fetches user-supplied feed URLs.
 func NewFeedClient() *http.Client {
 	return &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout:   15 * time.Second,
+		Transport: newSafeTransport(),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -45,6 +63,11 @@ func NewFeedClient() *http.Client {
 }
 
 // NewProxyClient creates an HTTP client for proxying with default redirect behavior.
+// It intentionally does NOT use the SSRF-guarded transport: its only consumer
+// proxies to the server-configured, trusted FrontendURL (typically a localhost
+// dev server), never to user/request-supplied targets, so there is no SSRF
+// exposure to guard against — and applying the loopback/private-range denylist
+// here would break the legitimate localhost proxy target.
 func NewProxyClient() *http.Client {
 	return &http.Client{
 		Timeout: 15 * time.Second,
