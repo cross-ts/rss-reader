@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -321,6 +322,23 @@ func TestParsePriorityFlagOverEnvOverFileOverDefault(t *testing.T) {
 	}
 	if cfg.PollIntervalMinutes != 20 {
 		t.Fatalf("expected poll interval from env (20), got %d", cfg.PollIntervalMinutes)
+	}
+}
+
+func TestParseEnvPollIntervalAboveMax(t *testing.T) {
+	saveRestoreArgs(t)
+
+	tmpDir := t.TempDir()
+	t.Setenv("POLL_INTERVAL_MINUTES", strconv.FormatUint(MaxPollIntervalMinutes+1, 10))
+
+	os.Args = []string{"test",
+		"-db", filepath.Join(tmpDir, "test.db"),
+		"-feeds", filepath.Join(tmpDir, "feeds.opml"),
+	}
+
+	_, err := Parse()
+	if err == nil {
+		t.Fatal("expected error for poll interval above max bound")
 	}
 }
 

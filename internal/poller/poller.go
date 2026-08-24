@@ -5,10 +5,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cross-ts/rss-reader/internal/config"
 	"github.com/cross-ts/rss-reader/internal/db"
 	"github.com/cross-ts/rss-reader/internal/fetcher"
 	"github.com/cross-ts/rss-reader/internal/opmlsync"
 )
+
+// defaultIntervalMinutes is the fallback interval used when the caller
+// provides a value that would overflow the time.Duration conversion.
+const defaultIntervalMinutes = 15
 
 // RunOnce fetches all feed targets and applies the results.
 func RunOnce(database *db.DB, client *http.Client) error {
@@ -49,6 +54,12 @@ func RunOnce(database *db.DB, client *http.Client) error {
 
 // Start launches the background poller that runs immediately and then on each tick.
 func Start(database *db.DB, client *http.Client, intervalMinutes uint64, syncer *opmlsync.Syncer) {
+	if intervalMinutes > config.MaxPollIntervalMinutes {
+		slog.Warn("poller: interval minutes out of range, falling back to default", "interval_minutes", intervalMinutes, "default", defaultIntervalMinutes)
+		intervalMinutes = defaultIntervalMinutes
+	}
+	interval := time.Duration(intervalMinutes) * time.Minute
+
 	// Run immediately in a goroutine.
 	go func() {
 		if syncer != nil {
@@ -63,7 +74,7 @@ func Start(database *db.DB, client *http.Client, intervalMinutes uint64, syncer 
 
 	// Start ticker goroutine.
 	go func() {
-		ticker := time.NewTicker(time.Duration(intervalMinutes) * time.Minute)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
 		for range ticker.C {

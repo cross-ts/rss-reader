@@ -94,8 +94,8 @@ func UpdateSettings(cfg *config.Config) http.HandlerFunc {
 			http.Error(w, "port must be between 1 and 65535", http.StatusBadRequest)
 			return
 		}
-		if body.PollIntervalMinutes != nil && *body.PollIntervalMinutes < 1 {
-			http.Error(w, "pollIntervalMinutes must be >= 1", http.StatusBadRequest)
+		if body.PollIntervalMinutes != nil && (*body.PollIntervalMinutes < 1 || *body.PollIntervalMinutes > config.MaxPollIntervalMinutes) {
+			http.Error(w, fmt.Sprintf("pollIntervalMinutes must be between 1 and %d", config.MaxPollIntervalMinutes), http.StatusBadRequest)
 			return
 		}
 		if body.FrontendURL != nil {
