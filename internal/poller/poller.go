@@ -2,18 +2,14 @@ package poller
 
 import (
 	"log/slog"
-	"math"
 	"net/http"
 	"time"
 
+	"github.com/cross-ts/rss-reader/internal/config"
 	"github.com/cross-ts/rss-reader/internal/db"
 	"github.com/cross-ts/rss-reader/internal/fetcher"
 	"github.com/cross-ts/rss-reader/internal/opmlsync"
 )
-
-// maxIntervalMinutes is the largest poll interval (in minutes) that can be
-// safely converted to a time.Duration without overflow.
-const maxIntervalMinutes = uint64(math.MaxInt64 / int64(time.Minute))
 
 // defaultIntervalMinutes is the fallback interval used when the caller
 // provides a value that would overflow the time.Duration conversion.
@@ -58,7 +54,7 @@ func RunOnce(database *db.DB, client *http.Client) error {
 
 // Start launches the background poller that runs immediately and then on each tick.
 func Start(database *db.DB, client *http.Client, intervalMinutes uint64, syncer *opmlsync.Syncer) {
-	if intervalMinutes > maxIntervalMinutes {
+	if intervalMinutes > config.MaxPollIntervalMinutes {
 		slog.Warn("poller: interval minutes out of range, falling back to default", "interval_minutes", intervalMinutes, "default", defaultIntervalMinutes)
 		intervalMinutes = defaultIntervalMinutes
 	}
