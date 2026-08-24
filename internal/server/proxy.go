@@ -28,48 +28,49 @@ func verifyProxyOrigin(frontendURL, targetURL string) bool {
 // staticHandler serves static files from the configured directory with SPA fallback.
 func staticHandler(state *AppState) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		baseDir, err := filepath.Abs(state.Config.StaticDir)
+		root, err := os.OpenRoot(state.Config.StaticDir)
 		if err != nil {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
+		defer root.Close()
 
-		// Clean the path to prevent directory traversal.
 		p := filepath.Clean(r.URL.Path)
 		if p == "/" {
 			p = "/index.html"
 		}
+		name := strings.TrimPrefix(filepath.FromSlash(p), string(os.PathSeparator))
 
-		filePath, err := filepath.Abs(filepath.Join(baseDir, filepath.FromSlash(p)))
-		if err != nil || !isWithinDir(filePath, baseDir) {
-			http.Error(w, "not found", http.StatusNotFound)
+		if serveRootFile(w, r, root, name) {
 			return
 		}
 
-		// Check if the file exists.
-		if _, err := os.Stat(filePath); err == nil {
-			http.ServeFile(w, r, filePath)
-			return
+		// SPA fallback: serve index.html for non-existent/inaccessible paths.
+		if !serveRootFile(w, r, root, "index.html") {
+			http.NotFound(w, r)
 		}
-
-		// SPA fallback: serve index.html for non-existent paths.
-		indexPath := filepath.Join(baseDir, "index.html")
-		http.ServeFile(w, r, indexPath)
 	})
 }
 
-// isWithinDir reports whether path is equal to base or is contained inside base,
-// using a boundary-safe comparison so that sibling directories sharing a string
-// prefix (e.g. "/var/static-evil" vs "/var/static") are not mistaken for containment.
-func isWithinDir(path, base string) bool {
-	rel, err := filepath.Rel(base, path)
+// serveRootFile attempts to open name within root and, if it is a regular
+// file, serves it. It reports whether the file was served. Access is
+// constrained to root at the OS level (os.Root rejects escapes, including
+// via symlinks that point outside the root), so no separate lexical
+// containment check is needed.
+func serveRootFile(w http.ResponseWriter, r *http.Request, root *os.Root, name string) bool {
+	f, err := root.Open(name)
 	if err != nil {
 		return false
 	}
-	if rel == "." {
-		return true
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil || info.IsDir() {
+		return false
 	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+
+	http.ServeContent(w, r, name, info.ModTime(), f)
+	return true
 }
 
 // proxyHandler reverse-proxies requests to the frontend dev server with SPA fallback.

@@ -135,54 +135,66 @@ func TestStaticHandler(t *testing.T) {
 	})
 
 	t.Run("path traversal attempt does not escape static dir", func(t *testing.T) {
-		// Create a sentinel file outside staticDir to prove it is never served.
+		// Create a sentinel file outside staticDir; a request path with enough
+		// "../" segments would, under the old vulnerable lexical-only check,
+		// have escaped staticDir to read this file.
 		outsideDir := t.TempDir()
 		secretContent := "top-secret"
 		if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte(secretContent), 0o644); err != nil {
 			t.Fatalf("write secret.txt: %v", err)
 		}
 
-		req := httptest.NewRequest("GET", "/../../../../../../etc/passwd", nil)
+		rel, err := filepath.Rel(staticDir, filepath.Join(outsideDir, "secret.txt"))
+		if err != nil {
+			t.Fatalf("compute relative path: %v", err)
+		}
+		traversalPath := "/" + filepath.ToSlash(rel)
+
+		req := httptest.NewRequest("GET", traversalPath, nil)
 		// Force the raw traversal path directly, bypassing any URL parsing
 		// normalization, to exercise the handler's own containment check.
-		req.URL.Path = "/../../../../../../etc/passwd"
+		req.URL.Path = traversalPath
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
 		body := rec.Body.String()
-		if strings.Contains(body, "root:") || strings.Contains(body, secretContent) {
-			t.Errorf("response body appears to contain content from outside staticDir: %q", body)
+		if strings.Contains(body, secretContent) {
+			t.Errorf("response body contains content from outside staticDir: %q", body)
 		}
-		// The response must either be a safe SPA fallback (contained within
-		// staticDir) or an explicit rejection - never a 500 from a panic.
-		if rec.Code == http.StatusInternalServerError {
-			t.Errorf("status = %d, unexpected internal error", rec.Code)
+		// os.Root rejects the escape, so root.Open fails and the handler
+		// falls through to the SPA fallback (index.html), not a 500.
+		if rec.Code != http.StatusOK || !strings.Contains(body, "SPA") {
+			t.Errorf("expected safe SPA fallback (200, index.html), got status = %d, body = %q", rec.Code, body)
 		}
 	})
-}
 
-func TestIsWithinDir(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
-		base string
-		want bool
-	}{
-		{name: "equal to base", path: "/var/static", base: "/var/static", want: true},
-		{name: "nested file", path: "/var/static/assets/main.js", base: "/var/static", want: true},
-		{name: "escapes via parent", path: "/var/etc/passwd", base: "/var/static", want: false},
-		{name: "sibling dir with shared prefix", path: "/var/static-evil/secret", base: "/var/static", want: false},
-		{name: "sibling dir with shared prefix, no separator", path: "/var/static-evil", base: "/var/static", want: false},
-	}
+	t.Run("symlink escape does not leak file outside static dir", func(t *testing.T) {
+		outsideDir := t.TempDir()
+		secretContent := "top-secret-via-symlink"
+		if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte(secretContent), 0o644); err != nil {
+			t.Fatalf("write secret.txt: %v", err)
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isWithinDir(tt.path, tt.base)
-			if got != tt.want {
-				t.Errorf("isWithinDir(%q, %q) = %v, want %v", tt.path, tt.base, got, tt.want)
-			}
-		})
-	}
+		symlinkPath := filepath.Join(staticDir, "escape")
+		if err := os.Symlink(outsideDir, symlinkPath); err != nil {
+			t.Fatalf("create symlink: %v", err)
+		}
+		t.Cleanup(func() { os.Remove(symlinkPath) })
+
+		req := httptest.NewRequest("GET", "/escape/secret.txt", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		body := rec.Body.String()
+		if strings.Contains(body, secretContent) {
+			t.Errorf("response body leaked content from symlink target outside staticDir: %q", body)
+		}
+		// os.Root rejects the symlink escape, so root.Open fails and the
+		// handler falls through to the SPA fallback (index.html), not a 500.
+		if rec.Code != http.StatusOK || !strings.Contains(body, "SPA") {
+			t.Errorf("expected safe SPA fallback (200, index.html), got status = %d, body = %q", rec.Code, body)
+		}
+	})
 }
 
 func TestProxyHandler(t *testing.T) {
