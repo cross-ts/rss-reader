@@ -1,11 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -25,40 +25,59 @@ func verifyProxyOrigin(frontendURL, targetURL string) bool {
 	return fe.Scheme == tgt.Scheme && fe.Host == tgt.Host
 }
 
+// bufferedResponseWriter captures a response so staticHandler can inspect
+// its status before deciding whether to forward it or fall back to the SPA
+// index, without writing partial output to the real ResponseWriter first.
+type bufferedResponseWriter struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func newBufferedResponseWriter() *bufferedResponseWriter {
+	return &bufferedResponseWriter{header: make(http.Header)}
+}
+
+func (b *bufferedResponseWriter) Header() http.Header { return b.header }
+
+func (b *bufferedResponseWriter) WriteHeader(status int) { b.status = status }
+
+func (b *bufferedResponseWriter) Write(p []byte) (int, error) {
+	if b.status == 0 {
+		b.status = http.StatusOK
+	}
+	return b.body.Write(p)
+}
+
 // staticHandler serves static files from the configured directory with SPA fallback.
 func staticHandler(state *AppState) http.Handler {
+	fileServer := http.FileServer(http.Dir(state.Config.StaticDir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Clean the path to prevent directory traversal.
-		p := filepath.Clean(r.URL.Path)
-		if p == "/" {
-			p = "/index.html"
-		}
-
 		// http.ServeFile independently rejects any request whose r.URL.Path
-		// contains "..", regardless of the resolved name argument it's given.
-		// Serve against a clone with a sanitized path so a raw traversal
-		// attempt in the original request doesn't also block the SPA
-		// fallback below; the name argument alone determines what's served.
+		// contains "..", regardless of the name argument it's given. Serve
+		// the SPA fallback below against a clone with a sanitized path so a
+		// raw traversal attempt doesn't also 400 on that call.
 		req := r
 		if strings.Contains(r.URL.Path, "..") {
 			req = r.Clone(r.Context())
 			req.URL.Path = "/"
 		}
 
-		// Resolve the requested file to an absolute path and verify it stays
-		// within the static directory. The same absPath variable that is
-		// checked here is the one passed to os.Stat/http.ServeFile below, so
-		// there is no separate guard variable for taint-tracking to lose.
-		absBase, baseErr := filepath.Abs(state.Config.StaticDir)
-		absPath, pathErr := filepath.Abs(filepath.Join(state.Config.StaticDir, filepath.FromSlash(p)))
-		contained := baseErr == nil && pathErr == nil &&
-			(absPath == absBase || strings.HasPrefix(absPath, absBase+string(filepath.Separator)))
+		// Delegate to the standard library's http.Dir/http.FileServer, which
+		// safely resolves the request path within StaticDir and rejects
+		// traversal attempts internally — our code never builds a filesystem
+		// path from r.URL.Path itself. Buffer the response so a 404 can fall
+		// back to the SPA index instead of being written directly.
+		rec := newBufferedResponseWriter()
+		fileServer.ServeHTTP(rec, r)
 
-		if contained {
-			if _, err := os.Stat(absPath); err == nil {
-				http.ServeFile(w, req, absPath)
-				return
+		if rec.status != http.StatusNotFound {
+			for k, v := range rec.header {
+				w.Header()[k] = v
 			}
+			w.WriteHeader(rec.status)
+			w.Write(rec.body.Bytes())
+			return
 		}
 
 		// SPA fallback: serve index.html for non-existent paths.
