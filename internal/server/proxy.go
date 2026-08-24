@@ -28,13 +28,23 @@ func verifyProxyOrigin(frontendURL, targetURL string) bool {
 // staticHandler serves static files from the configured directory with SPA fallback.
 func staticHandler(state *AppState) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		baseDir, err := filepath.Abs(state.Config.StaticDir)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
 		// Clean the path to prevent directory traversal.
 		p := filepath.Clean(r.URL.Path)
 		if p == "/" {
 			p = "/index.html"
 		}
 
-		filePath := filepath.Join(state.Config.StaticDir, filepath.FromSlash(p))
+		filePath, err := filepath.Abs(filepath.Join(baseDir, filepath.FromSlash(p)))
+		if err != nil || !isWithinDir(filePath, baseDir) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
 
 		// Check if the file exists.
 		if _, err := os.Stat(filePath); err == nil {
@@ -43,9 +53,23 @@ func staticHandler(state *AppState) http.Handler {
 		}
 
 		// SPA fallback: serve index.html for non-existent paths.
-		indexPath := filepath.Join(state.Config.StaticDir, "index.html")
+		indexPath := filepath.Join(baseDir, "index.html")
 		http.ServeFile(w, r, indexPath)
 	})
+}
+
+// isWithinDir reports whether path is equal to base or is contained inside base,
+// using a boundary-safe comparison so that sibling directories sharing a string
+// prefix (e.g. "/var/static-evil" vs "/var/static") are not mistaken for containment.
+func isWithinDir(path, base string) bool {
+	rel, err := filepath.Rel(base, path)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
 }
 
 // proxyHandler reverse-proxies requests to the frontend dev server with SPA fallback.

@@ -133,6 +133,56 @@ func TestStaticHandler(t *testing.T) {
 			t.Errorf("SPA fallback: body should contain SPA content, got %q", body)
 		}
 	})
+
+	t.Run("path traversal attempt does not escape static dir", func(t *testing.T) {
+		// Create a sentinel file outside staticDir to prove it is never served.
+		outsideDir := t.TempDir()
+		secretContent := "top-secret"
+		if err := os.WriteFile(filepath.Join(outsideDir, "secret.txt"), []byte(secretContent), 0o644); err != nil {
+			t.Fatalf("write secret.txt: %v", err)
+		}
+
+		req := httptest.NewRequest("GET", "/../../../../../../etc/passwd", nil)
+		// Force the raw traversal path directly, bypassing any URL parsing
+		// normalization, to exercise the handler's own containment check.
+		req.URL.Path = "/../../../../../../etc/passwd"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		body := rec.Body.String()
+		if strings.Contains(body, "root:") || strings.Contains(body, secretContent) {
+			t.Errorf("response body appears to contain content from outside staticDir: %q", body)
+		}
+		// The response must either be a safe SPA fallback (contained within
+		// staticDir) or an explicit rejection - never a 500 from a panic.
+		if rec.Code == http.StatusInternalServerError {
+			t.Errorf("status = %d, unexpected internal error", rec.Code)
+		}
+	})
+}
+
+func TestIsWithinDir(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		base string
+		want bool
+	}{
+		{name: "equal to base", path: "/var/static", base: "/var/static", want: true},
+		{name: "nested file", path: "/var/static/assets/main.js", base: "/var/static", want: true},
+		{name: "escapes via parent", path: "/var/etc/passwd", base: "/var/static", want: false},
+		{name: "sibling dir with shared prefix", path: "/var/static-evil/secret", base: "/var/static", want: false},
+		{name: "sibling dir with shared prefix, no separator", path: "/var/static-evil", base: "/var/static", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isWithinDir(tt.path, tt.base)
+			if got != tt.want {
+				t.Errorf("isWithinDir(%q, %q) = %v, want %v", tt.path, tt.base, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestProxyHandler(t *testing.T) {
