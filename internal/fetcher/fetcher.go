@@ -34,10 +34,21 @@ type FetchResult struct {
 	LastModified *string
 }
 
+// newSafeTransport returns an http.Transport that dials via safeDialContext,
+// which validates resolved IPs against the SSRF denylist at dial time (not
+// just during the pre-flight ValidateFeedURL check), closing the DNS-rebinding
+// TOCTOU gap between check and connect.
+func newSafeTransport() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.DialContext = safeDialContext
+	return t
+}
+
 // NewFeedClient creates an HTTP client for feed fetching with redirect disabled.
 func NewFeedClient() *http.Client {
 	return &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout:   15 * time.Second,
+		Transport: newSafeTransport(),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -47,7 +58,8 @@ func NewFeedClient() *http.Client {
 // NewProxyClient creates an HTTP client for proxying with default redirect behavior.
 func NewProxyClient() *http.Client {
 	return &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout:   15 * time.Second,
+		Transport: newSafeTransport(),
 	}
 }
 
