@@ -1,11 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -25,26 +25,83 @@ func verifyProxyOrigin(frontendURL, targetURL string) bool {
 	return fe.Scheme == tgt.Scheme && fe.Host == tgt.Host
 }
 
+// bufferedResponseWriter captures a response so staticHandler can inspect
+// its status before deciding whether to forward it or fall back to the SPA
+// index, without writing partial output to the real ResponseWriter first.
+type bufferedResponseWriter struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func newBufferedResponseWriter() *bufferedResponseWriter {
+	return &bufferedResponseWriter{header: make(http.Header)}
+}
+
+func (b *bufferedResponseWriter) Header() http.Header { return b.header }
+
+func (b *bufferedResponseWriter) WriteHeader(status int) { b.status = status }
+
+func (b *bufferedResponseWriter) Write(p []byte) (int, error) {
+	if b.status == 0 {
+		b.status = http.StatusOK
+	}
+	return b.body.Write(p)
+}
+
+// containsDotDotSegment reports whether path has a "/../"-style path
+// traversal segment, mirroring net/http's own (unexported) containsDotDot
+// check — used instead of a raw substring match so legitimate filenames
+// like "app..js" aren't mistaken for traversal attempts. Like net/http, it
+// splits on both "/" and "\" since http.ServeFile treats backslashes as
+// path separators too.
+func containsDotDotSegment(path string) bool {
+	if !strings.Contains(path, "..") {
+		return false
+	}
+	for _, part := range strings.FieldsFunc(path, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
+}
+
 // staticHandler serves static files from the configured directory with SPA fallback.
 func staticHandler(state *AppState) http.Handler {
+	fileServer := http.FileServer(http.Dir(state.Config.StaticDir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Clean the path to prevent directory traversal.
-		p := filepath.Clean(r.URL.Path)
-		if p == "/" {
-			p = "/index.html"
+		// http.ServeFile independently rejects any request whose r.URL.Path
+		// contains a ".." path segment, regardless of the name argument it's
+		// given. Serve the SPA fallback below against a clone with a
+		// sanitized path so a raw traversal attempt doesn't also 400 on that
+		// call.
+		req := r
+		if containsDotDotSegment(r.URL.Path) {
+			req = r.Clone(r.Context())
+			req.URL.Path = "/"
 		}
 
-		filePath := filepath.Join(state.Config.StaticDir, filepath.FromSlash(p))
+		// Delegate to the standard library's http.Dir/http.FileServer, which
+		// safely resolves the request path within StaticDir and rejects
+		// traversal attempts internally — our code never builds a filesystem
+		// path from r.URL.Path itself. Buffer the response so a 404 can fall
+		// back to the SPA index instead of being written directly.
+		rec := newBufferedResponseWriter()
+		fileServer.ServeHTTP(rec, r)
 
-		// Check if the file exists.
-		if _, err := os.Stat(filePath); err == nil {
-			http.ServeFile(w, r, filePath)
+		if rec.status != http.StatusNotFound {
+			for k, v := range rec.header {
+				w.Header()[k] = v
+			}
+			w.WriteHeader(rec.status)
+			w.Write(rec.body.Bytes())
 			return
 		}
 
 		// SPA fallback: serve index.html for non-existent paths.
 		indexPath := filepath.Join(state.Config.StaticDir, "index.html")
-		http.ServeFile(w, r, indexPath)
+		http.ServeFile(w, req, indexPath)
 	})
 }
 
