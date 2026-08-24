@@ -25,6 +25,24 @@ func verifyProxyOrigin(frontendURL, targetURL string) bool {
 	return fe.Scheme == tgt.Scheme && fe.Host == tgt.Host
 }
 
+// isPathContained reports whether candidate is equal to base or a descendant
+// of base, after resolving both to absolute paths. This guards against
+// path traversal and prefix confusion (e.g. "/static-evil" matching "/static").
+func isPathContained(base, candidate string) bool {
+	absBase, err := filepath.Abs(base)
+	if err != nil {
+		return false
+	}
+	absCandidate, err := filepath.Abs(candidate)
+	if err != nil {
+		return false
+	}
+	if absCandidate == absBase {
+		return true
+	}
+	return strings.HasPrefix(absCandidate, absBase+string(filepath.Separator))
+}
+
 // staticHandler serves static files from the configured directory with SPA fallback.
 func staticHandler(state *AppState) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,15 +54,28 @@ func staticHandler(state *AppState) http.Handler {
 
 		filePath := filepath.Join(state.Config.StaticDir, filepath.FromSlash(p))
 
-		// Check if the file exists.
-		if _, err := os.Stat(filePath); err == nil {
-			http.ServeFile(w, r, filePath)
-			return
+		// http.ServeFile independently rejects any request whose r.URL.Path
+		// contains "..", regardless of the resolved name argument it's given.
+		// Serve against a clone with a sanitized path so a raw traversal
+		// attempt in the original request doesn't also block the SPA
+		// fallback below; the name argument alone determines what's served.
+		req := r
+		if strings.Contains(r.URL.Path, "..") {
+			req = r.Clone(r.Context())
+			req.URL.Path = "/"
+		}
+
+		// Check if the file exists and is contained within the static directory.
+		if isPathContained(state.Config.StaticDir, filePath) {
+			if _, err := os.Stat(filePath); err == nil {
+				http.ServeFile(w, req, filePath)
+				return
+			}
 		}
 
 		// SPA fallback: serve index.html for non-existent paths.
 		indexPath := filepath.Join(state.Config.StaticDir, "index.html")
-		http.ServeFile(w, r, indexPath)
+		http.ServeFile(w, req, indexPath)
 	})
 }
 

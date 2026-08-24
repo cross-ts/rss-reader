@@ -133,6 +133,34 @@ func TestStaticHandler(t *testing.T) {
 			t.Errorf("SPA fallback: body should contain SPA content, got %q", body)
 		}
 	})
+
+	t.Run("path traversal falls back to index.html", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/../../../../etc/passwd", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "SPA") {
+			t.Errorf("traversal should fall back to SPA content, got %q", body)
+		}
+	})
+
+	t.Run("backslash traversal falls back to index.html", func(t *testing.T) {
+		req := httptest.NewRequest("GET", `/..\..\..\..\etc\passwd`, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "SPA") {
+			t.Errorf("traversal should fall back to SPA content, got %q", body)
+		}
+	})
 }
 
 func TestProxyHandler(t *testing.T) {
