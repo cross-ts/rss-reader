@@ -133,10 +133,28 @@ func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error
 	}
 
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	// Dial the literal, pre-validated IP — NOT the original hostname — so no
+	// Dial the literal, pre-validated IPs — NOT the original hostname — so no
 	// second, unvalidated DNS resolution happens between check and connect
 	// (this is what closes the DNS-rebinding TOCTOU gap).
-	return dialer.DialContext(ctx, network, net.JoinHostPort(validIPs[0].String(), port))
+	return dialFirstReachable(ctx, dialer, network, validIPs, port)
+}
+
+// dialFirstReachable dials each of the given (already-validated) IPs in order
+// on the given port, returning the first successful connection. This restores
+// the multi-address fallback behavior that dialing a hostname directly would
+// normally provide (Go's transport tries subsequent A/AAAA records if the
+// first is unreachable), which would otherwise be lost by pinning the dial to
+// a single literal IP. Returns the last encountered error if none succeed.
+func dialFirstReachable(ctx context.Context, dialer *net.Dialer, network string, ips []net.IP, port string) (net.Conn, error) {
+	var lastErr error
+	for _, ip := range ips {
+		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 // checkIP dispatches to checkIPv4 or checkIPv6 based on IP version.
