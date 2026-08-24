@@ -25,24 +25,6 @@ func verifyProxyOrigin(frontendURL, targetURL string) bool {
 	return fe.Scheme == tgt.Scheme && fe.Host == tgt.Host
 }
 
-// isPathContained reports whether candidate is equal to base or a descendant
-// of base, after resolving both to absolute paths. This guards against
-// path traversal and prefix confusion (e.g. "/static-evil" matching "/static").
-func isPathContained(base, candidate string) bool {
-	absBase, err := filepath.Abs(base)
-	if err != nil {
-		return false
-	}
-	absCandidate, err := filepath.Abs(candidate)
-	if err != nil {
-		return false
-	}
-	if absCandidate == absBase {
-		return true
-	}
-	return strings.HasPrefix(absCandidate, absBase+string(filepath.Separator))
-}
-
 // staticHandler serves static files from the configured directory with SPA fallback.
 func staticHandler(state *AppState) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,8 +33,6 @@ func staticHandler(state *AppState) http.Handler {
 		if p == "/" {
 			p = "/index.html"
 		}
-
-		filePath := filepath.Join(state.Config.StaticDir, filepath.FromSlash(p))
 
 		// http.ServeFile independently rejects any request whose r.URL.Path
 		// contains "..", regardless of the resolved name argument it's given.
@@ -65,10 +45,18 @@ func staticHandler(state *AppState) http.Handler {
 			req.URL.Path = "/"
 		}
 
-		// Check if the file exists and is contained within the static directory.
-		if isPathContained(state.Config.StaticDir, filePath) {
-			if _, err := os.Stat(filePath); err == nil {
-				http.ServeFile(w, req, filePath)
+		// Resolve the requested file to an absolute path and verify it stays
+		// within the static directory. The same absPath variable that is
+		// checked here is the one passed to os.Stat/http.ServeFile below, so
+		// there is no separate guard variable for taint-tracking to lose.
+		absBase, baseErr := filepath.Abs(state.Config.StaticDir)
+		absPath, pathErr := filepath.Abs(filepath.Join(state.Config.StaticDir, filepath.FromSlash(p)))
+		contained := baseErr == nil && pathErr == nil &&
+			(absPath == absBase || strings.HasPrefix(absPath, absBase+string(filepath.Separator)))
+
+		if contained {
+			if _, err := os.Stat(absPath); err == nil {
+				http.ServeFile(w, req, absPath)
 				return
 			}
 		}
