@@ -4,10 +4,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 )
 
 // Source identifies where a configuration value came from.
@@ -33,6 +35,10 @@ type Config struct {
 	// Sources records where each settable field's effective value came from.
 	Sources map[string]Source
 }
+
+// MaxPollIntervalMinutes is the largest poll interval (in minutes) that can be
+// safely converted to a time.Duration without overflow.
+const MaxPollIntervalMinutes = uint64(math.MaxInt64 / int64(time.Minute))
 
 const (
 	defaultHost         = "127.0.0.1"
@@ -113,8 +119,8 @@ func Parse() (*Config, error) {
 	if resolvedPort < 1 || resolvedPort > 65535 {
 		return nil, fmt.Errorf("port must be between 1 and 65535, got %d", resolvedPort)
 	}
-	if resolvedPollInterval < 1 {
-		return nil, fmt.Errorf("poll interval minutes must be >= 1, got %d", resolvedPollInterval)
+	if resolvedPollInterval < 1 || resolvedPollInterval > MaxPollIntervalMinutes {
+		return nil, fmt.Errorf("poll interval minutes must be between 1 and %d, got %d", MaxPollIntervalMinutes, resolvedPollInterval)
 	}
 
 	// Resolve XDG defaults for feeds path.
