@@ -49,16 +49,35 @@ func (b *bufferedResponseWriter) Write(p []byte) (int, error) {
 	return b.body.Write(p)
 }
 
+// containsDotDotSegment reports whether path has a "/../"-style path
+// traversal segment, mirroring net/http's own (unexported) containsDotDot
+// check — used instead of a raw substring match so legitimate filenames
+// like "app..js" aren't mistaken for traversal attempts. Like net/http, it
+// splits on both "/" and "\" since http.ServeFile treats backslashes as
+// path separators too.
+func containsDotDotSegment(path string) bool {
+	if !strings.Contains(path, "..") {
+		return false
+	}
+	for _, part := range strings.FieldsFunc(path, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
+}
+
 // staticHandler serves static files from the configured directory with SPA fallback.
 func staticHandler(state *AppState) http.Handler {
 	fileServer := http.FileServer(http.Dir(state.Config.StaticDir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// http.ServeFile independently rejects any request whose r.URL.Path
-		// contains "..", regardless of the name argument it's given. Serve
-		// the SPA fallback below against a clone with a sanitized path so a
-		// raw traversal attempt doesn't also 400 on that call.
+		// contains a ".." path segment, regardless of the name argument it's
+		// given. Serve the SPA fallback below against a clone with a
+		// sanitized path so a raw traversal attempt doesn't also 400 on that
+		// call.
 		req := r
-		if strings.Contains(r.URL.Path, "..") {
+		if containsDotDotSegment(r.URL.Path) {
 			req = r.Clone(r.Context())
 			req.URL.Path = "/"
 		}

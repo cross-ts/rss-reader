@@ -86,6 +86,10 @@ func TestStaticHandler(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(staticDir, "assets", "main.js"), []byte(jsContent), 0o644); err != nil {
 		t.Fatalf("write main.js: %v", err)
 	}
+	dottedContent := "console.log('dotted')"
+	if err := os.WriteFile(filepath.Join(staticDir, "assets", "app..js"), []byte(dottedContent), 0o644); err != nil {
+		t.Fatalf("write app..js: %v", err)
+	}
 
 	state := &AppState{
 		Config: &config.Config{StaticDir: staticDir},
@@ -103,6 +107,20 @@ func TestStaticHandler(t *testing.T) {
 		body := rec.Body.String()
 		if body != jsContent {
 			t.Errorf("body = %q, want %q", body, jsContent)
+		}
+	})
+
+	t.Run("legitimately dotted filename is served, not treated as traversal", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/assets/app..js", nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		body := rec.Body.String()
+		if body != dottedContent {
+			t.Errorf("body = %q, want %q", body, dottedContent)
 		}
 	})
 
