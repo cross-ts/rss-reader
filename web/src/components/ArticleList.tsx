@@ -304,80 +304,85 @@ function ArticleRow({
 
   const decodedTitle = useMemo(() => decodeEntities(article.title), [article.title]);
   const thumbSize = compact ? 'w-10 h-10' : 'w-14 h-14';
+  const metaLabel = isSingleFeed && article.author ? article.author : article.feedTitle;
+  const publishedLabel = relativeTime(article.publishedAt);
 
   return (
     <button
       data-article-id={article.id}
       onClick={onSelect}
       className={[
-        'w-full text-left flex items-center gap-3 px-5 border-b border-border transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
+        'w-full text-left flex items-start gap-3 px-5 border-b border-border transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none',
         compact ? 'py-2' : 'py-3',
         selected ? 'bg-accent-light' : 'hover:bg-bg-alt',
       ].join(' ')}
     >
-      {/* Fixed-width thumbnail / favicon / colored initial */}
-      <div className={`relative ${thumbSize} rounded-lg bg-bg-alt overflow-hidden flex-shrink-0`}>
-        {showImg ? (
-          <img
-            src={thumbnail}
-            alt=""
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover"
-          />
-        ) : !faviconError && faviconUrl ? (
-          <div className="w-full h-full flex items-center justify-center">
+      <div className={[
+        'flex items-start gap-3 flex-1 min-w-0',
+        read ? 'opacity-[0.55]' : '',
+      ].join(' ')}>
+        {/* Fixed-width thumbnail / favicon / colored initial */}
+        <div className={`relative ${thumbSize} rounded-lg bg-bg-alt overflow-hidden flex-shrink-0`}>
+          {showImg ? (
             <img
-              src={faviconUrl}
+              src={thumbnail}
               alt=""
-              onError={() => setFaviconError(true)}
-              className="w-6 h-6 object-contain"
+              onError={() => setImgError(true)}
+              className="w-full h-full object-cover"
             />
-          </div>
-        ) : (
-          <div className={`w-full h-full flex items-center justify-center text-white font-bold ${feedColor(article.feedTitle)}`}>
-            <span className={compact ? 'text-sm' : 'text-base'}>
-              {article.feedTitle.charAt(0).toUpperCase()}
-            </span>
-          </div>
-        )}
-        {/* Unread indicator dot on thumbnail corner */}
-        {!read && (
-          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-accent ring-1 ring-white" />
-        )}
-      </div>
-
-      {/* Text */}
-      <div className="flex-1 min-w-0">
-        <h3 className={[
-          'leading-snug',
-          compact ? 'text-[12px] line-clamp-1' : 'text-[13px] line-clamp-2',
-          read
-            ? 'font-normal text-text-muted'
-            : 'font-semibold text-text-primary',
-        ].join(' ')}>
-          {decodedTitle}
-        </h3>
-        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-text-sub">
-          {isSingleFeed ? (
-            <>
-              {article.author && (
-                <span className="truncate shrink-0 max-w-[8rem]">{article.author}</span>
-              )}
-              {excerpt && article.author && <span className="text-text-muted">·</span>}
-              {excerpt && (
-                <span className="truncate text-text-muted">{excerpt}</span>
-              )}
-            </>
+          ) : !faviconError && faviconUrl ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <img
+                src={faviconUrl}
+                alt=""
+                onError={() => setFaviconError(true)}
+                className="w-6 h-6 object-contain"
+              />
+            </div>
           ) : (
-            <span className="truncate">{article.feedTitle}</span>
+            <div className={`w-full h-full flex items-center justify-center text-white font-bold ${feedColor(article.feedTitle)}`}>
+              <span className={compact ? 'text-sm' : 'text-base'}>
+                {article.feedTitle.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Unread dot column, fixed width so titles align regardless of read state */}
+        <div className="flex-shrink-0 w-2 mt-1">
+          {!read && <span className="block w-2 h-2 rounded-full bg-accent" />}
+        </div>
+
+        {/* Text */}
+        <div className="flex-1 min-w-0">
+          {/* Tier 1: title */}
+          <h3 className={[
+            'leading-snug',
+            compact
+              ? 'text-[13px] line-clamp-1 min-h-[1.3em]'
+              : 'text-[15px] line-clamp-2 min-h-[2.6em]',
+            read
+              ? 'font-normal text-text-sub'
+              : 'font-semibold text-text-primary',
+          ].join(' ')}>
+            {decodedTitle}
+          </h3>
+
+          {/* Tier 2: meta line (feed/author + published time) */}
+          <div className="flex items-center gap-1.5 mt-0.5 text-[12px] text-text-muted">
+            <span className="truncate min-w-0 flex-1">{metaLabel}</span>
+            <span className="flex-shrink-0">·</span>
+            <span className="flex-shrink-0">{publishedLabel}</span>
+          </div>
+
+          {/* Tier 3: excerpt, lowest emphasis, separate line */}
+          {excerpt && (
+            <div className="mt-0.5 text-[12px] text-text-muted truncate">
+              {excerpt}
+            </div>
           )}
         </div>
       </div>
-
-      {/* Date */}
-      <span className="flex-shrink-0 text-[11px] text-text-muted">
-        {relativeTime(article.publishedAt)}
-      </span>
     </button>
   );
 }
