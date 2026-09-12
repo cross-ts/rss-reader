@@ -196,7 +196,7 @@ describe('ArticleList', () => {
       <ArticleList {...defaultProps} articles={[article]} />,
     );
     const title = container.querySelector('h3')!;
-    expect(title.className).toContain('text-text-muted');
+    expect(title.className).toContain('text-text-sub');
     expect(title.className).not.toContain('font-semibold');
   });
 
