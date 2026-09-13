@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Mockup 3 — Stream: トリアージ型フォーカスリーディング</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg:#0e1016; --card:#161923; --card-2:#1c2030; --border:#262b3d;
+    --text:#e6e8f0; --dim:#9aa0b5; --mute:#5d6378;
+    --accent:#7dd3a8; --accent-ink:#0b241a;
+    --skip:#f0708d; --keep:#7dd3a8; --later:#e8c268;
+    --sans:-apple-system,"Inter","Hiragino Sans",sans-serif;
+    --mono:"SF Mono",ui-monospace,monospace;
+  }
+  body { font-family:var(--sans); background:radial-gradient(1200px 700px at 50% -10%, #1a2030 0%, var(--bg) 60%); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; -webkit-font-smoothing:antialiased; font-size:14px; }
+
+  /* Top: session header */
+  .top { display:flex; flex-direction:column; align-items:center; padding:26px 0 4px; flex-shrink:0; }
+  .top .label { font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--mute); }
+  .top h1 { font-size:21px; font-weight:700; letter-spacing:-.01em; margin-top:6px; }
+  .top h1 b { color:var(--accent); }
+  .progress { width:340px; height:4px; background:var(--card-2); border-radius:2px; margin-top:14px; overflow:hidden; }
+  .progress i { display:block; width:42%; height:100%; background:var(--accent); border-radius:2px; }
+  .top .pnum { font-family:var(--mono); font-size:10px; color:var(--mute); margin-top:6px; }
+
+  /* Deck of cards */
+  .deck { flex:1; display:flex; align-items:center; justify-content:center; position:relative; min-height:0; padding:10px 0 20px; }
+  .card { position:absolute; width:640px; background:var(--card); border:1px solid var(--border); border-radius:18px; padding:30px 36px; box-shadow:0 30px 60px rgba(0,0,0,.45); }
+  .card.b2 { transform:translateY(-26px) scale(.94); opacity:.45; z-index:1; height:200px; overflow:hidden; }
+  .card.b1 { transform:translateY(-14px) scale(.97); opacity:.7; z-index:2; height:230px; overflow:hidden; }
+  .card.front { position:relative; z-index:3; }
+
+  .chip { display:inline-flex; align-items:center; gap:6px; background:var(--card-2); border:1px solid var(--border); border-radius:20px; padding:4px 12px; font-size:11.5px; color:var(--dim); margin-bottom:14px; }
+  .chip .dot { width:7px; height:7px; border-radius:50%; background:var(--later); }
+  .card h2 { font-size:24px; font-weight:700; line-height:1.3; letter-spacing:-.015em; margin-bottom:10px; }
+  .card .meta { font-family:var(--mono); font-size:11px; color:var(--mute); margin-bottom:18px; }
+  .card p { font-size:14.5px; line-height:1.75; color:var(--dim); margin-bottom:12px; }
+  .card .fade { position:relative; }
+  .card .fade::after { content:""; position:absolute; inset:auto 0 0 0; height:60px; background:linear-gradient(transparent,var(--card)); }
+  .expand { display:inline-block; margin-top:4px; font-size:12.5px; color:var(--accent); font-weight:600; }
+
+  /* Triage actions */
+  .actions { display:flex; justify-content:center; gap:14px; padding:6px 0 14px; flex-shrink:0; }
+  .act { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .act .btn { width:58px; height:58px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:21px; border:1px solid var(--border); background:var(--card); color:var(--dim); box-shadow:0 8px 20px rgba(0,0,0,.35); }
+  .act.skip .btn { color:var(--skip); border-color:rgba(240,112,141,.35); }
+  .act.keep .btn { background:var(--keep); color:var(--accent-ink); border-color:var(--keep); width:68px; height:68px; font-size:25px; }
+  .act.later .btn { color:var(--later); border-color:rgba(232,194,104,.35); }
+  .act .kl { font-family:var(--mono); font-size:10px; color:var(--mute); }
+  .act .kl b { color:var(--dim); font-weight:500; }
+
+  /* Bottom rail: sources as story-style bubbles */
+  .rail { display:flex; justify-content:center; gap:18px; padding:10px 0 22px; flex-shrink:0; }
+  .src { display:flex; flex-direction:column; align-items:center; gap:6px; width:64px; }
+  .src .av { width:44px; height:44px; border-radius:50%; background:var(--card-2); border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:var(--dim); position:relative; }
+  .src.unread .av { border-color:var(--accent); }
+  .src .av .n { position:absolute; top:-4px; right:-6px; background:var(--accent); color:var(--accent-ink); font-family:var(--mono); font-size:9px; font-weight:700; border-radius:9px; padding:1px 5px; }
+  .src.on .av { box-shadow:0 0 0 3px rgba(125,211,168,.25); }
+  .src .nm { font-size:10px; color:var(--mute); max-width:64px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .src.unread .nm { color:var(--dim); }
+  .src.add .av { border-style:dashed; font-size:20px; }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="label">Morning Triage</div>
+    <h1><b>13</b> of 31 cleared — 12 min so far</h1>
+    <div class="progress"><i></i></div>
+    <div class="pnum">kept 4 · skipped 8 · saved for later 1</div>
+  </header>
+
+  <main class="deck">
+    <div class="card b2"></div>
+    <div class="card b1">
+      <div class="chip"><span class="dot" style="background:var(--skip)"></span>Hacker News</div>
+      <h2>SQLite as an application file format</h2>
+    </div>
+    <div class="card front">
+      <div class="chip"><span class="dot"></span>The Rust Blog · unread · 4 min</div>
+      <h2>Announcing Rust 1.88.0</h2>
+      <div class="meta">rust-lang.org · today 10:02 · #release #language</div>
+      <div class="fade">
+        <p>The Rust team is happy to announce a new version of Rust, 1.88.0. Rust is a programming language empowering everyone to build reliable and efficient software.</p>
+        <p>This release brings let-chains to the 2024 edition, naked functions, and a number of quality-of-life improvements to cargo. Let-chains allow you to combine multiple let bindings and boolean conditions in a single if expression…</p>
+      </div>
+      <span class="expand">Read full article ⏎</span>
+    </div>
+  </main>
+
+  <div class="actions">
+    <div class="act skip"><div class="btn">✕</div><div class="kl"><b>H</b> skip</div></div>
+    <div class="act keep"><div class="btn">⏎</div><div class="kl"><b>Enter</b> read now</div></div>
+    <div class="act later"><div class="btn">◷</div><div class="kl"><b>L</b> read later</div></div>
+  </div>
+
+  <footer class="rail">
+    <div class="src unread on"><div class="av">R<span class="n">12</span></div><div class="nm">rust-blog</div></div>
+    <div class="src unread"><div class="av">H<span class="n">8</span></div><div class="nm">hackernews</div></div>
+    <div class="src unread"><div class="av">Z<span class="n">4</span></div><div class="nm">zed</div></div>
+    <div class="src unread"><div class="av">F<span class="n">2</span></div><div class="nm">chimero</div></div>
+    <div class="src unread"><div class="av">B<span class="n">3</span></div><div class="nm">butterick</div></div>
+    <div class="src"><div class="av">S</div><div class="nm">simonw</div></div>
+    <div class="src"><div class="av">D</div><div class="nm">df</div></div>
+    <div class="src"><div class="av">L</div><div class="nm">lobsters</div></div>
+    <div class="src add"><div class="av">＋</div><div class="nm">add feed</div></div>
+  </footer>
+</body>
+</html>
