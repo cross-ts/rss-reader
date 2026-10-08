@@ -3,6 +3,10 @@ const P = {
   subs: '<path d="M6 3h12v18l-6-4-6 4z"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   check: '<path d="m5 12.5 5 5L19 7"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>',
+  folder: '<path d="M3 6h6l2 2h10v11H3z"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  trash: '<path d="M5 7h14M10 7V4h4v3m-8 0 1 13h10l1-13"/>',
   share: '<path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6h14v-6"/>',
 } as const;
 
