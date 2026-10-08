@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RSS Reader – Substack-style mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;600;700&family=Spectral:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root{
+  --bg:#fff; --fg:#111; --muted:#6b6b6b; --line:#e8e8e8; --hover:#f6f6f6; --accent:#FF6719; --accent-fg:#fff;
+  --sans:"Inter","Noto Sans JP",system-ui,sans-serif;
+  --serif:"Spectral","Lora","Noto Serif JP",Georgia,serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#141414; --fg:#ececec; --muted:#9a9a9a; --line:#2c2c2c; --hover:#1e1e1e; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+a{color:inherit}
+.app{display:flex;min-height:100vh}
+/* sidebar */
+.side{width:260px;flex:none;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--bg);z-index:40}
+.side-scroll{flex:1;overflow-y:auto;padding:8px 12px}
+.brand{padding:20px 20px 12px;font-family:var(--serif);font-weight:700;font-size:22px;display:flex;align-items:center;gap:8px}
+.brand i{width:22px;height:22px;background:var(--accent);border-radius:5px;display:inline-block}
+.nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:8px;font-size:14px;font-weight:500;text-align:left}
+.nav-item:hover{background:var(--hover)}
+.nav-item.active{background:var(--hover);font-weight:700}
+.nav-item .cnt{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.nav-item .ico{width:18px;text-align:center;color:var(--muted)}
+.sec-title{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:18px 10px 6px}
+.folder-head{display:flex;align-items:center}
+.folder-head .tog{width:22px;height:30px;color:var(--muted);font-size:10px}
+.feed-row{padding-left:22px}
+.side-foot{padding:12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.btn-add{background:var(--accent);color:var(--accent-fg);border-radius:999px;padding:9px 14px;font-weight:600;font-size:14px;text-align:center}
+.btn-add:hover{filter:brightness(.95)}
+.foot-row{display:flex;gap:6px}
+.foot-row button{flex:1;padding:7px;border-radius:8px;font-size:13px;color:var(--muted)}
+.foot-row button:hover{background:var(--hover);color:var(--fg)}
+.avatar{flex:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-family:var(--sans);text-transform:uppercase}
+/* main */
+.main{flex:1;min-width:0;display:flex;justify-content:center}
+.col{width:100%;max-width:640px;padding:0 20px 80px}
+.topbar{display:none;position:sticky;top:0;z-index:30;background:var(--bg);border-bottom:1px solid var(--line);height:52px;align-items:center;padding:0 12px;gap:10px}
+.burger{width:36px;height:36px;border-radius:8px;font-size:20px}
+.burger:hover{background:var(--hover)}
+.scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35}
+.head{position:sticky;top:0;background:var(--bg);z-index:20;padding-top:20px}
+.tabs{display:flex;align-items:center;border-bottom:1px solid var(--line);gap:24px}
+.tab{padding:12px 0;font-size:15px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--fg);border-color:var(--fg)}
+.markall{margin-left:auto;font-size:13px;color:var(--muted);padding:6px 10px;border-radius:999px}
+.markall:hover{background:var(--hover);color:var(--fg)}
+.pub{padding:32px 0 24px;border-bottom:1px solid var(--line);display:flex;gap:18px;align-items:center}
+.pub h1{font-family:var(--serif);font-size:30px;margin:0 0 4px;line-height:1.2}
+.pub .meta{color:var(--muted);font-size:14px}
+.pub a.site{color:var(--accent);text-decoration:none}
+.pub a.site:hover{text-decoration:underline}
+.search{margin:16px 0 0}
+.search input{width:100%;font:inherit;padding:11px 16px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--fg);outline:none}
+.search input:focus{border-color:var(--accent)}
+/* card */
+.card{display:flex;gap:20px;padding:24px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.card .body{flex:1;min-width:0}
+.card .byline{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.card .byline b{color:var(--fg);font-weight:600}
+.card h2{font-family:var(--serif);font-weight:700;font-size:21px;line-height:1.3;margin:10px 0 6px;display:flex;gap:8px;align-items:baseline}
+.card h2 .dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--accent);transform:translateY(-3px)}
+.card .ex{font-family:var(--serif);font-size:16px;line-height:1.5;color:var(--muted);margin:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.card .thumb{flex:none;width:132px;height:132px;border-radius:8px;object-fit:cover;background:var(--hover)}
+.card.read h2{color:var(--muted);font-weight:600}
+.card.read .thumb{opacity:.65}
+.actions{display:flex;gap:6px;margin-top:14px;margin-left:-8px}
+.actions a,.actions button{font-size:12.5px;color:var(--muted);padding:5px 8px;border-radius:999px;text-decoration:none;display:inline-flex;gap:5px;align-items:center}
+.actions a:hover,.actions button:hover{background:var(--hover);color:var(--fg)}
+.loading{text-align:center;color:var(--muted);padding:32px 0;font-size:14px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{text-align:center;color:var(--muted);padding:64px 0}
+/* reader */
+.reader{width:100%;max-width:680px;padding:24px 20px 96px}
+.back{display:inline-flex;gap:6px;color:var(--muted);font-size:14px;text-decoration:none;padding:6px 10px;margin-left:-10px;border-radius:999px}
+.back:hover{background:var(--hover);color:var(--fg)}
+.r-pub{display:flex;align-items:center;gap:10px;margin:28px 0 14px;font-size:15px;font-weight:600}
+.reader h1{font-family:var(--serif);font-size:40px;line-height:1.15;font-weight:700;margin:0 0 16px;letter-spacing:-.01em}
+.r-by{color:var(--muted);font-size:14px;padding-bottom:22px;border-bottom:1px solid var(--line);margin-bottom:32px}
+.prose{font-family:var(--serif);font-size:19px;line-height:1.8}
+.prose p{margin:0 0 1.3em}
+.prose h2,.prose h3{font-family:var(--serif);line-height:1.3;margin:1.8em 0 .6em}
+.prose img{width:100%;height:auto;border-radius:4px;margin:.6em 0 1.4em;display:block}
+.prose a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.prose blockquote{margin:1.5em 0;padding:.2em 0 .2em 1.2em;border-left:3px solid var(--fg);font-style:italic;color:var(--muted)}
+.prose code{font-family:ui-monospace,Menlo,monospace;font-size:.85em;background:var(--hover);padding:.15em .4em;border-radius:4px}
+.prose pre{background:var(--hover);padding:16px;border-radius:8px;overflow-x:auto;font-size:14px;line-height:1.6;margin:0 0 1.4em}
+.prose pre code{background:none;padding:0}
+.prose ul,.prose ol{margin:0 0 1.3em;padding-left:1.4em}
+.r-foot{margin-top:48px;padding-top:28px;border-top:1px solid var(--line);display:flex;gap:12px;flex-wrap:wrap}
+.btn-pill{border-radius:999px;padding:11px 22px;font-weight:600;font-size:15px;text-decoration:none;font-family:var(--sans)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-ghost{border:1px solid var(--line)}
+.btn-ghost:hover{background:var(--hover)}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:100}
+.toast.on{opacity:1}
+@media (max-width:1023px){
+  .side{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .2s}
+  .app.open .side{transform:none;box-shadow:0 0 40px rgba(0,0,0,.25)}
+  .app.open .scrim{display:block}
+  .topbar{display:flex}
+  .head{top:52px}
+}
+@media (max-width:560px){
+  .card{gap:12px;padding:18px 0}
+  .card .thumb{width:84px;height:84px}
+  .card h2{font-size:18px}
+  .card .ex{font-size:15px;-webkit-line-clamp:2}
+  .reader h1{font-size:30px}
+  .prose{font-size:17.5px}
+  .pub h1{font-size:24px}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side" id="side"></aside>
+  <div class="scrim" id="scrim"></div>
+  <div class="main" style="flex-direction:column;align-items:center">
+    <div class="topbar" style="width:100%">
+      <button class="burger" id="burger" aria-label="Menu">☰</button>
+      <span style="font-family:var(--serif);font-weight:700;font-size:18px">Feedly<span style="color:var(--accent)">.</span></span>
+    </div>
+    <div id="view" style="width:100%;display:flex;justify-content:center"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- mock data (shapes match the real API) ---------- */
+const hoursAgo = h => new Date(Date.now() - h * 3600e3).toISOString();
+const img = (s, w = 600, h = 400) => `https://picsum.photos/seed/${s}/${w}/${h}`;
+
+const folders = [
+  { id: 'f1', name: 'テック', feedCount: 3 },
+  { id: 'f2', name: 'AR/VR', feedCount: 1 },
+  { id: 'f3', name: 'ニュース', feedCount: 1 },
+  { id: 'f4', name: 'デザイン', feedCount: 1 },
+];
+const feeds = [
+  { id: 'a', title: 'Zenn トレンド', url: 'https://zenn.dev/feed', siteUrl: 'https://zenn.dev', folder: 'テック', articleCount: 4 },
+  { id: 'b', title: 'Hacker Digest', url: 'https://hd.example.com/rss', siteUrl: 'https://hd.example.com', folder: 'テック', articleCount: 3 },
+  { id: 'c', title: 'The Rust Blog', url: 'https://blog.rust-lang.org/feed.xml', siteUrl: 'https://blog.rust-lang.org', folder: 'テック', articleCount: 2 },
+  { id: 'd', title: 'UploadVR', url: 'https://uploadvr.com/rss', siteUrl: 'https://uploadvr.com', folder: 'AR/VR', articleCount: 2 },
+  { id: 'e', title: '週刊ニュースまとめ', url: 'https://news.example.jp/rss', siteUrl: null, folder: 'ニュース', articleCount: 2 },
+  { id: 'f', title: 'Typography Notes', url: 'https://typo.example.com/feed', siteUrl: 'https://typo.example.com', folder: 'デザイン', articleCount: 1 },
+  { id: 'g', title: 'ひとりごとブログ', url: 'https://hitorigoto.example.jp/feed', siteUrl: 'https://hitorigoto.example.jp', folder: null, articleCount: 1 },
+];
+const A = (id, feedId, title, author, h, isRead, content) => ({
+  id, feedId, feedTitle: feeds.find(f => f.id === feedId).title, title,
+  url: `https://example.com/${id}`, author, content,
+  publishedAt: h == null ? null : hoursAgo(h), isRead, readAt: isRead ? hoursAgo(1) : null,
+});
+const lorem = '<p>この記事はモック用のダミー本文です。実際のフィードからは HTML がそのまま届くため、リーダー側で見出し、引用、コード、画像などを読みやすく整形する必要があります。</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus posuere velit aliquet.</p>';
+const articles = [
+  A('1','a','React 19 のサーバーコンポーネントを実務で使って分かったこと','田中 太郎',2,false,
+    `<img src="${img('react')}" alt=""><p>半年間、本番環境で React Server Components を運用してきました。結論から言うと、<strong>データ取得の設計が根本的に変わります</strong>が、慣れれば見通しはかなり良くなります。</p><h2>境界をどこに引くか</h2><p>最初に迷うのは <code>"use client"</code> の置き場所です。インタラクションを持つ末端のコンポーネントだけをクライアントにするのが基本方針です。</p><blockquote>サーバーで済むことはサーバーで。クライアントは本当に必要な場所だけ。</blockquote><pre><code>export default async function Page() {\n  const posts = await db.posts.list();\n  return &lt;PostList posts={posts} /&gt;;\n}</code></pre>${lorem}`),
+  A('2','b','Why SQLite is the database you should reach for first','Maria Chen',5,false,
+    `<img src="${img('sqlite')}" alt=""><p>For most applications, a single-file embedded database is more than enough. With WAL mode and a sensible backup strategy, SQLite handles surprisingly heavy workloads.</p><h2>Concurrency is not the problem you think it is</h2><p>Readers never block writers in WAL mode, and a single writer can do tens of thousands of transactions per second on commodity hardware.</p><blockquote>Most apps never outgrow SQLite. They outgrow their architecture first.</blockquote><ul><li>Use <code>PRAGMA journal_mode=WAL</code></li><li>Set a busy timeout</li><li>Back up with <a href="https://litestream.io">Litestream</a></li></ul>${lorem}`),
+  A('3','c','Announcing Rust 1.90.0','The Rust Release Team',9,false,
+    `<p>The Rust team is happy to announce a new version of Rust, 1.90.0. Rust is a programming language empowering everyone to build reliable and efficient software.</p><h2>What's in 1.90.0</h2><p>This release stabilizes several long-awaited APIs and improves compile times on large workspaces.</p><pre><code>let v: Vec&lt;u32&gt; = (0..10).collect();\nlet total: u32 = v.iter().sum();</code></pre>${lorem}`),
+  A('4','d','Meta Quest の次世代ヘッドセット、軽量化と価格の両立を狙う','UploadVR 編集部',12,false,
+    `<img src="${img('quest')}" alt=""><p>Meta は次世代のスタンドアロン型ヘッドセットで、重量を大幅に削減しつつ価格を抑える方針だと報じられています。</p>${lorem}`),
+  A('5','e','今週のまとめ：円相場、半導体、そして新しい働き方','',20,true,
+    `<p>今週の主要ニュースを5分で振り返ります。為替は小幅な動きにとどまり、半導体関連株は引き続き注目を集めました。</p>${lorem}`),
+  A('6','f','Choosing a serif for long-form reading','Lena Fischer',27,false,
+    `<img src="${img('serif')}" alt=""><p>A good reading serif disappears. Its job is not to be noticed but to carry the reader through thousands of words without friction.</p><blockquote>Contrast is not the same as legibility.</blockquote>${lorem}`),
+  A('7','a','Go 1.24 のジェネリクスと型エイリアスを整理する',null,32,true,
+    `<p>ジェネリックな型エイリアスが使えるようになり、公開 API の移行がしやすくなりました。</p><pre><code>type Set[T comparable] = map[T]struct{}</code></pre>${lorem}`),
+  A('8','g','最近読んだ本と、朝の散歩について','あやか',40,false,
+    `<img src="${img('walk')}" alt=""><p>朝6時に家を出て、川沿いを30分歩く。それだけの習慣が、一日の集中力をずいぶん変えてくれました。</p>${lorem}`),
+  A('9','b','The quiet return of server-rendered HTML',null,52,true,
+    `<p>After a decade of single-page apps, teams are rediscovering that HTML over the wire is fast, simple, and cheap to operate.</p>${lorem}`),
+  A('10','d','Apple Vision Pro 向けの新しい空間アプリ 5 選','Kenji Mori',60,false,
+    `<img src="${img('vision')}" alt=""><p>空間コンピューティングならではの体験を活かしたアプリを紹介します。</p>${lorem}`),
+  A('11','e','地方自治体のオープンデータ活用が広がる','山本 花子',75,false,
+    `<p>自治体が公開するデータを使った市民向けサービスが増えています。課題はデータ品質と継続的な更新体制です。</p>${lorem}`),
+  A('12','c','Rust for Linux: where we are in 2026','Alice Ryhl',96,true,
+    `<img src="${img('linux')}" alt=""><p>Rust support in the Linux kernel has moved from experiment to everyday tool. Several drivers now ship with Rust components by default.</p>${lorem}`),
+  A('13','a','Tailwind CSS v4 移行で詰まったポイント集','佐藤 健',120,false,
+    `<p>設定ファイルが CSS 中心になり、プラグインの扱いも変わりました。移行時にハマった箇所をまとめます。</p>${lorem}`),
+  A('14','g','日付が不明な古いメモ（publishedAt が null）',null,null,false,
+    `<p>公開日時を持たないフィードの記事は、取得時刻などで代替表示します。</p>`),
+];
+
+/* ---------- derivations (same logic the real UI would use) ---------- */
+const thumbOf = a => { const m = a.content.match(/<img[^>]+src=["']([^"']+)["']/i); return m ? m[1] : null; };
+const textOf = html => { const d = document.createElement('div'); d.innerHTML = html; return d.textContent.replace(/\s+/g, ' ').trim(); };
+const excerptOf = (a, n = 140) => { const t = textOf(a.content); return t.length > n ? t.slice(0, n) + '…' : t; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const colors = ['#e4572e', '#17bebb', '#76b041', '#a05195', '#2f6690', '#d4a017', '#c1456b', '#4a6fa5'];
+const colorOf = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return colors[h % colors.length]; };
+const avatar = (title, size = 20) => `<span class="avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size * .5)}px;background:${colorOf(title)}">${esc([...title][0])}</span>`;
+const rel = iso => {
+  if (!iso) return '日時不明';
+  const m = Math.max(1, Math.round((Date.now() - new Date(iso)) / 60000));
+  if (m < 60) return `${m}分前`;
+  if (m < 1440) return `${Math.floor(m / 60)}時間前`;
+  if (m < 43200) return `${Math.floor(m / 1440)}日前`;
+  return new Date(iso).toLocaleDateString('ja-JP');
+};
+const longDate = iso => iso ? new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : '日時不明';
+const folderIdOf = f => (folders.find(x => x.name === f.folder) || {}).id || null;
+const unreadCounts = () => {
+  const r = { total: 0, feeds: {}, folders: {} };
+  for (const a of articles) {
+    if (a.isRead) continue;
+    r.total++;
+    r.feeds[a.feedId] = (r.feeds[a.feedId] || 0) + 1;
+    const fid = folderIdOf(feeds.find(f => f.id === a.feedId));
+    if (fid) r.folders[fid] = (r.folders[fid] || 0) + 1;
+  }
+  return r;
+};
+
+/* ---------- state ---------- */
+const st = { nav: 'home', feedId: null, folderId: null, tab: 'all', q: '', collapsed: {} };
+const $ = id => document.getElementById(id);
+const app = $('app');
+let toastT;
+const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1600); };
+const setRead = (id, v) => { const a = articles.find(x => x.id === id); a.isRead = v; a.readAt = v ? new Date().toISOString() : null; };
+
+/* ---------- sidebar ---------- */
+function renderSide() {
+  const u = unreadCounts();
+  const navBtn = (key, ico, label, cnt) => `<button class="nav-item ${st.nav === key && !st.feedId && !st.folderId ? 'active' : ''}" data-nav="${key}"><span class="ico">${ico}</span>${label}${cnt ? `<span class="cnt">${cnt}</span>` : ''}</button>`;
+  const feedRow = f => `<button class="nav-item feed-row ${st.feedId === f.id ? 'active' : ''}" data-feed="${f.id}">${avatar(f.title, 20)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.title)}</span>${u.feeds[f.id] ? `<span class="cnt">${u.feeds[f.id]}</span>` : ''}</button>`;
+  let subs = '';
+  for (const fo of folders) {
+    const open = !st.collapsed[fo.id];
+    subs += `<div class="folder-head"><button class="tog" data-tog="${fo.id}">${open ? '▼' : '▶'}</button><button class="nav-item ${st.folderId === fo.id ? 'active' : ''}" data-folder="${fo.id}" style="padding-left:2px">${esc(fo.name)}${u.folders[fo.id] ? `<span class="cnt">${u.folders[fo.id]}</span>` : ''}</button></div>`;
+    if (open) subs += feeds.filter(f => f.folder === fo.name).map(feedRow).join('');
+  }
+  const loose = feeds.filter(f => !f.folder);
+  if (loose.length) subs += `<div class="sec-title" style="padding-top:12px">未分類</div>` + loose.map(f => feedRow(f).replace('feed-row', 'feed-row" style="padding-left:10px')).join('');
+  $('side').innerHTML = `
+    <div class="brand"><i></i>Feedly<span style="color:var(--accent)">.</span></div>
+    <div class="side-scroll">
+      ${navBtn('home', '⌂', 'Home')}${navBtn('unread', '●', 'Unread', u.total)}${navBtn('search', '⌕', 'Search')}
+      <div class="sec-title">Subscriptions</div>${subs}
+    </div>
+    <div class="side-foot">
+      <button class="btn-add" data-act="add">+ Add feed</button>
+      <div class="foot-row"><button data-act="refresh">↻ Refresh</button><button data-act="settings">⚙ Settings</button></div>
+    </div>`;
+}
+
+/* ---------- timeline ---------- */
+function visible() {
+  let list = articles.slice();
+  if (st.feedId) list = list.filter(a => a.feedId === st.feedId);
+  else if (st.folderId) {
+    const name = folders.find(f => f.id === st.folderId).name;
+    const ids = feeds.filter(f => f.folder === name).map(f => f.id);
+    list = list.filter(a => ids.includes(a.feedId));
+  }
+  if (st.tab === 'unread' || st.nav === 'unread') list = list.filter(a => !a.isRead);
+  if (st.nav === 'search' && st.q.trim()) {
+    const q = st.q.trim().toLowerCase();
+    list = list.filter(a => (a.title + ' ' + textOf(a.content)).toLowerCase().includes(q));
+  }
+  return list.sort((a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
+}
+function cardHtml(a) {
+  const t = thumbOf(a);
+  return `<article class="card ${a.isRead ? 'read' : ''}" data-open="${a.id}">
+    <div class="body">
+      <div class="byline">${avatar(a.feedTitle, 20)}<b>${esc(a.feedTitle)}</b>${a.author ? `<span>· ${esc(a.author)}</span>` : ''}<span>· ${rel(a.publishedAt)}</span></div>
+      <h2>${a.isRead ? '' : '<span class="dot" title="Unread"></span>'}<span>${esc(a.title)}</span></h2>
+      <p class="ex">${esc(excerptOf(a))}</p>
+      <div class="actions">
+        <a href="${esc(a.url)}" target="_blank" rel="noopener" data-stop>Open original ↗</a>
+        <button data-toggle="${a.id}">${a.isRead ? '○ Mark as unread' : '✓ Mark as read'}</button>
+      </div>
+    </div>
+    ${t ? `<img class="thumb" src="${esc(t)}" alt="" loading="lazy">` : ''}
+  </article>`;
+}
+function renderList(keepSearchFocus) {
+  const feed = st.feedId && feeds.find(f => f.id === st.feedId);
+  const folder = st.folderId && folders.find(f => f.id === st.folderId);
+  let pub = '';
+  if (feed) pub = `<div class="pub">${avatar(feed.title, 72)}<div><h1>${esc(feed.title)}</h1><div class="meta">${feed.siteUrl ? `<a class="site" href="${esc(feed.siteUrl)}" target="_blank" rel="noopener">${esc(feed.siteUrl.replace(/^https?:\/\//, ''))}</a> · ` : ''}${feed.articleCount} articles</div></div></div>`;
+  else if (folder) pub = `<div class="pub"><span class="avatar" style="width:72px;height:72px;font-size:30px;background:var(--fg);color:var(--bg)">▤</span><div><h1>${esc(folder.name)}</h1><div class="meta">${folder.feedCount} feeds</div></div></div>`;
+  const list = visible();
+  const tabs = st.nav === 'unread' ? '' : `<button class="tab ${st.tab === 'all' ? 'active' : ''}" data-tab="all">All</button><button class="tab ${st.tab === 'unread' ? 'active' : ''}" data-tab="unread">Unread</button>`;
+  const title = st.nav === 'unread' ? '<span class="tab active">Unread</span>' : '';
+  $('view').innerHTML = `<div class="col">
+    ${pub}
+    <div class="head"><div class="tabs">${tabs}${title}<button class="markall" data-act="markall">✓ Mark all as read</button></div></div>
+    ${st.nav === 'search' ? `<div class="search"><input id="q" type="search" placeholder="Search title and content…" value="${esc(st.q)}"></div>` : ''}
+    <div id="cards">${list.length ? list.map(cardHtml).join('') : '<div class="empty">該当する記事がありません。</div>'}</div>
+    ${list.length ? '<div class="loading"><span class="spin"></span>Loading more…</div>' : ''}
+  </div>`;
+  if (keepSearchFocus || st.nav === 'search') { const q = $('q'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+}
+function renderCardsOnly() {
+  const list = visible();
+  $('cards').innerHTML = list.length ? list.map(cardHtml).join('') : '<div class="empty">該当する記事がありません。</div>';
+}
+
+/* ---------- reader ---------- */
+function renderReader(id) {
+  const a = articles.find(x => x.id === id);
+  if (!a) { location.hash = '#/'; return; }
+  if (!a.isRead) { setRead(id, true); renderSide(); }
+  $('view').innerHTML = `<div class="reader">
+    <a class="back" href="#/">← Back</a>
+    <div class="r-pub">${avatar(a.feedTitle, 32)}<span>${esc(a.feedTitle)}</span></div>
+    <h1>${esc(a.title)}</h1>
+    <div class="r-by">${a.author ? esc(a.author) + ' · ' : ''}${longDate(a.publishedAt)}</div>
+    <div class="prose">${a.content}</div>
+    <div class="r-foot"><a class="btn-pill btn-primary" href="${esc(a.url)}" target="_blank" rel="noopener">Read on original site ↗</a><button class="btn-pill btn-ghost" data-toggle="${a.id}" data-reader>Mark as unread</button></div>
+  </div>`;
+  window.scrollTo(0, 0);
+}
+
+/* ---------- routing ---------- */
+function route() {
+  const m = location.hash.match(/^#\/article\/(.+)$/);
+  app.classList.remove('open');
+  if (m) renderReader(decodeURIComponent(m[1]));
+  else { renderSide(); renderList(); }
+}
+window.addEventListener('hashchange', route);
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const t = e.target;
+  const c = sel => t.closest(sel);
+  if (c('#burger')) return app.classList.add('open');
+  if (c('#scrim')) return app.classList.remove('open');
+  if (c('[data-stop]')) return;
+  let el;
+  if ((el = c('[data-toggle]'))) {
+    e.stopPropagation();
+    const id = el.dataset.toggle, a = articles.find(x => x.id === id);
+    setRead(id, !a.isRead);
+    renderSide();
+    if (el.hasAttribute('data-reader')) el.textContent = a.isRead ? 'Mark as unread' : 'Mark as read';
+    else renderList();
+    return;
+  }
+  const goList = () => { if (location.hash.startsWith('#/article')) location.hash = '#/'; else { renderSide(); renderList(); app.classList.remove('open'); } };
+  if ((el = c('[data-nav]'))) { st.nav = el.dataset.nav; st.feedId = st.folderId = null; st.tab = 'all'; if (st.nav !== 'search') st.q = ''; return goList(); }
+  if ((el = c('[data-feed]'))) { st.nav = 'home'; st.feedId = el.dataset.feed; st.folderId = null; st.q = ''; return goList(); }
+  if ((el = c('[data-folder]'))) { st.nav = 'home'; st.folderId = el.dataset.folder; st.feedId = null; st.q = ''; return goList(); }
+  if ((el = c('[data-tog]'))) { st.collapsed[el.dataset.tog] = !st.collapsed[el.dataset.tog]; return renderSide(); }
+  if ((el = c('[data-tab]'))) { st.tab = el.dataset.tab; return renderList(); }
+  if ((el = c('[data-act]'))) {
+    const act = el.dataset.act;
+    if (act === 'markall') { visible().forEach(a => setRead(a.id, true)); renderSide(); renderList(); toast('Marked all as read'); }
+    else toast({ add: 'Add feed (dummy)', refresh: 'Refreshing feeds… (dummy)', settings: 'Settings (dummy)' }[act]);
+    return;
+  }
+  if ((el = c('[data-open]'))) location.hash = '#/article/' + encodeURIComponent(el.dataset.open);
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'q') { st.q = e.target.value; renderCardsOnly(); }
+});
+
+route();
+</script>
+</body>
+</html>
