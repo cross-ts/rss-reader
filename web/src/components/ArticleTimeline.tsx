@@ -8,13 +8,14 @@ const Spinner = () => (
 );
 
 export function ArticleTimeline({ q, emptyText }: { q: string; emptyText: string }) {
-  const { articles, isPending, isError, hasNextPage, isFetchingNextPage, fetchNextPage, refetch } = useArticles(q);
+  const { articles, isPending, isError, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, refetch } = useArticles(q);
   const setRead = useSetRead();
   const sentinel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || !hasNextPage) return;
+    // 次ページ取得に失敗したら監視を止める（無限リトライ防止）。再試行は手動。
+    if (!el || !hasNextPage || isFetchNextPageError) return;
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting) && !isFetchingNextPage) fetchNextPage();
@@ -23,7 +24,7 @@ export function ArticleTimeline({ q, emptyText }: { q: string; emptyText: string
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
   if (isPending) {
     return (
@@ -50,11 +51,20 @@ export function ArticleTimeline({ q, emptyText }: { q: string; emptyText: string
       {articles.map((a) => (
         <ArticleCard key={a.id} article={a} onSetRead={setRead} />
       ))}
-      {hasNextPage && (
-        <div ref={sentinel} className="py-8 text-center text-sm text-muted">
-          <Spinner />
-          Loading more…
+      {hasNextPage && isFetchNextPageError && !isFetchingNextPage ? (
+        <div className="py-8 text-center text-sm text-muted">
+          読み込みに失敗しました。
+          <button type="button" onClick={() => fetchNextPage()} className="ml-2 text-accent underline">
+            再試行
+          </button>
         </div>
+      ) : (
+        hasNextPage && (
+          <div ref={sentinel} className="py-8 text-center text-sm text-muted">
+            <Spinner />
+            Loading more…
+          </div>
+        )
       )}
     </>
   );
