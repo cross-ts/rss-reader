@@ -131,7 +131,7 @@ a{color:inherit}
   <div class="main" style="flex-direction:column;align-items:center">
     <div class="topbar" style="width:100%">
       <button class="burger" id="burger" aria-label="Menu">☰</button>
-      <span style="font-family:var(--serif);font-weight:700;font-size:18px">Feedly<span style="color:var(--accent)">.</span></span>
+      <span style="font-family:var(--serif);font-weight:700;font-size:18px">Reader<span style="color:var(--accent)">.</span></span>
     </div>
     <div id="view" style="width:100%;display:flex;justify-content:center"></div>
   </div>
@@ -247,7 +247,7 @@ function renderSide() {
   const loose = feeds.filter(f => !f.folder);
   if (loose.length) subs += `<div class="sec-title" style="padding-top:12px">未分類</div>` + loose.map(f => feedRow(f).replace('feed-row', 'feed-row" style="padding-left:10px')).join('');
   $('side').innerHTML = `
-    <div class="brand"><i></i>Feedly<span style="color:var(--accent)">.</span></div>
+    <div class="brand"><i></i>Reader<span style="color:var(--accent)">.</span></div>
     <div class="side-scroll">
       ${navBtn('home', '⌂', 'Home')}${navBtn('unread', '●', 'Unread', u.total)}${navBtn('search', '⌕', 'Search')}
       <div class="sec-title">Subscriptions</div>${subs}
