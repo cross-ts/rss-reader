@@ -57,6 +57,28 @@ describe('useSetRead', () => {
   });
 });
 
+describe('useSetRead concurrency', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    toastSpy.mockClear();
+  });
+
+  it('rolls back only the failed article, keeping other successful updates', async () => {
+    const { wrapper, isRead } = setup();
+    vi.spyOn(api, 'updateArticle').mockImplementation((id) =>
+      id === 1 ? Promise.reject(new Error('x')) : Promise.resolve(),
+    );
+    const { result } = renderHook(() => useSetRead(), { wrapper });
+    act(() => {
+      result.current(1, true);
+      result.current(2, true);
+    });
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith('更新に失敗しました'));
+    expect(isRead('', 1)).toBe(false);
+    expect(isRead('', 2)).toBe(true);
+  });
+});
+
 describe('useRefresh', () => {
   beforeEach(() => {
     vi.restoreAllMocks();

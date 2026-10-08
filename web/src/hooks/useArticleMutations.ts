@@ -9,25 +9,35 @@ export function useSetRead() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
+  const patchArticle = (id: number, patch: { isRead: boolean; readAt: string | null }) =>
+    queryClient.setQueriesData<ArticlesData>({ queryKey: ['articles'] }, (old) =>
+      old && {
+        ...old,
+        pages: old.pages.map((p) => ({
+          ...p,
+          items: p.items.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+        })),
+      },
+    );
+
   const mutation = useMutation({
     mutationFn: ({ id, isRead }: { id: number; isRead: boolean }) => api.updateArticle(id, { isRead }),
     onMutate: async ({ id, isRead }) => {
       await queryClient.cancelQueries({ queryKey: ['articles'] });
-      const previous = queryClient.getQueriesData<ArticlesData>({ queryKey: ['articles'] });
-      const readAt = isRead ? new Date().toISOString() : null;
-      queryClient.setQueriesData<ArticlesData>({ queryKey: ['articles'] }, (old) =>
-        old && {
-          ...old,
-          pages: old.pages.map((p) => ({
-            ...p,
-            items: p.items.map((a) => (a.id === id ? { ...a, isRead, readAt } : a)),
-          })),
-        },
-      );
-      return { previous };
+      // ロールバック用に、この記事の元の状態だけを記憶する（並行ミューテーションを巻き戻さない）
+      let prev: { isRead: boolean; readAt: string | null } | undefined;
+      for (const [, data] of queryClient.getQueriesData<ArticlesData>({ queryKey: ['articles'] })) {
+        const a = data?.pages.flatMap((p) => p.items).find((x) => x.id === id);
+        if (a) {
+          prev = { isRead: a.isRead, readAt: a.readAt };
+          break;
+        }
+      }
+      patchArticle(id, { isRead, readAt: isRead ? new Date().toISOString() : null });
+      return { prev };
     },
-    onError: (_err, _vars, ctx) => {
-      ctx?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.prev) patchArticle(id, ctx.prev);
       toast('更新に失敗しました');
     },
     onSettled: () => {
