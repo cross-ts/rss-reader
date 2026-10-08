@@ -1,6 +1,6 @@
 /**
- * Extract the first image URL from HTML content using DOMParser.
- * Only allows http/https URLs to prevent XSS via data: or javascript: URIs.
+ * HTML 内の最初の img の src を返す。
+ * data: / javascript: 等を避けるため http/https のみ許可する。
  */
 export function extractThumbnail(html: string): string | null {
   try {
@@ -16,10 +16,12 @@ export function extractThumbnail(html: string): string | null {
   }
 }
 
-/** Extract plain-text excerpt from HTML content, trimmed to maxLen chars. */
-export function extractTextExcerpt(html: string, maxLen = 80): string {
+const BLOCK_END = /<br\s*\/?>|<\/(p|h[1-6]|li|blockquote|pre|div|ul|ol|tr|table|figure|figcaption)>/gi;
+
+/** HTML からプレーンテキストの抜粋を作る。ブロック要素の境界には空白を入れる。 */
+export function extractTextExcerpt(html: string, maxLen = 320): string {
   try {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const doc = new DOMParser().parseFromString(html.replace(BLOCK_END, '$& '), 'text/html');
     const text = (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim();
     if (text.length <= maxLen) return text;
     return text.slice(0, maxLen).trimEnd() + '…';

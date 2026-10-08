@@ -46,33 +46,7 @@ export interface UnreadCounts {
   folders: Record<string, number>;
 }
 
-export interface SettingItem<T = string | number> {
-  value: T;
-  source: 'flag' | 'env' | 'file' | 'default';
-  editable: boolean;
-  restartRequired: boolean;
-}
-
-export interface Settings {
-  host: SettingItem<string>;
-  port: SettingItem<number>;
-  pollIntervalMinutes: SettingItem<number>;
-  frontendUrl: SettingItem<string>;
-  db: SettingItem<string>;
-  feeds: SettingItem<string>;
-  staticDir: SettingItem<string>;
-}
-
-export interface SettingsUpdate {
-  host?: string;
-  port?: number;
-  pollIntervalMinutes?: number;
-  frontendUrl?: string;
-}
-
 export interface ArticleQuery {
-  folderId?: number;
-  feedId?: number;
   q?: string;
   limit?: number;
   offset?: number;
@@ -122,6 +96,14 @@ export const api = {
     });
   },
 
+  // フォルダ改名（子フォルダとフィードもサーバー側で付け替わる）
+  updateFolder(id: number, name: string): Promise<Folder> {
+    return request(`/api/folders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    });
+  },
+
   // フォルダ削除（フォルダ内のフィードは未分類になる）
   deleteFolder(id: number): Promise<void> {
     return request(`/api/folders/${id}`, { method: 'DELETE' });
@@ -151,8 +133,6 @@ export const api = {
   // 記事一覧
   getArticles(query: ArticleQuery = {}): Promise<ArticleListResponse> {
     const params = new URLSearchParams();
-    if (query.folderId != null) params.set('folderId', String(query.folderId));
-    if (query.feedId != null) params.set('feedId', String(query.feedId));
     if (query.q) params.set('q', query.q);
     if (query.limit != null) params.set('limit', String(query.limit));
     if (query.offset != null) params.set('offset', String(query.offset));
@@ -177,29 +157,8 @@ export const api = {
     });
   },
 
-  // 複数記事をまとめて既読化
-  markArticlesRead(articleIds: number[]): Promise<{ updated: number }> {
-    return request('/api/articles/mark-read', {
-      method: 'POST',
-      body: JSON.stringify({ articleIds }),
-    });
-  },
-
   // 未読数集計（フィード/フォルダ/全体）
   getUnreadCounts(): Promise<UnreadCounts> {
     return request('/api/unread-counts');
-  },
-
-  // 設定取得
-  getSettings(): Promise<Settings> {
-    return request('/api/settings');
-  },
-
-  // 設定更新（編集可能なキーのみ）
-  updateSettings(update: SettingsUpdate): Promise<void> {
-    return request('/api/settings', {
-      method: 'PUT',
-      body: JSON.stringify(update),
-    });
   },
 };

@@ -77,6 +77,20 @@ describe('api client', () => {
     });
   });
 
+  describe('updateFolder', () => {
+    it('calls PUT /api/folders/:id with name', async () => {
+      const folder = { id: 3, name: 'A/B', feedCount: 0 };
+      vi.mocked(fetch).mockResolvedValue(mockResponse(folder));
+      const result = await api.updateFolder(3, 'A/B');
+      expect(fetch).toHaveBeenCalledWith('/api/folders/3', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'A/B' }),
+      });
+      expect(result).toEqual(folder);
+    });
+  });
+
   describe('deleteFolder', () => {
     it('calls DELETE /api/folders/:id', async () => {
       vi.mocked(fetch).mockResolvedValue(mockResponse(null, 204));
@@ -182,12 +196,10 @@ describe('api client', () => {
 
     it('builds query string from all params', async () => {
       vi.mocked(fetch).mockResolvedValue(mockResponse({ items: [], total: 0 }));
-      await api.getArticles({ folderId: 1, feedId: 2, q: 'test', limit: 10, offset: 20 });
+      await api.getArticles({ q: 'test', limit: 10, offset: 20 });
       const calledUrl = vi.mocked(fetch).mock.calls[0][0] as string;
       expect(calledUrl).toContain('/api/articles?');
       const params = new URLSearchParams(calledUrl.split('?')[1]);
-      expect(params.get('folderId')).toBe('1');
-      expect(params.get('feedId')).toBe('2');
       expect(params.get('q')).toBe('test');
       expect(params.get('limit')).toBe('10');
       expect(params.get('offset')).toBe('20');
@@ -195,11 +207,11 @@ describe('api client', () => {
 
     it('omits undefined query params', async () => {
       vi.mocked(fetch).mockResolvedValue(mockResponse({ items: [], total: 0 }));
-      await api.getArticles({ feedId: 5 });
+      await api.getArticles({ limit: 30, offset: 0 });
       const calledUrl = vi.mocked(fetch).mock.calls[0][0] as string;
       const params = new URLSearchParams(calledUrl.split('?')[1]);
-      expect(params.get('feedId')).toBe('5');
-      expect(params.has('folderId')).toBe(false);
+      expect(params.get('limit')).toBe('30');
+      expect(params.get('offset')).toBe('0');
       expect(params.has('q')).toBe(false);
     });
   });
@@ -213,19 +225,6 @@ describe('api client', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isRead: true }),
       });
-    });
-  });
-
-  describe('markArticlesRead', () => {
-    it('calls POST /api/articles/mark-read with articleIds', async () => {
-      vi.mocked(fetch).mockResolvedValue(mockResponse({ updated: 3 }));
-      const result = await api.markArticlesRead([1, 2, 3]);
-      expect(fetch).toHaveBeenCalledWith('/api/articles/mark-read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ articleIds: [1, 2, 3] }),
-      });
-      expect(result).toEqual({ updated: 3 });
     });
   });
 
