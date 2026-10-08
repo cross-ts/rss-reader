@@ -17,8 +17,8 @@
   :root{ --bg:#fff; --fg:#111; --muted:#6b6b6b; --line:#e8e8e8; --hover:#f4f4f4; --panel:#fafafa; }
 }
 *{box-sizing:border-box}
-html{overflow-y:scroll;scrollbar-gutter:stable;overscroll-behavior-y:contain}
-html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+html{overflow-x:hidden;overflow-y:scroll;scrollbar-gutter:stable;overscroll-behavior-y:contain}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);-webkit-font-smoothing:antialiased}
 button,input,select{font:inherit;color:inherit}
 button{background:none;border:0;cursor:pointer;padding:0}
 a{color:inherit;text-decoration:none}
@@ -33,15 +33,11 @@ svg.s{width:18px;height:18px}
 .nav.active{color:var(--fg);font-weight:700}
 .nav.active svg.f{fill:currentColor}
 .nav.active svg.b{stroke-width:2.6}
-.btn-add{margin:16px 0 0;background:var(--accent);color:#fff;border-radius:12px;padding:14px;font-weight:700;font-size:17px;text-align:center}
-.btn-add:hover{filter:brightness(1.08)}
-.btn-add .short{display:none}
-.side .spacer{flex:1}
 /* views */
 #view{flex:1;min-width:0}
 .cols{display:flex;justify-content:center;min-width:0}
 .center{flex:1 1 750px;max-width:750px;min-width:0;border-left:1px solid var(--line);border-right:1px solid var(--line);min-height:100vh}
-.right{flex:0 1 540px;min-width:300px;padding:20px 32px;display:flex;flex-direction:column;gap:20px}
+.right{position:sticky;top:0;align-self:flex-start;height:100vh;overflow-y:auto;flex:0 1 540px;min-width:300px;padding:20px 32px;display:flex;flex-direction:column;gap:20px}
 .rbox{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0 16px;color:var(--muted)}
 .rbox input{flex:1;min-width:0;background:none;border:0;outline:0;padding:13px 0;color:var(--fg)}
 .rbox:focus-within{border-color:var(--accent)}
@@ -153,9 +149,6 @@ svg.s{width:18px;height:18px}
   .logo{margin:0 0 16px}
   .nav{justify-content:center;padding:13px;width:auto}
   .nav .lb{display:none}
-  .btn-add .long{display:none}
-  .btn-add .short{display:inline}
-  .btn-add{width:48px;height:48px;padding:0;display:flex;align-items:center;justify-content:center;font-size:24px;border-radius:50%}
 }
 @media (max-width:639px){
   .side{display:none}
@@ -382,9 +375,7 @@ function addFeedModal() {
 const NAVS = [['home', '#/', 'Home', 'home', 'f'], ['subs', '#/subscriptions', 'Subscriptions', 'subs', 'f'], ['search', '#/search', 'Search', 'search', 'b']];
 function renderChrome(active) {
   $('side').innerHTML = `<a href="#/" aria-label="Home">${LOGO}</a>` +
-    NAVS.map(([k, h, l, i, c]) => `<a class="nav ${active === k ? 'active' : ''}" href="${h}" title="${l}">${ico(i, c)}<span class="lb">${l}</span></a>`).join('') +
-    `<button class="btn-add" data-act="addfeed"><span class="long">+ フィードを追加</span><span class="short">+</span></button>
-`;
+    NAVS.map(([k, h, l, i, c]) => `<a class="nav ${active === k ? 'active' : ''}" href="${h}" title="${l}">${ico(i, c)}<span class="lb">${l}</span></a>`).join('');
   $('tabbar').innerHTML = NAVS.map(([k, h, l, i, c]) => `<a href="${h}" class="${active === k ? 'active' : ''}" aria-label="${l}">${ico(i, c)}</a>`).join('');
 }
 
