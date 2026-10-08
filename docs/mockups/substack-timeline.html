@@ -272,7 +272,7 @@ let articles = [
 
 /* ---------- derivations ---------- */
 const thumbOf = a => { const m = a.content.match(/<img[^>]+src=["']([^"']+)["']/i); return m ? m[1] : null; };
-const textOf = html => { const d = document.createElement('div'); d.innerHTML = html; return d.textContent.replace(/\s+/g, ' ').trim(); };
+const textOf = html => { const d = document.createElement('div'); d.innerHTML = html.replace(/<br\s*\/?>|<\/(p|h[1-6]|li|blockquote|pre|div|ul|ol|tr|table|figure|figcaption)>/gi, '$& '); return d.textContent.replace(/\s+/g, ' ').trim(); };
 const excerptOf = (a, n = 320) => { const t = textOf(a.content); return t.length > n ? t.slice(0, n) + '…' : t; };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const colors = ['#e4572e', '#17bebb', '#76b041', '#a05195', '#2f6690', '#d4a017', '#c1456b', '#4a6fa5'];
