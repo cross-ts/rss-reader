@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, type InfiniteData } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { useSetRead } from '../useArticleMutations';
+import { useSetRead, useRefresh } from '../useArticleMutations';
 import { api, type ArticleListResponse } from '../../api/client';
 import { makeArticle } from '../../test/factories';
 
@@ -54,5 +54,40 @@ describe('useSetRead', () => {
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith('更新に失敗しました'));
     expect(isRead('', 1)).toBe(false);
     expect(isRead('q', 1)).toBe(false);
+  });
+});
+
+describe('useRefresh', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    toastSpy.mockClear();
+  });
+
+  it('trims to the first page without dropping data, refetches it and toasts the new count', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    vi.spyOn(api, 'getArticles').mockResolvedValue({ items: [makeArticle(9), makeArticle(1)], total: 3 });
+    // 2 ページ分をキャッシュに積む（observer が無いので invalidate では refetch されない点に注意）
+    qc.setQueryData<InfiniteData<ArticleListResponse>>(['articles', ''], {
+      pages: [
+        { items: [makeArticle(1)], total: 3 },
+        { items: [makeArticle(2)], total: 3 },
+      ],
+      pageParams: [0, 1],
+    });
+    vi.spyOn(api, 'refresh').mockResolvedValue({ refreshed: 1 });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useRefresh(), { wrapper });
+    // 購読者を付けて active にする（staleTime が無限なのでマウントでは取得しない）
+    const { useArticles } = await import('../useArticles');
+    renderHook(() => useArticles(''), { wrapper });
+    await act(async () => {
+      await result.current();
+    });
+    const data = qc.getQueryData<InfiniteData<ArticleListResponse>>(['articles', ''])!;
+    expect(data.pages).toHaveLength(1);
+    expect(data.pages[0].items.map((a) => a.id)).toEqual([9, 1]);
+    expect(toastSpy).toHaveBeenCalledWith('1 件の新着');
   });
 });

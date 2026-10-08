@@ -49,7 +49,11 @@ export function useRefresh() {
     const before = firstIds();
     try {
       await api.refresh();
-      await queryClient.resetQueries({ queryKey: ['articles'] });
+      // 既存表示を保ったまま1ページ目だけ取り直す（reset だと Loading に戻ってガタつく）
+      queryClient.setQueriesData<ArticlesData>({ queryKey: ['articles'] }, (d) =>
+        d && { pages: d.pages.slice(0, 1), pageParams: d.pageParams.slice(0, 1) },
+      );
+      await queryClient.invalidateQueries({ queryKey: ['articles'] });
       queryClient.invalidateQueries({ queryKey: ['feeds'] });
       queryClient.invalidateQueries({ queryKey: ['unreadCounts'] });
       const n = [...firstIds()].filter((id) => !before.has(id)).length;
