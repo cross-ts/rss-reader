@@ -37,3 +37,25 @@ export function useSetRead() {
 
   return (id: number, isRead: boolean) => mutation.mutate({ id, isRead });
 }
+
+/** 全フィードを更新し、1ページ目だけ取り直して新着件数をトーストする。 */
+export function useRefresh() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return async () => {
+    const firstIds = () =>
+      new Set(queryClient.getQueryData<ArticlesData>(['articles', ''])?.pages[0]?.items.map((a) => a.id));
+    const before = firstIds();
+    try {
+      await api.refresh();
+      await queryClient.resetQueries({ queryKey: ['articles'] });
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['unreadCounts'] });
+      const n = [...firstIds()].filter((id) => !before.has(id)).length;
+      toast(n > 0 ? `${n} 件の新着` : '新着はありません');
+    } catch {
+      toast('更新に失敗しました');
+    }
+  };
+}
