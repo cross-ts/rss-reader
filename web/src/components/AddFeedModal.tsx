@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api, type Folder, type FeedCandidate } from '../api/client';
 import { useSubscriptionMutations } from '../hooks/useSubscriptionMutations';
 import { Footer, Modal, btnCls, btnPri, inputCls } from './Modal';
@@ -12,18 +12,21 @@ export function AddFeedModal({ folders, onClose }: { folders: Folder[]; onClose:
   const [chosen, setChosen] = useState<FeedCandidate | null>(null);
   const [folder, setFolder] = useState('');
   const [busy, setBusy] = useState(false);
+  const seq = useRef(0); // 古い discover 応答を破棄するための連番
 
   const discover = async () => {
     const v = url.trim();
     if (!v || busy) return;
+    const mine = ++seq.current;
     setBusy(true);
     setChosen(null);
     try {
-      setCands(await api.discoverFeed(v.includes('://') ? v : 'https://' + v));
+      const r = await api.discoverFeed(v.includes('://') ? v : 'https://' + v);
+      if (mine === seq.current) setCands(r);
     } catch {
-      setCands([]);
+      if (mine === seq.current) setCands([]);
     } finally {
-      setBusy(false);
+      if (mine === seq.current) setBusy(false);
     }
   };
 
@@ -46,7 +49,14 @@ export function AddFeedModal({ folders, onClose }: { folders: Folder[]; onClose:
         <input
           type="text"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => {
+            // URL を変えたら、古い候補・選択は無効にする
+            seq.current++;
+            setUrl(e.target.value);
+            setCands(null);
+            setChosen(null);
+            setBusy(false);
+          }}
           onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && discover()}
           placeholder="https://example.com または フィード URL"
           className={inputCls}

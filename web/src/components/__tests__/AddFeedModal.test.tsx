@@ -34,4 +34,26 @@ describe('AddFeedModal', () => {
     await userEvent.type(screen.getByPlaceholderText(/example\.com/), 'https://x.test{Enter}');
     expect(await screen.findByText('フィードが見つかりませんでした')).toBeInTheDocument();
   });
+
+  it('clears candidates and selection when the URL is edited', async () => {
+    vi.spyOn(api, 'discoverFeed').mockResolvedValue([{ feedUrl: 'https://ex.com/feed', title: 'Ex' }]);
+    renderWithProviders(<AddFeedModal folders={[]} onClose={() => {}} />);
+    await userEvent.type(screen.getByPlaceholderText(/example\.com/), 'ex.com{Enter}');
+    await userEvent.click(await screen.findByText('Ex'));
+    expect(screen.getByRole('button', { name: '追加' })).toBeEnabled();
+    await userEvent.type(screen.getByPlaceholderText(/example\.com/), 'x');
+    expect(screen.queryByText('Ex')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '追加' })).toBeDisabled();
+  });
+
+  it('discards a stale discover response after the URL changed', async () => {
+    let resolve!: (v: { feedUrl: string; title: string }[]) => void;
+    vi.spyOn(api, 'discoverFeed').mockReturnValue(new Promise((r) => (resolve = r)));
+    renderWithProviders(<AddFeedModal folders={[]} onClose={() => {}} />);
+    await userEvent.type(screen.getByPlaceholderText(/example\.com/), 'old.com{Enter}');
+    await userEvent.type(screen.getByPlaceholderText(/example\.com/), 'x');
+    resolve([{ feedUrl: 'https://old.com/feed', title: 'Old' }]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('Old')).not.toBeInTheDocument();
+  });
 });
