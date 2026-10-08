@@ -74,10 +74,15 @@ describe('extractTextExcerpt', () => {
     expect(extractTextExcerpt('', 80)).toBe('');
   });
 
-  it('uses default maxLen of 80', () => {
-    const long = 'a'.repeat(100);
+  it('uses default maxLen of 320', () => {
+    const long = 'a'.repeat(400);
     const result = extractTextExcerpt(`<p>${long}</p>`);
-    expect(result.length).toBeLessThanOrEqual(81); // 80 chars + ellipsis
+    expect(result.length).toBe(321); // 320 chars + ellipsis
     expect(result.endsWith('…')).toBe(true);
+  });
+
+  it('inserts a space at block element boundaries', () => {
+    expect(extractTextExcerpt('<p>foo</p><p>bar</p><h2>baz</h2>qux')).toBe('foo bar baz qux');
+    expect(extractTextExcerpt('a<br>b')).toBe('a b');
   });
 });

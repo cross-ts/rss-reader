@@ -1,103 +1,75 @@
-import { useCallback } from 'react';
 import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { api, type ArticleListResponse } from '../api/client';
+import { useToast } from '../components/Toast';
 
-export function useArticleMutations() {
+type ArticlesData = InfiniteData<ArticleListResponse>;
+
+/** 既読/未読の楽観的更新。['articles'] は invalidate せず、未読数だけ取り直す。 */
+export function useSetRead() {
   const queryClient = useQueryClient();
+  const toast = useToast();
 
-  const markReadMutation = useMutation({
-    mutationFn: (id: number) => api.updateArticle(id, { isRead: true }),
-    onMutate: async (id: number) => {
+  const patchArticle = (id: number, patch: { isRead: boolean; readAt: string | null }) =>
+    queryClient.setQueriesData<ArticlesData>({ queryKey: ['articles'] }, (old) =>
+      old && {
+        ...old,
+        pages: old.pages.map((p) => ({
+          ...p,
+          items: p.items.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+        })),
+      },
+    );
+
+  const mutation = useMutation({
+    mutationFn: ({ id, isRead }: { id: number; isRead: boolean }) => api.updateArticle(id, { isRead }),
+    onMutate: async ({ id, isRead }) => {
       await queryClient.cancelQueries({ queryKey: ['articles'] });
-      const previousQueries = queryClient.getQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] });
-      queryClient.setQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] }, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page) => ({
-            ...page,
-            items: page.items.map((a) => (a.id === id ? { ...a, isRead: true, readAt: new Date().toISOString() } : a)),
-          })),
-        };
-      });
-      return { previousQueries };
+      // ロールバック用に、この記事の元の状態だけを記憶する（並行ミューテーションを巻き戻さない）
+      let prev: { isRead: boolean; readAt: string | null } | undefined;
+      for (const [, data] of queryClient.getQueriesData<ArticlesData>({ queryKey: ['articles'] })) {
+        const a = data?.pages.flatMap((p) => p.items).find((x) => x.id === id);
+        if (a) {
+          prev = { isRead: a.isRead, readAt: a.readAt };
+          break;
+        }
+      }
+      patchArticle(id, { isRead, readAt: isRead ? new Date().toISOString() : null });
+      return { prev };
     },
-    onError: (_err, _vars, context) => {
-      context?.previousQueries.forEach(([queryKey, data]) => {
-        queryClient.setQueryData(queryKey, data);
-      });
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.prev) patchArticle(id, ctx.prev);
+      toast('更新に失敗しました');
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
       queryClient.invalidateQueries({ queryKey: ['unreadCounts'] });
     },
   });
 
-  const toggleReadMutation = useMutation({
-    mutationFn: ({ id, currentIsRead }: { id: number; currentIsRead: boolean }) =>
-      api.updateArticle(id, { isRead: !currentIsRead }),
-    onMutate: async ({ id, currentIsRead }) => {
-      await queryClient.cancelQueries({ queryKey: ['articles'] });
-      const previousQueries = queryClient.getQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] });
-      queryClient.setQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] }, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page) => ({
-            ...page,
-            items: page.items.map((a) =>
-              a.id === id ? { ...a, isRead: !currentIsRead, readAt: !currentIsRead ? new Date().toISOString() : null } : a,
-            ),
-          })),
-        };
-      });
-      return { previousQueries };
-    },
-    onError: (_err, _vars, context) => {
-      context?.previousQueries.forEach(([queryKey, data]) => {
-        queryClient.setQueryData(queryKey, data);
-      });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
+  return (id: number, isRead: boolean) => mutation.mutate({ id, isRead });
+}
+
+/** 全フィードを更新し、1ページ目だけ取り直して新着件数をトーストする。 */
+export function useRefresh() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return async () => {
+    const firstIds = () =>
+      new Set(queryClient.getQueryData<ArticlesData>(['articles', ''])?.pages[0]?.items.map((a) => a.id));
+    const before = firstIds();
+    try {
+      await api.refresh();
+      // 既存表示を保ったまま1ページ目だけ取り直す（reset だと Loading に戻ってガタつく）
+      queryClient.setQueriesData<ArticlesData>({ queryKey: ['articles'] }, (d) =>
+        d && { pages: d.pages.slice(0, 1), pageParams: d.pageParams.slice(0, 1) },
+      );
+      await queryClient.invalidateQueries({ queryKey: ['articles'] });
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
       queryClient.invalidateQueries({ queryKey: ['unreadCounts'] });
-    },
-  });
-
-  const markAllReadMutation = useMutation({
-    mutationFn: (ids: number[]) => api.markArticlesRead(ids),
-    onMutate: async (ids: number[]) => {
-      await queryClient.cancelQueries({ queryKey: ['articles'] });
-      const previousQueries = queryClient.getQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] });
-      const idSet = new Set(ids);
-      queryClient.setQueriesData<InfiniteData<ArticleListResponse>>({ queryKey: ['articles'] }, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page) => ({
-            ...page,
-            items: page.items.map((a) =>
-              idSet.has(a.id) ? { ...a, isRead: true, readAt: new Date().toISOString() } : a,
-            ),
-          })),
-        };
-      });
-      return { previousQueries };
-    },
-    onError: (_err, _vars, context) => {
-      context?.previousQueries.forEach(([queryKey, data]) => {
-        queryClient.setQueryData(queryKey, data);
-      });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
-      queryClient.invalidateQueries({ queryKey: ['unreadCounts'] });
-    },
-  });
-
-  const markRead = useCallback((id: number) => markReadMutation.mutate(id), [markReadMutation.mutate]);
-  const toggleRead = useCallback((id: number, currentIsRead: boolean) => toggleReadMutation.mutate({ id, currentIsRead }), [toggleReadMutation.mutate]);
-  const markAllRead = useCallback((ids: number[]) => markAllReadMutation.mutate(ids), [markAllReadMutation.mutate]);
-
-  return { markRead, toggleRead, markAllRead };
+      const n = [...firstIds()].filter((id) => !before.has(id)).length;
+      toast(n > 0 ? `${n} 件の新着` : '新着はありません');
+    } catch {
+      toast('更新に失敗しました');
+    }
+  };
 }

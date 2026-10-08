@@ -1,24 +1,37 @@
 # AGENTS.md — web/（React + Vite フロントエンド）
 
-3ペイン SPA（Sidebar / ArticleList / ArticleView）。バックエンド API（`/api/*`）を同一オリジンで叩く。
+Substack 風のタイムライン SPA（Home / Subscriptions / Search）。バックエンド API（`/api/*`）を同一オリジンで叩く。記事本文の HTML は描画せず、テキスト抜粋と先頭画像・元記事リンク（http/https のみ）だけを表示する。
 
 ## スタック / コマンド
-- React 19 + Vite + TypeScript + `@tanstack/react-query` + `dompurify`。
-- **pnpm を使う（npm 禁止）**。`pnpm -C web install` / `pnpm -C web run build` / `pnpm -C web run dev`（:5173, `/api`→`http://localhost:3000` プロキシ）。
+- React 19 + Vite + TypeScript + `@tanstack/react-query` + Tailwind CSS v4。
+- **pnpm を使う（npm 禁止）**。`pnpm -C web install` / `pnpm -C web run build` / `pnpm -C web run dev`（:5173, `/api`→`http://localhost:3000` プロキシ）/ `pnpm -C web test`。
 - esbuild のビルドは `web/pnpm-workspace.yaml` の `allowBuilds: { esbuild: true }` で許可。pnpm 11 では package.json の `pnpm` フィールドではなくこちら。必要に応じ `pnpm -C web rebuild esbuild`。
 - ビルド成果物 `web/dist` は gitignore。GitHub Pages へは Actions でデプロイ予定。
 
-## ファイル
-- `src/main.tsx` — エントリ（QueryClientProvider, CSS import）。
-- `src/App.tsx` — 3ペインレイアウト。
-- `src/api/client.ts` — 型（Folder/Feed/Article、`publishedAt: string | null`）と api 関数（getFolders/createFolder/getFeeds/createFeed/deleteFeed/getArticles/refresh）。
-- `src/components/Sidebar.tsx` — フォルダ/フィードツリー＋追加フォーム。
-- `src/components/ArticleList.tsx` — 検索ボックス＋記事カード（`formatDate` は null→「日付不明」、`stripHtml`）。
-- `src/components/ArticleView.tsx` — 本文（`DOMPurify.sanitize`）、元記事リンクは http/https のみ。
-- `src/styles.css` — スタイル。
+## スタイル
+- Tailwind v4 の CSS-first。`tailwind.config.js` は無い。`src/styles.css` に `@import "tailwindcss"`、`:root` の CSS 変数（`--bg --fg --muted --line --hover --panel --accent`、`prefers-color-scheme: light` で上書き）、`@theme inline` での色・フォント登録（`bg-bg` `text-muted` `border-line` `bg-accent` など）、`@layer base`。
+- 見た目は原則ユーティリティで書く。ブレークポイントは Tailwind 既定の `sm`=640 / `lg`=1024 / `xl`=1280 に一致（`sm` 未満: 下部タブバー、`lg` 未満: アイコンレール、`xl` 未満: 右カラム非表示）。
+- スクロールするのは window。左右カラムは `sticky top-0 h-screen`。
 
-## 第2フェーズでのフロント作業（予定/進行中）
-- **Tailwind CSS 導入**: `tailwindcss`/`@tailwindcss/postcss`/`postcss`/`autoprefixer`、`tailwind.config.js`、`postcss.config.js`、エントリCSS に `@import "tailwindcss"` と `@config "../tailwind.config.js"`。
-- **フォルダ削除UI**: `client.ts` に `deleteFolder(id)`、Sidebar の各フォルダ見出しに削除ボタン＋確認、成功時 folders/feeds/articles を invalidate。
-- **フィード自動検出UI**: `client.ts` に `discoverFeed(url)`（`POST /api/feeds/discover`）。追加フォームの入力を「サイト or フィードURL」に。追加はサーバ側自動検出に任せる。任意で「検出」ボタンで候補プレビュー。
-- **`vite.config.ts`**: `base: './'`（Pages とローカルプロキシ双方で解決）。dev の `/api` プロキシは維持。
+## ルーティング
+- ライブラリ無しの自前ハッシュルーティング（`hooks/useHashRoute.ts`、`#/` `#/search?q=` `#/subscriptions`）。理由: GitHub Pages のサブパス配信には SPA フォールバックが無く、`base: './'` ではネストしたパスで相対アセットが解決できないため。ハッシュなら Pages / Go 静的配信 / Vite dev のどれでも変更なしで動く。
+- Search の入力は `history.replaceState` で URL だけ更新する（`hashchange` が発火しないので再マウントされずフォーカスが保たれる）。`App.tsx` は `SearchPage` を `key={rawHash}` でマウントし、外部からの遷移では作り直される。
+
+## データ取得（React Query）
+- キー: `['articles', q]`（Home は q=''、Search は q。`useInfiniteQuery`、30 件/ページ、id で重複排除）、`['feeds']`、`['folders']`、`['unreadCounts']`。
+- 既読は楽観的更新（`useSetRead`）。**`['articles']` は invalidate しない**（読み込み済みの全ページを再取得してしまうため）。`['unreadCounts']` だけ取り直す。
+- 更新（`useRefresh`）は `['articles']` を 1 ページ目だけに切り詰めて invalidate する（reset だと Loading に戻る）。
+- 購読画面の変更系は `hooks/useSubscriptionMutations.ts`。成功時に folders / feeds / unreadCounts を invalidate、フィードの改名・削除・追加は articles も invalidate。フォルダ移動のみ楽観的更新。409 は「同名のフォルダがあります」。
+- フィードの「最終更新」は API に無いので表示しない。「最近更新されたフィード」は Home と同じ `['articles','']` の 1 ページ目から導出する。
+
+## ファイル
+- `src/main.tsx` — エントリ（QueryClient、ToastProvider）。`src/App.tsx` — シェル（Sidebar / main / TabBar）。
+- `src/api/client.ts` — 型と api 関数。
+- `src/pages/` — HomePage / SearchPage / SubscriptionsPage。
+- `src/components/` — Sidebar, TabBar, Columns, SearchBox, ArticleCard, ArticleTimeline（無限スクロール）, RecentFeedsPanel, Avatar, Icon, Toast, Modal（Modal/ConfirmDialog/PromptDialog）, Menu, AddFeedModal。
+- `src/hooks/` — useHashRoute, useArticles, useArticleMutations（useSetRead / useRefresh）, usePullToRefresh（touch・マウスドラッグ・wheel、Home 専用）, useSubscriptionMutations, useDebounce。
+- `src/utils/` — time（formatDate）, thumbnail, decodeEntities, avatar, url（safeHttpUrl）, subscriptions（buildSections）, recentFeeds。
+- `src/test/` — setup（IntersectionObserver スタブ、clipboard モック）、テスト用ヘルパー。
+
+## 設定
+- `vite.config.ts`: `base: './'`（Pages とローカルプロキシ双方で解決）。dev の `/api` プロキシは維持。

@@ -1,31 +1,11 @@
-/**
- * Format an ISO date string as a relative time string (e.g., "3h ago", "2d ago").
- * Falls back to a short absolute date for older items.
- */
-export function relativeTime(iso: string | null): string {
-  if (!iso) return '';
-  try {
-    const date = new Date(iso);
-    if (isNaN(date.getTime())) return '';
-    const now = Date.now();
-    const diff = now - date.getTime();
-    if (diff < 0) return 'just now';
-
-    const minutes = Math.floor(diff / 60_000);
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes}m ago`;
-
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-
-    if (days < 365) {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return '';
-  }
+/** ISO 日時を「N分前」「N時間前」「M月D日」「YYYY年M月D日」で表す。不正・null は「日時不明」。 */
+export function formatDate(iso: string | null): string {
+  if (!iso) return '日時不明';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '日時不明';
+  const diff = Date.now() - d.getTime();
+  if (diff < 3_600_000) return `${Math.max(1, Math.round(diff / 60_000))}分前`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}時間前`;
+  const md = `${d.getMonth() + 1}月${d.getDate()}日`;
+  return d.getFullYear() === new Date().getFullYear() ? md : `${d.getFullYear()}年${md}`;
 }

@@ -1,281 +1,115 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { type ReactNode } from 'react';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, type InfiniteData } from '@tanstack/react-query';
-import { useArticleMutations } from '../useArticleMutations';
-import { api, type Article, type ArticleListResponse } from '../../api/client';
+import type { ReactNode } from 'react';
+import { useSetRead, useRefresh } from '../useArticleMutations';
+import { api, type ArticleListResponse } from '../../api/client';
+import { makeArticle } from '../../test/factories';
 
-vi.mock('../../api/client', () => ({
-  api: {
-    updateArticle: vi.fn(),
-    markArticlesRead: vi.fn(),
-  },
-}));
+const toastSpy = vi.fn();
+vi.mock('../../components/Toast', () => ({ useToast: () => toastSpy }));
 
-const mockUpdateArticle = vi.mocked(api.updateArticle);
-const mockMarkArticlesRead = vi.mocked(api.markArticlesRead);
+const seed = (): InfiniteData<ArticleListResponse> => ({
+  pages: [{ items: [makeArticle(1), makeArticle(2)], total: 2 }],
+  pageParams: [0],
+});
 
-function createArticle(overrides: Partial<Article> = {}): Article {
-  return {
-    id: 1,
-    feedId: 1,
-    feedTitle: 'Test Feed',
-    title: 'Test Article',
-    url: 'https://example.com/article',
-    author: null,
-    content: '<p>Content</p>',
-    publishedAt: '2024-01-01T00:00:00Z',
-    isRead: false,
-    readAt: null,
-    ...overrides,
-  };
+function setup() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qc.setQueryData(['articles', ''], seed());
+  qc.setQueryData(['articles', 'q'], seed());
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+  const isRead = (key: string, id: number) =>
+    qc.getQueryData<InfiniteData<ArticleListResponse>>(['articles', key])!.pages[0].items.find((a) => a.id === id)!
+      .isRead;
+  return { qc, wrapper, isRead };
 }
 
-function createQueryClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  });
-}
-
-function createWrapper(queryClient: QueryClient) {
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-  };
-}
-
-function seedArticlesCache(
-  queryClient: QueryClient,
-  articles: Article[],
-): void {
-  queryClient.setQueryData<InfiniteData<ArticleListResponse>>(['articles'], {
-    pages: [{ items: articles, total: articles.length }],
-    pageParams: [0],
-  });
-}
-
-describe('useArticleMutations', () => {
-  let queryClient: QueryClient;
-
+describe('useSetRead', () => {
   beforeEach(() => {
-    queryClient = createQueryClient();
-    vi.resetAllMocks();
-    mockUpdateArticle.mockResolvedValue(undefined);
-    mockMarkArticlesRead.mockResolvedValue({ updated: 1 });
+    vi.restoreAllMocks();
+    toastSpy.mockClear();
   });
 
-  afterEach(() => {
-    queryClient.clear();
+  it('optimistically updates every articles cache', async () => {
+    const { wrapper, isRead } = setup();
+    let resolve!: () => void;
+    vi.spyOn(api, 'updateArticle').mockReturnValue(new Promise<void>((r) => (resolve = r)));
+    const { result } = renderHook(() => useSetRead(), { wrapper });
+    act(() => result.current(1, true));
+    await waitFor(() => expect(isRead('', 1)).toBe(true));
+    expect(isRead('q', 1)).toBe(true);
+    expect(isRead('', 2)).toBe(false);
+    expect(api.updateArticle).toHaveBeenCalledWith(1, { isRead: true });
+    resolve();
   });
 
-  describe('markRead', () => {
-    it('calls api.updateArticle with isRead: true', async () => {
-      const article = createArticle({ id: 42 });
-      seedArticlesCache(queryClient, [article]);
+  it('rolls back and toasts on error', async () => {
+    const { wrapper, isRead } = setup();
+    vi.spyOn(api, 'updateArticle').mockRejectedValue(new Error('x'));
+    const { result } = renderHook(() => useSetRead(), { wrapper });
+    act(() => result.current(1, true));
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith('更新に失敗しました'));
+    expect(isRead('', 1)).toBe(false);
+    expect(isRead('q', 1)).toBe(false);
+  });
+});
 
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.markRead(42);
-      });
-
-      await waitFor(() => {
-        expect(mockUpdateArticle).toHaveBeenCalledWith(42, { isRead: true });
-      });
-    });
-
-    it('optimistically updates the article cache to isRead: true', async () => {
-      const article = createArticle({ id: 1, isRead: false });
-      seedArticlesCache(queryClient, [article]);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.markRead(1);
-      });
-
-      await waitFor(() => {
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].isRead).toBe(true);
-        expect(cached?.pages[0].items[0].readAt).toBeTruthy();
-      });
-    });
-
-    it('rolls back on API error', async () => {
-      mockUpdateArticle.mockRejectedValueOnce(new Error('Network error'));
-
-      const article = createArticle({ id: 1, isRead: false, readAt: null });
-      seedArticlesCache(queryClient, [article]);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.markRead(1);
-      });
-
-      await waitFor(() => {
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].isRead).toBe(false);
-        expect(cached?.pages[0].items[0].readAt).toBeNull();
-      });
-    });
+describe('useSetRead concurrency', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    toastSpy.mockClear();
   });
 
-  describe('toggleRead', () => {
-    it('toggles from unread to read', async () => {
-      const article = createArticle({ id: 1, isRead: false });
-      seedArticlesCache(queryClient, [article]);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.toggleRead(1, false);
-      });
-
-      await waitFor(() => {
-        expect(mockUpdateArticle).toHaveBeenCalledWith(1, { isRead: true });
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].isRead).toBe(true);
-        expect(cached?.pages[0].items[0].readAt).toBeTruthy();
-      });
+  it('rolls back only the failed article, keeping other successful updates', async () => {
+    const { wrapper, isRead } = setup();
+    vi.spyOn(api, 'updateArticle').mockImplementation((id) =>
+      id === 1 ? Promise.reject(new Error('x')) : Promise.resolve(),
+    );
+    const { result } = renderHook(() => useSetRead(), { wrapper });
+    act(() => {
+      result.current(1, true);
+      result.current(2, true);
     });
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith('更新に失敗しました'));
+    expect(isRead('', 1)).toBe(false);
+    expect(isRead('', 2)).toBe(true);
+  });
+});
 
-    it('toggles from read to unread', async () => {
-      const article = createArticle({
-        id: 1,
-        isRead: true,
-        readAt: '2024-01-01T00:00:00Z',
-      });
-      seedArticlesCache(queryClient, [article]);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.toggleRead(1, true);
-      });
-
-      await waitFor(() => {
-        expect(mockUpdateArticle).toHaveBeenCalledWith(1, { isRead: false });
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].isRead).toBe(false);
-        expect(cached?.pages[0].items[0].readAt).toBeNull();
-      });
-    });
-
-    it('rolls back on error', async () => {
-      mockUpdateArticle.mockRejectedValueOnce(new Error('fail'));
-
-      const article = createArticle({ id: 1, isRead: false, readAt: null });
-      seedArticlesCache(queryClient, [article]);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.toggleRead(1, false);
-      });
-
-      await waitFor(() => {
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].isRead).toBe(false);
-        expect(cached?.pages[0].items[0].readAt).toBeNull();
-      });
-    });
+describe('useRefresh', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    toastSpy.mockClear();
   });
 
-  describe('markAllRead', () => {
-    it('calls api.markArticlesRead with the given ids', async () => {
-      const articles = [
-        createArticle({ id: 1, isRead: false }),
-        createArticle({ id: 2, isRead: false }),
-        createArticle({ id: 3, isRead: true }),
-      ];
-      seedArticlesCache(queryClient, articles);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.markAllRead([1, 2]);
-      });
-
-      await waitFor(() => {
-        expect(mockMarkArticlesRead).toHaveBeenCalledWith([1, 2]);
-      });
+  it('trims to the first page without dropping data, refetches it and toasts the new count', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    vi.spyOn(api, 'getArticles').mockResolvedValue({ items: [makeArticle(9), makeArticle(1)], total: 3 });
+    // 2 ページ分をキャッシュに積む（observer が無いので invalidate では refetch されない点に注意）
+    qc.setQueryData<InfiniteData<ArticleListResponse>>(['articles', ''], {
+      pages: [
+        { items: [makeArticle(1)], total: 3 },
+        { items: [makeArticle(2)], total: 3 },
+      ],
+      pageParams: [0, 1],
     });
-
-    it('optimistically marks specified articles as read', async () => {
-      const articles = [
-        createArticle({ id: 1, isRead: false }),
-        createArticle({ id: 2, isRead: false }),
-        createArticle({ id: 3, isRead: false }),
-      ];
-      seedArticlesCache(queryClient, articles);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.markAllRead([1, 3]);
-      });
-
-      await waitFor(() => {
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].isRead).toBe(true);
-        expect(cached?.pages[0].items[0].readAt).toBeTruthy();
-        // id=2 should remain unread
-        expect(cached?.pages[0].items[1].isRead).toBe(false);
-        expect(cached?.pages[0].items[2].isRead).toBe(true);
-        expect(cached?.pages[0].items[2].readAt).toBeTruthy();
-      });
+    vi.spyOn(api, 'refresh').mockResolvedValue({ refreshed: 1 });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useRefresh(), { wrapper });
+    // 購読者を付けて active にする（staleTime が無限なのでマウントでは取得しない）
+    const { useArticles } = await import('../useArticles');
+    renderHook(() => useArticles(''), { wrapper });
+    await act(async () => {
+      await result.current();
     });
-
-    it('rolls back all changes on error', async () => {
-      mockMarkArticlesRead.mockRejectedValueOnce(new Error('fail'));
-
-      const articles = [
-        createArticle({ id: 1, isRead: false, readAt: null }),
-        createArticle({ id: 2, isRead: false, readAt: null }),
-      ];
-      seedArticlesCache(queryClient, articles);
-
-      const { result } = renderHook(() => useArticleMutations(), {
-        wrapper: createWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.markAllRead([1, 2]);
-      });
-
-      await waitFor(() => {
-        const cached =
-          queryClient.getQueryData<InfiniteData<ArticleListResponse>>(['articles']);
-        expect(cached?.pages[0].items[0].isRead).toBe(false);
-        expect(cached?.pages[0].items[1].isRead).toBe(false);
-      });
-    });
+    const data = qc.getQueryData<InfiniteData<ArticleListResponse>>(['articles', ''])!;
+    expect(data.pages).toHaveLength(1);
+    expect(data.pages[0].items.map((a) => a.id)).toEqual([9, 1]);
+    expect(toastSpy).toHaveBeenCalledWith('1 件の新着');
   });
 });
