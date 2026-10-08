@@ -5,7 +5,7 @@
 - バックエンド: Go（標準ライブラリ中心 / `net/http` `ServeMux`）
 - ストレージ: SQLite（`modernc.org/sqlite` + FTS5 による全文検索）
 - 全文検索: SQLite FTS5 の **trigram トークナイザ**（BM25 ランキング）
-- フロントエンド: React + Vite（SPA、3ペイン）
+- フロントエンド: React + Vite（SPA、Substack 風タイムライン: Home / Subscriptions / Search、ハッシュルーティング）
 - フィード定義: `feeds.opml` を **SSOT（単一の正本）** とし、SQLiteはそこから再構築される派生キャッシュ
 
 ## 必要環境
@@ -84,12 +84,7 @@ frontend_url: "https://..."
 static_dir: "web/dist"
 ```
 
-Web UI（サイドバー下部の歯車アイコン）から次の項目を編集できます。保存すると `config.yml` に永続化され、**サーバーの再起動後に反映されます**（ライブ反映はしません）。
-
-| キー | Web UI から編集可能 | 備考 |
-|---|---|---|
-| `host`, `port`, `poll_interval_minutes`, `frontend_url` | ✅ | 保存後は再起動が必要 |
-| `db`, `feeds`, `static_dir` | ❌（閲覧のみ） | 意図しないパス書き換えを防ぐため編集不可 |
+設定は config.yml・CLI フラグ・環境変数で行います（Web UI からの設定編集はありません）。`/api/settings` は API として残っており、現在値の取得と編集可能なキーの更新ができます（`db` / `feeds` / `static_dir` は閲覧のみ。保存した値は再起動後に反映されます）。
 
 ### バイナリのビルド
 
@@ -151,12 +146,13 @@ pnpm -C web run dev          # Vite :5173（/api を :3000 にプロキシ）
 - 複数フィードの定期巡回（条件付きGET）と `(feed_id, guid)` による重複排除
 - フォルダ単位のグルーピングと記事一覧（公開日降順）
 - キーワードの全文検索（SQLite FTS5 trigram / BM25）。3文字以上は trigram MATCH、1〜2文字は LIKE フォールバック。
-- Web UIからのフィード/フォルダ管理
+- 全フィード横断のタイムライン（公開日降順）と無限スクロール、pull-to-refresh による更新
+- Web UIからのフィード/フォルダ管理（Subscriptions 画面。追加・改名・削除、ドラッグ&ドロップでフォルダ移動）
 
 ## セキュリティ上の注意
 - 既定で **127.0.0.1（ループバック）にのみバインド**。無認証のため、**そのまま外部公開しない**こと（公開する場合は認証・TLS・許可Originの追加が必須）。
 - フィード取得は **http/https のみ許可**し、ループバック/プライベート/リンクローカルIP（DNS解決後を含む）への取得を拒否（SSRF対策）。タイムアウト・リダイレクト上限・ボディサイズ上限あり。
-- 記事本文は表示前に DOMPurify でサニタイズ。元記事リンクは http/https のみ。
+- 記事本文の HTML は描画せず、テキスト抜粋と http/https の画像・リンクだけを表示する。
 
 ## 既知の制限 / 今後の対応
 MVPとして許容し、将来対応とする項目:
