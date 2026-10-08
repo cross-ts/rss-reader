@@ -56,4 +56,18 @@ describe('ArticleCard', () => {
     setup({ title: 'Bad', url: 'javascript:alert(1)' });
     expect(screen.getByText('Bad')).not.toHaveAttribute('href');
   });
+
+  it('shows a failure toast when the clipboard write fails', async () => {
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(new Error('denied'));
+    setup();
+    await userEvent.click(screen.getByRole('button', { name: 'リンクをコピー' }));
+    expect(await screen.findByText('コピーに失敗しました')).toBeInTheDocument();
+    expect(screen.queryByText('リンクをコピーしました')).not.toBeInTheDocument();
+  });
+
+  it('shows a failure toast when the url is not copyable', async () => {
+    setup({ url: 'javascript:alert(1)' });
+    await userEvent.click(screen.getByRole('button', { name: 'リンクをコピー' }));
+    expect(await screen.findByText('コピーに失敗しました')).toBeInTheDocument();
+  });
 });

@@ -23,9 +23,14 @@ export const ArticleCard = memo(function ArticleCard({ article: a, onSetRead }: 
   const open = () => {
     if (!a.isRead) onSetRead(a.id, true);
   };
-  const copy = () => {
-    if (href) navigator.clipboard?.writeText(href).catch(() => {});
-    toast('リンクをコピーしました');
+  const copy = async () => {
+    try {
+      if (!href || !navigator.clipboard) throw new Error('unavailable');
+      await navigator.clipboard.writeText(href);
+      toast('リンクをコピーしました');
+    } catch {
+      toast('コピーに失敗しました');
+    }
   };
 
   return (
