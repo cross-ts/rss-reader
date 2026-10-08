@@ -1,5 +1,7 @@
 import { Columns } from '../components/Columns';
+import { ArticleTimeline } from '../components/ArticleTimeline';
+import { SearchBox } from '../components/SearchBox';
 
 export function HomePage() {
-  return <Columns center={<div className="px-5 py-[18px] text-xl font-bold">Home</div>} />;
+  return <Columns center={<ArticleTimeline q="" emptyText="記事がありません。" />} right={<SearchBox />} />;
 }
