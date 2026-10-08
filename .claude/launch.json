@@ -3,9 +3,15 @@
   "configurations": [
     {
       "name": "rss-reader",
-      "runtimeExecutable": "cargo",
-      "runtimeArgs": ["run", "--quiet"],
+      "runtimeExecutable": "go",
+      "runtimeArgs": ["run", "."],
       "port": 3000
+    },
+    {
+      "name": "mockup",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "docs/mockups"],
+      "port": 8765
     },
     {
       "name": "web",
