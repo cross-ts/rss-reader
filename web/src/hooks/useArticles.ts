@@ -4,14 +4,24 @@ import { api, type Article } from '../api/client';
 
 export const PAGE_SIZE = 30;
 
-/** 記事の無限スクロール取得。q='' は全記事（Home）。id で重複を除いて返す。 */
-export function useArticles(q: string) {
+/**
+ * 記事の無限スクロール取得。q='' は全記事（Home）。id で重複を除いて返す。
+ * unreadOnly のときは「読み込み済みのうちまだ未読の件数」を次の offset にする
+ * （このセッションで既読にした分だけサーバー側の未読リストが縮むため）。
+ */
+export function useArticles(
+  q: string,
+  { unreadOnly = false, enabled = true }: { unreadOnly?: boolean; enabled?: boolean } = {},
+) {
   const query = useInfiniteQuery({
-    queryKey: ['articles', q],
-    queryFn: ({ pageParam }) => api.getArticles({ q: q || undefined, limit: PAGE_SIZE, offset: pageParam }),
+    queryKey: unreadOnly ? ['articles', q, 'unread'] : ['articles', q],
+    queryFn: ({ pageParam }) =>
+      api.getArticles({ q: q || undefined, unreadOnly: unreadOnly || undefined, limit: PAGE_SIZE, offset: pageParam }),
+    enabled,
     initialPageParam: 0,
     getNextPageParam: (last, all) => {
-      const n = all.reduce((s, p) => s + p.items.length, 0);
+      const items = all.flatMap((p) => p.items);
+      const n = unreadOnly ? items.filter((a) => !a.isRead).length : items.length;
       return n < last.total && last.items.length > 0 ? n : undefined;
     },
   });

@@ -7,6 +7,11 @@ const P = {
   folder: '<path d="M3 6h6l2 2h10v11H3z"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
   trash: '<path d="M5 7h14M10 7V4h4v3m-8 0 1 13h10l1-13"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+  up: '<path d="M12 19V5m0 0-6 6m6-6 6 6"/>',
+  down: '<path d="M12 5v14m0 0-6-6m6 6 6-6"/>',
+  inbox: '<path d="M3 13h5l1.5 3h5L16 13h5M5 5h14l2 8v6H3v-6z"/>',
   share: '<path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6h14v-6"/>',
 } as const;
 

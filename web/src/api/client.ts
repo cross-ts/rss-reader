@@ -48,6 +48,8 @@ export interface UnreadCounts {
 
 export interface ArticleQuery {
   q?: string;
+  /** true なら未読のみ */
+  unreadOnly?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -134,6 +136,7 @@ export const api = {
   getArticles(query: ArticleQuery = {}): Promise<ArticleListResponse> {
     const params = new URLSearchParams();
     if (query.q) params.set('q', query.q);
+    if (query.unreadOnly) params.set('unread', '1');
     if (query.limit != null) params.set('limit', String(query.limit));
     if (query.offset != null) params.set('offset', String(query.offset));
     const qs = params.toString();
@@ -154,6 +157,14 @@ export const api = {
     return request(`/api/articles/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
+    });
+  },
+
+  // 複数記事をまとめて既読にする
+  markRead(ids: number[]): Promise<{ updated: number }> {
+    return request('/api/articles/mark-read', {
+      method: 'POST',
+      body: JSON.stringify({ articleIds: ids }),
     });
   },
 
