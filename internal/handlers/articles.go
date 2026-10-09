@@ -74,6 +74,10 @@ func ListArticles(database *db.DB) http.HandlerFunc {
 			filter.FeedID = &id
 		}
 
+		if query.Get("unread") == "1" {
+			filter.UnreadOnly = true
+		}
+
 		if v := query.Get("q"); v != "" {
 			filter.Q = &v
 		}

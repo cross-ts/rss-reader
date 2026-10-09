@@ -42,8 +42,10 @@ type ArticleFilter struct {
 	FolderID *int
 	FeedID   *int
 	Q        *string
-	Limit    int64
-	Offset   int64
+	// UnreadOnly restricts the result to unread articles.
+	UnreadOnly bool
+	Limit      int64
+	Offset     int64
 }
 
 // FeedTarget holds the minimal information needed to fetch a feed.
