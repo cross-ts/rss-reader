@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reader – timeline mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;600;700&family=Spectral:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f0f0f; --fg:#f2f2f2; --muted:#8e8e8e; --line:#262626; --hover:#1b1b1b; --panel:#161616; --accent:#FF6719;
+  --sans:"Inter","Noto Sans JP",system-ui,sans-serif;
+  --serif:"Spectral","Lora","Noto Serif JP",Georgia,serif;
+}
+@media (prefers-color-scheme:light){
+  :root{ --bg:#fff; --fg:#111; --muted:#6b6b6b; --line:#e8e8e8; --hover:#f4f4f4; --panel:#fafafa; }
+}
+*{box-sizing:border-box}
+html{overflow-x:hidden;overflow-y:scroll;scrollbar-gutter:stable;overscroll-behavior-y:contain}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;padding:0}
+a{color:inherit;text-decoration:none}
+svg.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.s{width:18px;height:18px}
+.shell{display:flex;max-width:1590px;margin:0 auto;min-height:100vh}
+/* sidebar */
+.side{width:300px;flex:none;position:sticky;top:0;height:100vh;padding:20px 24px;display:flex;flex-direction:column;gap:8px}
+.logo{display:block;width:40px;height:40px;margin:0 0 20px 12px}
+.nav{display:flex;align-items:center;gap:18px;padding:13px 12px;border-radius:12px;font-size:19px;color:var(--muted);width:100%}
+.nav:hover{background:var(--hover);color:var(--fg)}
+.nav.active{color:var(--fg);font-weight:700}
+.nav.active svg.f{fill:currentColor}
+.nav.active svg.b{stroke-width:2.6}
+/* views */
+#view{flex:1;min-width:0}
+.cols{display:flex;justify-content:center;min-width:0}
+.center{flex:1 1 750px;max-width:750px;min-width:0;border-left:1px solid var(--line);border-right:1px solid var(--line);min-height:100vh}
+.right{position:sticky;top:0;align-self:flex-start;height:100vh;overflow-y:auto;flex:0 1 540px;min-width:300px;padding:20px 32px;display:flex;flex-direction:column;gap:20px}
+.rbox{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0 16px;color:var(--muted)}
+.rbox input{flex:1;min-width:0;background:none;border:0;outline:0;padding:13px 0;color:var(--fg)}
+.rbox:focus-within{border-color:var(--accent)}
+.panel{border:1px solid var(--line);border-radius:16px;padding:18px 20px;background:var(--panel)}
+.panel h3{margin:0 0 4px;font-size:17px}
+.panel .sub{color:var(--muted);font-size:14px;margin-bottom:12px}
+.panel .ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.panel .ph a{color:var(--muted);font-size:13px}
+.btn{border-radius:999px;padding:9px 18px;font-weight:600;font-size:14px;border:1px solid var(--line)}
+.btn:hover{background:var(--hover)}
+.btn.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.danger{background:#d93636;border-color:#d93636;color:#fff}
+.btn[disabled]{opacity:.4;cursor:default}
+.mini{display:flex;gap:12px;align-items:center;padding:10px 0;min-width:0}
+.mini+.mini{border-top:1px solid var(--line)}
+.mini .t{flex:1;min-width:0}
+.mini .t b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini .t span{display:block;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini img{width:56px;height:56px;border-radius:8px;object-fit:cover;flex:none;background:var(--hover)}
+.avatar{flex:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;text-transform:uppercase}
+.ph-title{padding:18px 20px;font-size:20px;font-weight:700;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px}
+/* post */
+.post{position:relative;display:flex;gap:14px;padding:20px 20px 8px;border-bottom:1px solid var(--line);cursor:pointer}
+.gut{flex:none}
+.pbody{flex:1;min-width:0}
+.phead{display:flex;align-items:center;gap:6px;font-size:15px;color:var(--muted);min-height:40px;flex-wrap:wrap}
+.phead b{color:var(--fg);font-weight:700}
+.phead .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.post h2{margin:2px 0 8px;font-size:21px;line-height:1.3;font-weight:700;overflow-wrap:anywhere}
+.post.read h2{color:var(--muted);font-weight:600}
+.post .ex{margin:0;font-size:16px;line-height:1.55;color:color-mix(in srgb,var(--fg) 75%,transparent);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.post .seemore{display:block;margin:6px 0 12px auto;color:var(--muted);font-size:14px}
+.post .seemore:hover{color:var(--fg)}
+.post img.hero{display:block;width:100%;max-height:420px;object-fit:cover;border-radius:16px;margin:12px 0;background:var(--hover)}
+.post a.stretch::after{content:'';position:absolute;inset:0;z-index:1}
+.post a.stretch:focus-visible{outline:2px solid var(--accent)}
+.ptr{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:14px;border-bottom:0}
+.ptr.anim{transition:height .25s ease}
+.ptr .spin{animation:none;border-top-color:var(--accent)}
+.ptr.loading .spin{animation:sp 1s linear infinite}
+.acts{position:relative;z-index:2;display:flex;gap:4px;margin:4px 0 4px -10px;color:var(--muted)}
+.acts button,.acts a{display:inline-flex;gap:6px;align-items:center;font-size:13px;padding:8px 10px;border-radius:999px}
+.acts button:hover,.acts a:hover{background:var(--hover);color:var(--fg)}
+.loading{text-align:center;color:var(--muted);padding:32px 0;font-size:14px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{text-align:center;color:var(--muted);padding:64px 20px}
+/* search */
+.sbar{padding:16px 20px 0}
+.sbar .rbox{padding:0 20px}
+.sbar .rbox input{padding:15px 0;font-size:17px}
+.tabs{display:flex;gap:28px;padding:0 20px;border-bottom:1px solid var(--line);margin-top:8px}
+.tab{padding:14px 0;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--fg);border-color:var(--fg)}
+.frow{display:flex;gap:14px;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line);min-width:0}
+.frow .t{flex:1;min-width:0}
+.frow .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .t span{display:block;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* subscriptions */
+.sh{padding:24px 20px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sh h1{margin:0;font-size:26px;flex:1 1 auto}
+.sh h1 small{font-size:15px;color:var(--muted);font-weight:500;margin-left:8px}
+.sfilter{padding:0 20px 12px}
+.sec-h{display:flex;align-items:center;gap:8px;padding:12px 20px;background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-weight:700;min-width:0}
+.sec-h .chev{color:var(--muted);transition:transform .15s;display:inline-flex}
+.sec-h .chev.open{transform:rotate(90deg)}
+.sec-h .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec-h .cnt{font-weight:400;color:var(--muted);font-size:13px;white-space:nowrap}
+.hact{margin-left:auto;display:flex;gap:2px;opacity:0}
+.sec-h:hover .hact,.hact:focus-within{opacity:1}
+.ib{padding:7px;border-radius:8px;color:var(--muted);display:inline-flex}
+.ib:hover{background:var(--hover);color:var(--fg)}
+.sec.over .sec-h{outline:2px dashed var(--accent);outline-offset:-2px}
+.srow{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--line);min-width:0;cursor:grab}
+.srow.drag{opacity:.4}
+.srow .t{flex:1;min-width:0}
+.srow .t .ti{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.srow .t .ti input{width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:6px;padding:4px 8px;outline:0}
+.srow .t .dm{color:var(--muted);font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow .t .dm a:hover{color:var(--accent);text-decoration:underline}
+.srow .st{text-align:right;font-size:12.5px;color:var(--muted);white-space:nowrap;line-height:1.5}
+.srow .st .un{color:var(--accent);font-weight:600}
+.srow .hact{margin-left:0}
+.srow:hover .hact,.srow .hact:focus-within{opacity:1}
+.nodata{padding:14px 20px;color:var(--muted);font-size:14px;border-bottom:1px solid var(--line)}
+/* overlays */
+#pop{position:fixed;z-index:90;min-width:190px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:none}
+#pop button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 12px;border-radius:8px;font-size:14px}
+#pop button:hover{background:var(--hover)}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:95;display:none;align-items:center;justify-content:center;padding:16px}
+.mbox{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.mbox h3{margin:0 0 16px;font-size:20px}
+.mbox label{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px}
+.mbox input[type=text],.mbox select{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 14px;outline:0;color:var(--fg)}
+.mbox input:focus,.mbox select:focus{border-color:var(--accent)}
+.mbox .row{display:flex;gap:8px}
+.mbox .mfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:22px}
+.cand{display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-top:8px;cursor:pointer;min-width:0}
+.cand span{overflow-wrap:anywhere;font-size:14px}
+.cand small{display:block;color:var(--muted)}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:100;white-space:nowrap}
+.toast.on{opacity:1}
+.tabbar{display:none}
+/* responsive */
+@media (max-width:1279px){ .right{display:none} }
+@media (max-width:1023px){
+  .side{width:76px;padding:20px 8px;align-items:center}
+  .logo{margin:0 0 16px}
+  .nav{justify-content:center;padding:13px;width:auto}
+  .nav .lb{display:none}
+}
+@media (max-width:639px){
+  .side{display:none}
+  .tabbar{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--bg);border-top:1px solid var(--line);justify-content:space-around;padding:6px 0 max(6px,env(safe-area-inset-bottom))}
+  .tabbar a{padding:8px 24px;color:var(--muted);border-radius:12px}
+  .tabbar a.active{color:var(--fg)}
+  .tabbar a.active svg.f{fill:currentColor}
+  .tabbar a.active svg.b{stroke-width:2.6}
+  #view{padding-bottom:72px}
+  .center{border-left:0;border-right:0}
+  .post{gap:10px;padding:16px 14px 6px}
+  .post h2{font-size:19px}
+  .srow{gap:10px;padding:12px 14px}
+  .srow .st .lu{display:none}
+  .srow .dm{max-width:100%}
+  .sec-h,.sh,.sfilter,.sbar,.tabs,.frow{padding-left:14px;padding-right:14px}
+  .hact{opacity:1}
+  .srow .t .dm{display:none}
+  .toast{bottom:84px}
+}
+@media (hover:none){ .hact{opacity:1} }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side" id="side"></aside>
+  <main id="view"></main>
+</div>
+<nav class="tabbar" id="tabbar"></nav>
+<div id="pop"></div>
+<div id="modal"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- mock data (shapes match the real API) ---------- */
+const hoursAgo = h => new Date(Date.now() - h * 3600e3).toISOString();
+const img = (s, w = 600, h = 400) => `https://picsum.photos/seed/${s}/${w}/${h}`;
+
+let folders = [
+  { id: 'f1', name: 'テック', feedCount: 0 },
+  { id: 'f2', name: 'テック/Web', feedCount: 0 },
+  { id: 'f3', name: 'テック/言語', feedCount: 0 },
+  { id: 'f4', name: 'AR', feedCount: 0 },
+  { id: 'f5', name: 'AR/VR', feedCount: 0 },
+  { id: 'f6', name: 'ニュース', feedCount: 0 },
+  { id: 'f7', name: 'デザイン', feedCount: 0 },
+];
+let feeds = [
+  { id: 'a', title: 'Zenn トレンド', url: 'https://zenn.dev/feed', siteUrl: 'https://zenn.dev', folder: 'テック/Web', articleCount: 0 },
+  { id: 'b', title: 'Hacker Digest', url: 'https://hd.example.com/rss', siteUrl: 'https://hd.example.com', folder: 'テック', articleCount: 0 },
+  { id: 'c', title: 'The Rust Blog', url: 'https://blog.rust-lang.org/feed.xml', siteUrl: 'https://blog.rust-lang.org', folder: 'テック/言語', articleCount: 0 },
+  { id: 'd', title: 'UploadVR', url: 'https://uploadvr.com/rss', siteUrl: 'https://uploadvr.com', folder: 'AR/VR', articleCount: 0 },
+  { id: 'e', title: '週刊ニュースまとめ', url: 'https://news.example.jp/rss', siteUrl: null, folder: 'ニュース', articleCount: 0 },
+  { id: 'f', title: 'Typography Notes', url: 'https://typo.example.com/feed', siteUrl: 'https://typo.example.com', folder: 'デザイン', articleCount: 0 },
+  { id: 'g', title: 'ひとりごとブログ', url: 'https://hitorigoto.example.jp/feed', siteUrl: 'https://hitorigoto.example.jp', folder: null, articleCount: 0 },
+];
+const feedTitle = id => (feeds.find(f => f.id === id) || {}).title || '';
+const A = (id, feedId, title, author, h, isRead, content) => ({
+  id, feedId, feedTitle: feedTitle(feedId), title,
+  url: `https://example.com/${id}`, author, content,
+  publishedAt: h == null ? null : hoursAgo(h), isRead, readAt: isRead ? hoursAgo(1) : null,
+});
+const lorem = '<p>この記事はモック用のダミー本文です。実際のフィードからは HTML がそのまま届くため、リーダー側で見出し、引用、コード、画像などを読みやすく整形する必要があります。</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus posuere velit aliquet.</p>';
+let articles = [
+  A('1','a','React 19 のサーバーコンポーネントを実務で使って分かったこと','田中 太郎',2,false,
+    `<img src="${img('react')}" alt=""><p>半年間、本番環境で React Server Components を運用してきました。結論から言うと、<strong>データ取得の設計が根本的に変わります</strong>が、慣れれば見通しはかなり良くなります。</p><h2>境界をどこに引くか</h2><p>最初に迷うのは <code>"use client"</code> の置き場所です。インタラクションを持つ末端のコンポーネントだけをクライアントにするのが基本方針です。</p><blockquote>サーバーで済むことはサーバーで。クライアントは本当に必要な場所だけ。</blockquote><pre><code>export default async function Page() {\n  const posts = await db.posts.list();\n  return &lt;PostList posts={posts} /&gt;;\n}</code></pre>${lorem}`),
+  A('2','b','Why SQLite is the database you should reach for first','Maria Chen',5,false,
+    `<img src="${img('sqlite')}" alt=""><p>For most applications, a single-file embedded database is more than enough. With WAL mode and a sensible backup strategy, SQLite handles surprisingly heavy workloads.</p><h2>Concurrency is not the problem you think it is</h2><p>Readers never block writers in WAL mode, and a single writer can do tens of thousands of transactions per second on commodity hardware.</p><blockquote>Most apps never outgrow SQLite. They outgrow their architecture first.</blockquote><ul><li>Use <code>PRAGMA journal_mode=WAL</code></li><li>Set a busy timeout</li><li>Back up with <a href="https://litestream.io">Litestream</a></li></ul>${lorem}`),
+  A('3','c','Announcing Rust 1.90.0','The Rust Release Team',9,false,
+    `<p>The Rust team is happy to announce a new version of Rust, 1.90.0. Rust is a programming language empowering everyone to build reliable and efficient software.</p><h2>What's in 1.90.0</h2><p>This release stabilizes several long-awaited APIs and improves compile times on large workspaces.</p><pre><code>let v: Vec&lt;u32&gt; = (0..10).collect();\nlet total: u32 = v.iter().sum();</code></pre>${lorem}`),
+  A('4','d','Meta Quest の次世代ヘッドセット、軽量化と価格の両立を狙う','UploadVR 編集部',12,false,
+    `<img src="${img('quest')}" alt=""><p>Meta は次世代のスタンドアロン型ヘッドセットで、重量を大幅に削減しつつ価格を抑える方針だと報じられています。</p>${lorem}`),
+  A('5','e','今週のまとめ：円相場、半導体、そして新しい働き方',null,20,true,
+    `<p>今週の主要ニュースを5分で振り返ります。為替は小幅な動きにとどまり、半導体関連株は引き続き注目を集めました。</p>${lorem}`),
+  A('6','f','Choosing a serif for long-form reading','Lena Fischer',27,false,
+    `<img src="${img('serif')}" alt=""><p>A good reading serif disappears. Its job is not to be noticed but to carry the reader through thousands of words without friction.</p><blockquote>Contrast is not the same as legibility.</blockquote>${lorem}`),
+  A('7','a','Go 1.24 のジェネリクスと型エイリアスを整理する',null,32,true,
+    `<p>ジェネリックな型エイリアスが使えるようになり、公開 API の移行がしやすくなりました。</p><pre><code>type Set[T comparable] = map[T]struct{}</code></pre>${lorem}`),
+  A('8','g','最近読んだ本と、朝の散歩について','あやか',40,false,
+    `<img src="${img('walk')}" alt=""><p>朝6時に家を出て、川沿いを30分歩く。それだけの習慣が、一日の集中力をずいぶん変えてくれました。</p>${lorem}`),
+  A('9','b','The quiet return of server-rendered HTML',null,52,true,
+    `<p>After a decade of single-page apps, teams are rediscovering that HTML over the wire is fast, simple, and cheap to operate.</p>${lorem}`),
+  A('10','d','Apple Vision Pro 向けの新しい空間アプリ 5 選','Kenji Mori',60,false,
+    `<img src="${img('vision')}" alt=""><p>空間コンピューティングならではの体験を活かしたアプリを紹介します。</p>${lorem}`),
+  A('11','e','地方自治体のオープンデータ活用が広がる','山本 花子',75,false,
+    `<p>自治体が公開するデータを使った市民向けサービスが増えています。課題はデータ品質と継続的な更新体制です。</p>${lorem}`),
+  A('12','c','Rust for Linux: where we are in 2026','Alice Ryhl',96,true,
+    `<img src="${img('linux')}" alt=""><p>Rust support in the Linux kernel has moved from experiment to everyday tool. Several drivers now ship with Rust components by default.</p>${lorem}`),
+  A('13','a','Tailwind CSS v4 移行で詰まったポイント集','佐藤 健',120,false,
+    `<p>設定ファイルが CSS 中心になり、プラグインの扱いも変わりました。移行時にハマった箇所をまとめます。</p>${lorem}`),
+  A('14','g','日付が不明な古いメモ（publishedAt が null）',null,null,false,
+    `<p>公開日時を持たないフィードの記事は、取得時刻などで代替表示します。</p>`),
+  A('15','f','2025年の振り返り：書体選びのメモ','Lena Fischer',9000,true,
+    `<img src="${img('memo')}" alt=""><p>昨年の仕事で使った書体と、その理由をざっと振り返ります。</p>${lorem}`),
+];
+
+/* ---------- derivations ---------- */
+const thumbOf = a => { const m = a.content.match(/<img[^>]+src=["']([^"']+)["']/i); return m ? m[1] : null; };
+const textOf = html => { const d = document.createElement('div'); d.innerHTML = html.replace(/<br\s*\/?>|<\/(p|h[1-6]|li|blockquote|pre|div|ul|ol|tr|table|figure|figcaption)>/gi, '$& '); return d.textContent.replace(/\s+/g, ' ').trim(); };
+const excerptOf = (a, n = 320) => { const t = textOf(a.content); return t.length > n ? t.slice(0, n) + '…' : t; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const colors = ['#e4572e', '#17bebb', '#76b041', '#a05195', '#2f6690', '#d4a017', '#c1456b', '#4a6fa5'];
+const colorOf = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return colors[h % colors.length]; };
+const avatar = (title, size = 40) => `<span class="avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size * .45)}px;background:${colorOf(title || '?')}">${esc([...(title || '?')][0])}</span>`;
+const fmtDate = iso => {
+  if (!iso) return '日時不明';
+  const d = new Date(iso), diff = Date.now() - d;
+  if (diff < 3600e3) return `${Math.max(1, Math.round(diff / 60000))}分前`;
+  if (diff < 86400e3) return `${Math.floor(diff / 3600e3)}時間前`;
+  return d.getFullYear() === new Date().getFullYear() ? `${d.getMonth() + 1}月${d.getDate()}日` : `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+};
+const longDate = iso => iso ? new Date(iso).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : '日時不明';
+const domainOf = u => { try { return new URL(u).hostname; } catch { return u || ''; } };
+const sorted = list => list.slice().sort((a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
+const syncCounts = () => {
+  feeds.forEach(f => f.articleCount = articles.filter(a => a.feedId === f.id).length);
+  folders.forEach(fo => fo.feedCount = feeds.filter(f => f.folder === fo.name).length);
+};
+const unreadCounts = () => {
+  const r = { total: 0, feeds: {}, folders: {} };
+  for (const a of articles) {
+    if (a.isRead) continue;
+    r.total++;
+    r.feeds[a.feedId] = (r.feeds[a.feedId] || 0) + 1;
+    const fo = folders.find(x => x.name === (feeds.find(f => f.id === a.feedId) || {}).folder);
+    if (fo) r.folders[fo.id] = (r.folders[fo.id] || 0) + 1;
+  }
+  return r;
+};
+const lastPub = feedId => sorted(articles.filter(a => a.feedId === feedId && a.publishedAt))[0]?.publishedAt || null;
+
+/* ---------- icons ---------- */
+const P = {
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  subs: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  check: '<path d="m5 12.5 5 5L19 7"/>',
+  ext: '<path d="M7 17 17 7M8 7h9v9"/>',
+  share: '<path d="M12 15V4m0 0L8 8m4-4 4 4M5 13v6h14v-6"/>',
+  dots: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  trash: '<path d="M5 7h14M10 7V4h4v3m-8 0 1 13h10l1-13"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>',
+  folder: '<path d="M3 6h6l2 2h10v11H3z"/>',
+  back: '<path d="M19 12H5m6-6-6 6 6 6"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+};
+const ico = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
+const LOGO = `<svg class="logo" viewBox="0 0 40 40" aria-label="Reader"><rect width="40" height="40" rx="10" fill="#FF6719"/><path d="M11 14a15 15 0 0 1 15 15M11 21a8 8 0 0 1 8 8" stroke="#fff" stroke-width="3.2" stroke-linecap="round" fill="none"/><circle cx="12" cy="28" r="2.4" fill="#fff"/></svg>`;
+
+/* ---------- state / helpers ---------- */
+const st = { sq: '', stab: 'articles', fq: '', collapsed: {}, editFeed: null, route: 'home' };
+const $ = id => document.getElementById(id);
+let toastT;
+const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1600); };
+const setRead = (id, v) => { const a = articles.find(x => x.id === id); a.isRead = v; a.readAt = v ? new Date().toISOString() : null; };
+const copy = url => { try { navigator.clipboard && navigator.clipboard.writeText(url).catch(() => {}); } catch (e) {} toast('リンクをコピーしました'); };
+
+/* popup menu */
+let popFns = [];
+function showPop(anchor, items, align = 'left') {
+  popFns = items.map(i => i.fn);
+  const p = $('pop');
+  p.innerHTML = items.map((i, n) => `<button data-pop="${n}">${i.icon ? ico(i.icon, 's') : ''}${esc(i.label)}</button>`).join('');
+  p.style.display = 'block';
+  const r = anchor.getBoundingClientRect(), w = p.offsetWidth, h = p.offsetHeight;
+  let left = align === 'right' ? r.right - w : r.left;
+  left = Math.max(8, Math.min(left, innerWidth - w - 8));
+  let top = r.bottom + 4;
+  if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 4);
+  p.style.left = left + 'px'; p.style.top = top + 'px';
+}
+const hidePop = () => { $('pop').style.display = 'none'; };
+
+/* modal */
+function openModal(html) { const m = $('modal'); m.innerHTML = `<div class="mbox">${html}</div>`; m.style.display = 'flex'; const i = m.querySelector('input'); if (i) i.focus(); }
+const closeModal = () => { $('modal').style.display = 'none'; $('modal').innerHTML = ''; };
+function confirmModal(title, msg, label, fn) {
+  openModal(`<h3>${esc(title)}</h3><div style="color:var(--muted);line-height:1.6">${esc(msg)}</div><div class="mfoot"><button class="btn" data-act="close">キャンセル</button><button class="btn danger" id="m-ok">${esc(label)}</button></div>`);
+  $('m-ok').onclick = () => { closeModal(); fn(); };
+}
+function promptModal(title, label, value, okLabel, fn) {
+  openModal(`<h3>${esc(title)}</h3><label>${esc(label)}</label><input type="text" id="m-in" value="${esc(value)}"><div class="mfoot"><button class="btn" data-act="close">キャンセル</button><button class="btn pri" id="m-ok">${esc(okLabel)}</button></div>`);
+  const go = () => { const v = $('m-in').value.trim(); if (!v) return; closeModal(); fn(v); };
+  $('m-ok').onclick = go;
+  $('m-in').onkeydown = e => { if (e.key === 'Enter') go(); };
+}
+const folderOptions = sel => `<option value="">未分類</option>` + folders.slice().sort((a, b) => a.name.localeCompare(b.name)).map(f => `<option value="${esc(f.name)}" ${f.name === sel ? 'selected' : ''}>${'　'.repeat(f.name.split('/').length - 1)}${esc(f.name)}</option>`).join('');
+
+function addFeedModal() {
+  openModal(`<h3>フィードを追加</h3>
+    <label>URL</label>
+    <div class="row"><input type="text" id="m-url" placeholder="https://example.com または フィード URL"><button class="btn" id="m-disc">探す</button></div>
+    <div id="m-cands"></div>
+    <label>フォルダ</label><select id="m-folder">${folderOptions('')}</select>
+    <div class="mfoot"><button class="btn" data-act="close">キャンセル</button><button class="btn pri" id="m-add" disabled>追加</button></div>`);
+  let chosen = null;
+  const disc = () => {
+    let v = $('m-url').value.trim(); if (!v) return;
+    let u; try { u = new URL(v.includes('://') ? v : 'https://' + v); } catch { $('m-cands').innerHTML = '<div class="nodata">URL を解釈できません</div>'; return; }
+    const host = u.hostname.replace(/^www\./, '');
+    const cands = [{ title: host, url: u.origin + '/feed', kind: 'RSS' }, { title: host + ' (Atom)', url: u.origin + '/atom.xml', kind: 'Atom' }];
+    $('m-cands').innerHTML = `<label>検出されたフィード</label>` + cands.map((c, n) => `<div class="cand" data-c="${n}"><span>${esc(c.title)}<small>${esc(c.url)} · ${c.kind}</small></span></div>`).join('');
+    $('m-cands').onclick = e => {
+      const el = e.target.closest('[data-c]'); if (!el) return;
+      chosen = { ...cands[+el.dataset.c], siteUrl: u.origin };
+      $('m-cands').querySelectorAll('.cand').forEach(x => x.style.borderColor = x === el ? 'var(--accent)' : '');
+      $('m-add').disabled = false;
+    };
+  };
+  $('m-disc').onclick = disc;
+  $('m-url').onkeydown = e => { if (e.key === 'Enter') disc(); };
+  $('m-add').onclick = () => {
+    if (!chosen) return;
+    feeds.push({ id: 'n' + Date.now(), title: chosen.title, url: chosen.url, siteUrl: chosen.siteUrl, folder: $('m-folder').value || null, articleCount: 0 });
+    closeModal(); toast('フィードを追加しました'); route();
+  };
+}
+
+/* ---------- sidebar / tabbar ---------- */
+const NAVS = [['home', '#/', 'Home', 'home', 'f'], ['subs', '#/subscriptions', 'Subscriptions', 'subs', 'f'], ['search', '#/search', 'Search', 'search', 'b']];
+function renderChrome(active) {
+  $('side').innerHTML = `<a href="#/" aria-label="Home">${LOGO}</a>` +
+    NAVS.map(([k, h, l, i, c]) => `<a class="nav ${active === k ? 'active' : ''}" href="${h}" title="${l}">${ico(i, c)}<span class="lb">${l}</span></a>`).join('');
+  $('tabbar').innerHTML = NAVS.map(([k, h, l, i, c]) => `<a href="${h}" class="${active === k ? 'active' : ''}" aria-label="${l}">${ico(i, c)}</a>`).join('');
+}
+
+/* ---------- post card ---------- */
+function postHtml(a) {
+  const t = thumbOf(a);
+  return `<article class="post ${a.isRead ? 'read' : ''}">
+    <div class="gut">${avatar(a.feedTitle, 40)}</div>
+    <div class="pbody">
+      <div class="phead">${a.isRead ? '' : '<span class="dot" title="未読"></span>'}<b>${esc(a.feedTitle)}</b><span>${fmtDate(a.publishedAt)}</span>${a.author ? `<span>· ${esc(a.author)}</span>` : ''}</div>
+      <h2><a class="stretch" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer" data-read="${a.id}">${esc(a.title)}</a></h2>
+      <p class="ex">${esc(excerptOf(a))}</p>
+      <span class="seemore">もっと見る</span>
+      ${t ? `<img class="hero" src="${esc(t)}" alt="" loading="lazy">` : ''}
+      <div class="acts">
+        <button data-toggle="${a.id}" title="${a.isRead ? '未読にする' : '既読にする'}">${ico('check', 's')}${a.isRead ? '未読にする' : '既読にする'}</button>
+        <button data-copy="${a.id}" title="リンクをコピー">${ico('share', 's')}</button>
+      </div>
+    </div>
+  </article>`;
+}
+
+/* ---------- views ---------- */
+const rightSearch = () => `<div class="rbox">${ico('search', 's')}<input id="rq" type="search" placeholder="検索"></div>`;
+function viewHome() {
+  const list = sorted(articles);
+  $('view').innerHTML = `<div class="cols">
+    <div class="center"><div class="ptr" id="ptr"></div>${list.map(postHtml).join('')}<div class="loading"><span class="spin"></span>Loading more…</div></div>
+    <aside class="right">${rightSearch()}</aside></div>`;
+  ptr.d = 0; ptr.loading = false;
+}
+function recentFeedsPanel() {
+  const rows = feeds.map(f => ({ f, a: sorted(articles.filter(x => x.feedId === f.id))[0] })).filter(x => x.a).sort((x, y) => new Date(y.a.publishedAt || 0) - new Date(x.a.publishedAt || 0)).slice(0, 5);
+  return `<div class="panel"><div class="ph"><h3 style="margin:0">最近更新されたフィード</h3><a href="#/subscriptions">すべて表示</a></div>${rows.map(({ f, a }) => {
+    const t = thumbOf(a);
+    return `<a class="mini" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${t ? `<img src="${esc(t)}" alt="" loading="lazy">` : avatar(f.title, 56)}<div class="t"><b>${esc(f.title)}</b><span>${esc(a.title)}</span><span>${fmtDate(a.publishedAt)}</span></div></a>`;
+  }).join('')}</div>`;
+}
+function viewSearch(q) {
+  st.sq = q;
+  $('view').innerHTML = `<div class="cols">
+    <div class="center">
+      <div class="sbar"><div class="rbox">${ico('search', 's')}<input id="sq" type="search" placeholder="記事やフィードを検索" value="${esc(q)}"></div></div>
+      <div class="tabs"><button class="tab ${st.stab === 'articles' ? 'active' : ''}" data-stab="articles">記事</button><button class="tab ${st.stab === 'feeds' ? 'active' : ''}" data-stab="feeds">フィード</button></div>
+      <div id="sres"></div>
+    </div>
+    <aside class="right">${recentFeedsPanel()}</aside></div>`;
+  searchResults();
+  $('sq').focus();
+}
+function searchResults() {
+  const q = st.sq.trim().toLowerCase();
+  let h = '';
+  if (st.stab === 'articles') {
+    const list = sorted(articles).filter(a => !q || (a.title + ' ' + textOf(a.content)).toLowerCase().includes(q));
+    h = list.length ? list.map(postHtml).join('') : '<div class="empty">一致する記事がありません。</div>';
+  } else {
+    const list = feeds.filter(f => !q || (f.title + ' ' + f.url).toLowerCase().includes(q));
+    h = list.length ? list.map(f => `<div class="frow">${avatar(f.title, 40)}<div class="t"><b>${esc(f.title)}</b><span>${esc(f.url)}</span></div><span style="color:var(--muted);font-size:13px">${f.articleCount} 件</span></div>`).join('') : '<div class="empty">一致するフィードがありません。</div>';
+  }
+  $('sres').innerHTML = h;
+}
+
+/* subscriptions */
+function viewSubs() {
+  $('view').innerHTML = `<div class="cols"><div class="center">
+    <div class="sh"><h1>Subscriptions<small id="scount"></small></h1>
+      <button class="btn" data-act="addfolder">${'+ フォルダ'}</button><button class="btn pri" data-act="addfeed">+ フィードを追加</button></div>
+    <div class="sfilter"><div class="rbox">${ico('search', 's')}<input id="fq" type="search" placeholder="フィード名・URL で絞り込み" value="${esc(st.fq)}"></div></div>
+    <div id="subs"></div></div><aside class="right">${rightSearch()}</aside></div>`;
+  subsList();
+}
+function feedRow(f, un) {
+  const lp = lastPub(f.id), editing = st.editFeed === f.id;
+  return `<div class="srow" draggable="${editing ? 'false' : 'true'}" data-feed="${f.id}">
+    ${avatar(f.title, 36)}
+    <div class="t"><span class="ti">${editing ? `<input id="edit-in" value="${esc(f.title)}">` : esc(f.title)}</span>
+      <span class="dm">${f.siteUrl ? `<a href="${esc(f.siteUrl)}" target="_blank" rel="noopener">${esc(domainOf(f.siteUrl))} ↗</a>` : esc(domainOf(f.url))}</span></div>
+    <div class="st"><div>${f.articleCount} 件${un ? ` · <span class="un">未読 ${un}</span>` : ''}</div><div class="lu">${lp ? '最終 ' + fmtDate(lp) : '記事なし'}</div></div>
+    <div class="hact">
+      <button class="ib" data-act="editfeed" data-id="${f.id}" title="タイトル編集">${ico('edit', 's')}</button>
+      <button class="ib" data-act="movefeed" data-id="${f.id}" title="フォルダ移動">${ico('folder', 's')}</button>
+      <button class="ib" data-act="delfeed" data-id="${f.id}" title="削除">${ico('trash', 's')}</button>
+    </div></div>`;
+}
+function subsList() {
+  syncCounts();
+  const uc = unreadCounts(), q = st.fq.trim().toLowerCase();
+  const match = f => !q || (f.title + ' ' + f.url).toLowerCase().includes(q);
+  const secs = folders.slice().sort((a, b) => a.name.localeCompare(b.name)).map(fo => ({ id: fo.id, name: fo.name, folder: fo, items: feeds.filter(f => f.folder === fo.name) }));
+  secs.push({ id: 'none', name: '未分類', folder: null, items: feeds.filter(f => !f.folder) });
+  let h = '';
+  for (const s of secs) {
+    const items = s.items.filter(match);
+    if (q && !items.length) continue;
+    if (!q && s.id === 'none' && !items.length) continue;
+    const depth = s.folder ? s.name.split('/').length - 1 : 0, label = s.name.split('/').pop();
+    const open = q ? true : !st.collapsed[s.id];
+    const unread = s.items.reduce((n, f) => n + (uc.feeds[f.id] || 0), 0);
+    h += `<section class="sec" data-drop="${s.id}">
+      <div class="sec-h" style="padding-left:${20 + depth * 22}px">
+        <button class="chev ${open ? 'open' : ''}" data-act="tog" data-id="${s.id}" aria-label="開閉">${ico('chev', 's')}</button>
+        <span class="nm" title="${esc(s.name)}">${esc(label)}</span>
+        <span class="cnt">${s.items.length} フィード${unread ? ` · 未読 ${unread}` : ''}</span>
+        ${s.folder ? `<span class="hact"><button class="ib" data-act="renamefolder" data-id="${s.id}" title="リネーム">${ico('edit', 's')}</button><button class="ib" data-act="delfolder" data-id="${s.id}" title="削除">${ico('trash', 's')}</button></span>` : ''}
+      </div>
+      ${open ? (items.length ? items.map(f => feedRow(f, uc.feeds[f.id] || 0)).join('') : '<div class="nodata">フィードなし（ここへドラッグして移動）</div>') : ''}
+    </section>`;
+  }
+  $('subs').innerHTML = h || '<div class="empty">一致するフィードがありません。</div>';
+  $('scount').textContent = `${feeds.length} フィード`;
+  const ei = $('edit-in');
+  if (ei) {
+    ei.focus(); ei.select();
+    ei.onkeydown = e => {
+      if (e.key === 'Enter') { const v = ei.value.trim(); const f = feeds.find(x => x.id === st.editFeed); if (v && f) { f.title = v; articles.forEach(a => { if (a.feedId === f.id) a.feedTitle = v; }); } st.editFeed = null; subsList(); }
+      if (e.key === 'Escape') { st.editFeed = null; subsList(); }
+    };
+    ei.onblur = () => { if (st.editFeed) { st.editFeed = null; subsList(); } };
+  }
+}
+function moveFeed(id, folderName) { const f = feeds.find(x => x.id === id); if (f && f.folder !== folderName) { f.folder = folderName; subsList(); toast(folderName ? `「${folderName}」へ移動しました` : '未分類へ移動しました'); } }
+
+/* ---------- routing ---------- */
+function route() {
+  hidePop();
+  const h = location.hash.replace(/^#/, '') || '/';
+  const [path, qs] = h.split('?');
+  syncCounts();
+  if (path === '/subscriptions') { renderChrome('subs'); viewSubs(); }
+  else if (path === '/search') { renderChrome('search'); viewSearch(new URLSearchParams(qs || '').get('q') || ''); }
+  else { renderChrome('home'); viewHome(); }
+}
+window.addEventListener('hashchange', route);
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const t = e.target, c = s => t.closest(s);
+  let el;
+  if ((el = c('[data-pop]'))) { const fn = popFns[+el.dataset.pop]; hidePop(); fn && fn(); return; }
+  hidePop();
+  if (c('#modal') && !c('.mbox')) return closeModal();
+  if ((el = c('[data-act]'))) {
+    const act = el.dataset.act, id = el.dataset.id;
+    switch (act) {
+      case 'close': return closeModal();
+      case 'addfeed': return addFeedModal();
+      case 'markall': articles.forEach(a => setRead(a.id, true)); toast('すべて既読にしました'); return route();
+      case 'addfolder': return promptModal('フォルダを追加', '名前（"親/子" で階層）', '', '追加', v => {
+        if (folders.some(f => f.name === v)) return toast('同名のフォルダがあります');
+        folders.push({ id: 'f' + Date.now(), name: v, feedCount: 0 }); subsList(); });
+      case 'tog': st.collapsed[id] = !st.collapsed[id]; return subsList();
+      case 'renamefolder': { const fo = folders.find(f => f.id === id); return promptModal('フォルダをリネーム', 'フルパス（子フォルダも追従します）', fo.name, '変更', v => {
+        const old = fo.name; if (v === old) return;
+        if (folders.some(f => f.name === v)) return toast('同名のフォルダがあります');
+        const re = n => n === old ? v : n.startsWith(old + '/') ? v + n.slice(old.length) : n;
+        folders.forEach(f => f.name = re(f.name)); feeds.forEach(f => { if (f.folder) f.folder = re(f.folder); }); subsList(); }); }
+      case 'delfolder': { const fo = folders.find(f => f.id === id); return confirmModal('フォルダを削除', `「${fo.name}」とその子フォルダを削除します。中のフィードは未分類に移動します。`, '削除', () => {
+        const inside = n => n === fo.name || n.startsWith(fo.name + '/');
+        folders = folders.filter(f => !inside(f.name)); feeds.forEach(f => { if (f.folder && inside(f.folder)) f.folder = null; }); subsList(); }); }
+      case 'editfeed': st.editFeed = id; return subsList();
+      case 'movefeed': return showPop(el, [{ icon: 'folder', label: '未分類', fn: () => moveFeed(id, null) }].concat(folders.slice().sort((a, b) => a.name.localeCompare(b.name)).map(f => ({ icon: 'folder', label: f.name, fn: () => moveFeed(id, f.name) }))), 'right');
+      case 'delfeed': { const f = feeds.find(x => x.id === id); return confirmModal('フィードを削除', `「${f.title}」と取得済みの記事 ${f.articleCount} 件を削除します。`, '削除', () => {
+        feeds = feeds.filter(x => x.id !== id); articles = articles.filter(a => a.feedId !== id); subsList(); toast('フィードを削除しました'); }); }
+    }
+    return;
+  }
+  if ((el = c('[data-stab]'))) { st.stab = el.dataset.stab; return viewSearch(st.sq); }
+  if ((el = c('[data-copy]'))) { e.stopPropagation(); return copy(articles.find(x => x.id === el.dataset.copy).url); }
+  if ((el = c('[data-toggle]'))) {
+    e.stopPropagation();
+    const a = articles.find(x => x.id === el.dataset.toggle);
+    setRead(a.id, !a.isRead);
+    refreshPosts();
+    return;
+  }
+  if ((el = c('[data-read]'))) { setRead(el.dataset.read, true); setTimeout(refreshPosts, 0); }
+});
+function refreshPosts() {
+  const y = window.scrollY;
+  if (location.hash.startsWith('#/search')) searchResults(); else viewHome();
+  window.scrollTo(0, y);
+}
+document.addEventListener('input', e => {
+  if (e.target.id === 'sq') {
+    st.sq = e.target.value; searchResults();
+    history.replaceState(null, '', '#/search' + (st.sq ? '?q=' + encodeURIComponent(st.sq) : ''));
+  }
+  if (e.target.id === 'fq') { st.fq = e.target.value; subsList(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); hidePop(); }
+  if (e.key === 'Enter' && e.target.id === 'rq') location.hash = '#/search?q=' + encodeURIComponent(e.target.value);
+});
+/* drag & drop (subscriptions) */
+let dragId = null;
+document.addEventListener('dragstart', e => { const r = e.target.closest && e.target.closest('.srow'); if (!r) return; dragId = r.dataset.feed; r.classList.add('drag'); e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'move'; });
+document.addEventListener('dragend', e => { dragId = null; document.querySelectorAll('.drag,.over').forEach(x => x.classList.remove('drag', 'over')); });
+document.addEventListener('dragover', e => { const s = e.target.closest && e.target.closest('[data-drop]'); if (s && dragId) { e.preventDefault(); document.querySelectorAll('.over').forEach(x => x !== s && x.classList.remove('over')); s.classList.add('over'); } });
+document.addEventListener('drop', e => {
+  const s = e.target.closest && e.target.closest('[data-drop]'); if (!s || !dragId) return;
+  e.preventDefault();
+  const fo = folders.find(f => f.id === s.dataset.drop);
+  moveFeed(dragId, fo ? fo.name : null);
+});
+
+/* ---------- pull to refresh (Home) ---------- */
+const ptr = { d: 0, loading: false, tracking: false, startY: 0, moved: false, wheel: 0, wt: null };
+const PTR_MAX = 90, PTR_READY = 60;
+const rubber = d => PTR_MAX * (1 - Math.exp(-d / 150));
+const onHome = () => !!$('ptr');
+function ptrDraw(anim) {
+  const el = $('ptr'); if (!el) return;
+  const h = ptr.loading ? 56 : rubber(ptr.d);
+  el.classList.toggle('anim', !!anim); el.classList.toggle('loading', ptr.loading);
+  el.style.height = h + 'px';
+  const ready = h >= PTR_READY;
+  el.innerHTML = `<span class="spin" style="transform:rotate(${Math.round(h * 4)}deg)"></span>${ptr.loading ? '更新中…' : ready ? '離して更新' : '引っ張って更新'}`;
+}
+function ptrRelease() {
+  ptr.tracking = false; ptr.wheel = 0;
+  if (!onHome() || ptr.loading) return;
+  if (rubber(ptr.d) >= PTR_READY) {
+    ptr.loading = true; ptrDraw(true);
+    setTimeout(() => {
+      const n = 1 + Math.floor(Math.random() * 2);
+      const f = feeds.filter(x => articles.some(a => a.feedId === x.id));
+      for (let i = 0; i < n; i++) { const fd = f[Math.floor(Math.random() * f.length)]; articles.push({ id: 'r' + Date.now() + i, feedId: fd.id, feedTitle: fd.title, title: '【新着】' + fd.title + ' の最新記事 ' + (i + 1), url: 'https://example.com/new' + Date.now() + i, author: null, content: `<img src="${img('new' + Date.now() + i)}" alt=""><p>プルリフレッシュで取得されたダミーの新着記事です。</p>`, publishedAt: hoursAgo(0.02), isRead: false, readAt: null }); }
+      if (onHome()) { viewHome(); toast(`${n} 件の新着`); }
+    }, 1000);
+  } else { ptr.d = 0; ptrDraw(true); }
+}
+document.addEventListener('touchstart', e => { if (onHome() && !ptr.loading && scrollY <= 0) { ptr.tracking = true; ptr.startY = e.touches[0].clientY; ptr.d = 0; } }, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!ptr.tracking) return;
+  const dy = e.touches[0].clientY - ptr.startY;
+  if (dy > 0 && scrollY <= 0) { ptr.d = dy; ptrDraw(false); if (e.cancelable) e.preventDefault(); } else if (ptr.d) { ptr.d = 0; ptrDraw(false); }
+}, { passive: false });
+document.addEventListener('touchend', () => { if (ptr.tracking) ptrRelease(); });
+document.addEventListener('mousedown', e => {
+  if (e.button !== 0 || !onHome() || ptr.loading || scrollY > 0 || !e.target.closest('.center') || e.target.closest('button,input')) return;
+  ptr.tracking = true; ptr.startY = e.clientY; ptr.d = 0; ptr.moved = false; e.preventDefault();
+});
+document.addEventListener('mousemove', e => {
+  if (!ptr.tracking || e.buttons !== 1) return;
+  const dy = e.clientY - ptr.startY;
+  if (dy > 5) ptr.moved = true;
+  ptr.d = Math.max(0, dy); ptrDraw(false);
+});
+document.addEventListener('mouseup', () => { if (ptr.tracking) { const m = ptr.moved; ptrRelease(); if (m) { const k = ev => { ev.preventDefault(); ev.stopPropagation(); }; document.addEventListener('click', k, { capture: true, once: true }); setTimeout(() => document.removeEventListener('click', k, true), 0); } } });
+document.addEventListener('wheel', e => {
+  if (!onHome() || ptr.loading) return;
+  if (e.deltaY < 0 && scrollY <= 0) {
+    e.preventDefault(); ptr.wheel += -e.deltaY; ptr.d = ptr.wheel; ptrDraw(false);
+    clearTimeout(ptr.wt); ptr.wt = setTimeout(ptrRelease, 160);
+  } else if (ptr.wheel) { ptr.wheel = 0; ptr.d = 0; ptrDraw(true); }
+}, { passive: false });
+
+route();
+</script>
+</body>
+</html>
