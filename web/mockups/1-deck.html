@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Mockup 1 — Deck: エディタパラダイム</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg:#131317; --panel:#18181d; --panel-2:#1f1f26; --border:#2b2b34;
+    --text:#d8d8e0; --dim:#8b8b9c; --mute:#585866;
+    --accent:#74ade8; --accent-bg:rgba(116,173,232,.1);
+    --green:#9ece6a; --yellow:#e0af68; --red:#f7768e; --purple:#bb9af7;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --sans:"IBM Plex Sans",-apple-system,sans-serif;
+  }
+  body { font-family:var(--sans); background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; font-size:13px; -webkit-font-smoothing:antialiased; }
+
+  /* ── Tab bar: open articles are tabs, like editor buffers ── */
+  .tabbar { height:36px; background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:stretch; flex-shrink:0; }
+  .traffic { display:flex; gap:8px; align-items:center; padding:0 14px; }
+  .traffic span { width:12px; height:12px; border-radius:50%; background:#35353f; }
+  .tab { display:flex; align-items:center; gap:8px; padding:0 14px; border-right:1px solid var(--border); font-family:var(--mono); font-size:11px; color:var(--dim); max-width:240px; }
+  .tab .d { width:6px; height:6px; border-radius:50%; background:var(--yellow); flex-shrink:0; }
+  .tab.active { background:var(--bg); color:var(--text); box-shadow:inset 0 2px 0 var(--accent); }
+  .tab .x { color:var(--mute); margin-left:2px; }
+  .tab span.t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tabbar .plus { display:flex; align-items:center; padding:0 12px; color:var(--mute); font-size:14px; }
+
+  .body { flex:1; display:flex; min-height:0; position:relative; }
+
+  /* ── Icon dock (leftmost) ── */
+  .dock { width:44px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; padding:8px 0; gap:4px; flex-shrink:0; }
+  .dock .di { width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--mute); font-size:14px; position:relative; }
+  .dock .di.on { color:var(--accent); background:var(--accent-bg); }
+  .dock .di .badge { position:absolute; top:-2px; right:-4px; background:var(--yellow); color:#131317; font-family:var(--mono); font-size:8px; font-weight:700; padding:0 4px; border-radius:6px; }
+  .dock .sp { flex:1; }
+
+  /* ── Feed tree panel ── */
+  .feeds { width:220px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+  .feeds .hd { padding:10px 12px 6px; font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--mute); display:flex; justify-content:space-between; }
+  .frow { display:flex; align-items:center; gap:7px; padding:3px 12px; font-size:12.5px; color:var(--dim); font-family:var(--mono); }
+  .frow .tw { color:var(--mute); width:10px; }
+  .frow .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .frow .c { font-size:10px; color:var(--mute); }
+  .frow.sel { background:var(--accent-bg); color:var(--accent); box-shadow:inset 2px 0 0 var(--accent); }
+  .frow.dim2 { color:var(--mute); }
+  .findent { padding-left:28px; }
+
+  /* ── Split editor area: two article "buffers" side by side ── */
+  .editors { flex:1; display:flex; min-width:0; }
+  .pane { flex:1; min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--border); }
+  .pane:last-child { border-right:none; }
+  .bcrumb { height:30px; display:flex; align-items:center; gap:6px; padding:0 16px; font-family:var(--mono); font-size:10.5px; color:var(--mute); border-bottom:1px solid var(--border); flex-shrink:0; }
+  .bcrumb b { color:var(--dim); font-weight:500; }
+  .buf { flex:1; overflow:hidden; padding:28px 36px; }
+  .buf .feed { font-family:var(--mono); font-size:11px; color:var(--accent); margin-bottom:8px; }
+  .buf h1 { font-size:21px; font-weight:600; line-height:1.35; letter-spacing:-.01em; margin-bottom:8px; }
+  .buf .meta { font-family:var(--mono); font-size:10.5px; color:var(--mute); margin-bottom:22px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+  .buf p { font-size:13.5px; line-height:1.8; color:#c0c0cc; margin-bottom:14px; }
+  .buf pre { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:10px 13px; font-family:var(--mono); font-size:11.5px; color:var(--green); margin-bottom:14px; }
+  .buf .gutter-hint { font-family:var(--mono); font-size:10px; color:var(--mute); margin-top:20px; }
+
+  /* ── Command palette overlay ── */
+  .overlay { position:absolute; inset:0; background:rgba(9,9,12,.55); display:flex; justify-content:center; padding-top:80px; z-index:50; }
+  .palette { width:560px; height:fit-content; background:var(--panel-2); border:1px solid var(--border); border-radius:10px; box-shadow:0 24px 60px rgba(0,0,0,.6); overflow:hidden; }
+  .palette .inp { padding:12px 16px; font-family:var(--mono); font-size:13px; color:var(--text); border-bottom:1px solid var(--border); display:flex; gap:10px; }
+  .palette .inp .pfx { color:var(--accent); }
+  .palette .inp .cur { display:inline-block; width:7px; height:15px; background:var(--accent); vertical-align:text-bottom; }
+  .prow { display:flex; align-items:center; gap:10px; padding:7px 16px; font-size:12.5px; color:var(--dim); }
+  .prow.sel { background:var(--accent-bg); color:var(--text); }
+  .prow .ic { font-family:var(--mono); font-size:11px; color:var(--mute); width:14px; }
+  .prow .k { margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--mute); border:1px solid var(--border); border-radius:4px; padding:1px 5px; }
+  .prow .hl { color:var(--accent); }
+  .psec { padding:8px 16px 3px; font-family:var(--mono); font-size:9.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--mute); }
+
+  /* ── Status bar ── */
+  .status { height:24px; background:var(--panel); border-top:1px solid var(--border); display:flex; align-items:center; padding:0 12px; gap:14px; font-family:var(--mono); font-size:10px; color:var(--mute); flex-shrink:0; }
+  .status .seg { display:flex; gap:5px; align-items:center; }
+  .status .ok { width:6px; height:6px; border-radius:50%; background:var(--green); }
+  .status .right { margin-left:auto; display:flex; gap:14px; }
+  .status .u { color:var(--yellow); }
+</style>
+</head>
+<body>
+  <div class="tabbar">
+    <div class="traffic"><span></span><span></span><span></span></div>
+    <div class="tab active"><span class="d"></span><span class="t">Announcing Rust 1.88.0</span><span class="x">×</span></div>
+    <div class="tab"><span class="d" style="background:transparent;border:1px solid var(--mute)"></span><span class="t">Zed's new agent panel</span><span class="x">×</span></div>
+    <div class="tab"><span class="d"></span><span class="t">HN: SQLite as an application file format</span><span class="x">×</span></div>
+    <div class="plus">＋</div>
+  </div>
+
+  <div class="body">
+    <div class="dock">
+      <div class="di on">☰<span class="badge">31</span></div>
+      <div class="di">◎</div>
+      <div class="di">★</div>
+      <div class="di">⌕</div>
+      <div class="sp"></div>
+      <div class="di">⟳</div>
+      <div class="di">⚙</div>
+    </div>
+
+    <aside class="feeds">
+      <div class="hd"><span>Feeds</span><span>31 unread</span></div>
+      <div class="frow"><span class="tw">▾</span><span class="n">tech/</span><span class="c">24</span></div>
+      <div class="frow sel findent"><span class="n">rust-blog</span><span class="c">12</span></div>
+      <div class="frow findent"><span class="n">zed-blog</span><span class="c">4</span></div>
+      <div class="frow findent"><span class="n">hacker-news</span><span class="c">8</span></div>
+      <div class="frow dim2 findent"><span class="n">lobsters</span></div>
+      <div class="frow"><span class="tw">▾</span><span class="n">design/</span><span class="c">5</span></div>
+      <div class="frow findent"><span class="n">frank-chimero</span><span class="c">2</span></div>
+      <div class="frow dim2 findent"><span class="n">rasmus-andersson</span></div>
+      <div class="frow findent"><span class="n">butterick-typography</span><span class="c">3</span></div>
+      <div class="frow"><span class="tw">▸</span><span class="n">news/</span><span class="c">2</span></div>
+      <div class="frow dim2"><span class="tw">·</span><span class="n">simonwillison.net</span></div>
+      <div class="frow dim2"><span class="tw">·</span><span class="n">daringfireball.net</span></div>
+    </aside>
+
+    <div class="editors">
+      <section class="pane">
+        <div class="bcrumb">tech/ <b>›</b> rust-blog <b>›</b> <b>Announcing Rust 1.88.0</b></div>
+        <div class="buf">
+          <div class="feed">rust-blog · unread</div>
+          <h1>Announcing Rust 1.88.0</h1>
+          <div class="meta">2026-07-14 10:02 · rust-lang.org · 4 min · ★ star (s) · ✓ read (m)</div>
+          <p>The Rust team is happy to announce a new version of Rust, 1.88.0. Rust is a programming language empowering everyone to build reliable and efficient software.</p>
+          <pre>$ rustup update stable</pre>
+          <p>This release brings let-chains to the 2024 edition, naked functions, and quality-of-life improvements to cargo. Let-chains allow combining multiple let bindings and boolean conditions in a single if expression.</p>
+          <div class="gutter-hint">── j: next article · k: prev · ⇥: next unread · ⌘\: split ──</div>
+        </div>
+      </section>
+      <section class="pane">
+        <div class="bcrumb">tech/ <b>›</b> zed-blog <b>›</b> <b>Zed's new agent panel</b></div>
+        <div class="buf">
+          <div class="feed" style="color:var(--purple)">zed-blog · read</div>
+          <h1>Zed's new agent panel</h1>
+          <div class="meta">2026-07-13 18:44 · zed.dev · 6 min</div>
+          <p>Today we're shipping a redesigned agent panel. The panel is built entirely in GPUI, our UI framework that renders everything on the GPU.</p>
+          <p>We rethought how conversations with an agent should feel inside an editor: not a chat bolted onto the side, but threads that live alongside your buffers and splits.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Command palette (open state) -->
+    <div class="overlay">
+      <div class="palette">
+        <div class="inp"><span class="pfx">›</span>rust<span class="cur"></span></div>
+        <div class="psec">Jump to feed</div>
+        <div class="prow sel"><span class="ic">●</span><span><span class="hl">rust</span>-blog</span><span class="k">12 unread</span></div>
+        <div class="psec">Articles</div>
+        <div class="prow"><span class="ic">○</span>Announcing <span class="hl">Rust</span> 1.88.0<span class="k">rust-blog</span></div>
+        <div class="prow"><span class="ic">○</span>This Week in <span class="hl">Rust</span> #556<span class="k">rust-blog</span></div>
+        <div class="psec">Commands</div>
+        <div class="prow"><span class="ic">›</span>mark feed as read: <span class="hl">rust</span>-blog<span class="k">⇧⌘M</span></div>
+        <div class="prow"><span class="ic">›</span>refresh feed: <span class="hl">rust</span>-blog<span class="k">⌘R</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status">
+    <div class="seg"><span class="ok"></span>synced 12:04</div>
+    <div class="seg">18 feeds</div>
+    <div class="seg u">31 unread</div>
+    <div class="right"><span>tab 1/3</span><span>split: vertical</span><span>⌘K palette</span></div>
+  </div>
+</body>
+</html>

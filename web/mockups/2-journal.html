@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Mockup 2 — Journal: 朝刊型</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --paper:#f7f4ee; --ink:#1a1814; --dim:#6b655a; --mute:#a39c8e;
+    --rule:#d8d2c4; --accent:#b3441e;
+    --serif:"Georgia","Times New Roman","Hiragino Mincho ProN",serif;
+    --sans:-apple-system,"Helvetica Neue","Hiragino Sans",sans-serif;
+  }
+  body { background:var(--paper); color:var(--ink); font-family:var(--serif); height:100vh; overflow:hidden; -webkit-font-smoothing:antialiased; }
+  .sheet { max-width:1180px; margin:0 auto; padding:26px 48px; height:100vh; display:flex; flex-direction:column; }
+
+  /* Masthead */
+  .masthead { text-align:center; border-bottom:3px double var(--ink); padding-bottom:14px; flex-shrink:0; }
+  .masthead .date { font-family:var(--sans); font-size:11px; letter-spacing:.25em; text-transform:uppercase; color:var(--dim); display:flex; justify-content:space-between; margin-bottom:6px; }
+  .masthead h1 { font-size:44px; font-weight:700; letter-spacing:.02em; line-height:1; }
+  .masthead h1 em { font-style:italic; color:var(--accent); }
+  .masthead .sub { font-family:var(--sans); font-size:11px; color:var(--dim); margin-top:8px; letter-spacing:.12em; text-transform:uppercase; }
+  .masthead .sub b { color:var(--accent); }
+
+  /* Section nav */
+  .nav { display:flex; justify-content:center; gap:34px; padding:10px 0; border-bottom:1px solid var(--ink); font-family:var(--sans); font-size:12px; letter-spacing:.15em; text-transform:uppercase; color:var(--dim); flex-shrink:0; }
+  .nav .on { color:var(--ink); font-weight:600; border-bottom:2px solid var(--accent); padding-bottom:8px; margin-bottom:-11px; }
+
+  .page { flex:1; display:grid; grid-template-columns: 1.5fr 1fr 1fr; gap:0; min-height:0; padding-top:20px; }
+  .col { padding:0 22px; overflow:hidden; }
+  .col + .col { border-left:1px solid var(--rule); }
+  .col:first-child { padding-left:0; }
+  .col:last-child { padding-right:0; }
+
+  .kicker { font-family:var(--sans); font-size:10px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin-bottom:8px; }
+  .lead h2 { font-size:31px; line-height:1.18; font-weight:700; letter-spacing:-.01em; margin-bottom:10px; }
+  .lead .std { font-size:15px; line-height:1.55; color:var(--dim); font-style:italic; margin-bottom:12px; }
+  .byline { font-family:var(--sans); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--mute); margin-bottom:12px; }
+  .byline b { color:var(--dim); }
+  .lead p { font-size:14px; line-height:1.72; margin-bottom:12px; text-align:justify; }
+  .lead p:first-of-type::first-letter { font-size:46px; float:left; line-height:.85; padding:4px 8px 0 0; font-weight:700; color:var(--accent); }
+  .contread { font-family:var(--sans); font-size:11px; color:var(--accent); letter-spacing:.05em; }
+
+  .rule-h { border-top:1px solid var(--rule); margin:16px 0; }
+  .sechead { font-family:var(--sans); font-size:11px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; border-top:2px solid var(--ink); padding-top:8px; margin-bottom:12px; display:flex; justify-content:space-between; }
+  .sechead .n { color:var(--mute); font-weight:400; }
+
+  .story { margin-bottom:16px; }
+  .story h3 { font-size:16.5px; line-height:1.3; font-weight:700; margin-bottom:4px; }
+  .story h3 .dot { color:var(--accent); }
+  .story.read h3 { font-weight:400; color:var(--dim); }
+  .story .src { font-family:var(--sans); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--mute); margin-bottom:4px; }
+  .story p { font-size:12.5px; line-height:1.55; color:var(--dim); }
+
+  .brief { display:flex; gap:8px; margin-bottom:11px; font-size:13px; line-height:1.45; }
+  .brief .b { color:var(--accent); font-weight:700; }
+  .brief .s { font-family:var(--sans); font-size:10px; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; }
+
+  .footer { border-top:1px solid var(--ink); padding:8px 0 2px; display:flex; justify-content:space-between; font-family:var(--sans); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--mute); flex-shrink:0; }
+  .footer .k { color:var(--dim); }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <header class="masthead">
+      <div class="date"><span>Vol. 128 — 31 Unread</span><span>Tuesday, July 14, 2026</span></div>
+      <h1>The Morning <em>Feed</em></h1>
+      <div class="sub">Your 18 subscriptions, composed as today's edition · <b>refreshed 12:04</b></div>
+    </header>
+    <nav class="nav">
+      <span class="on">Front Page</span><span>Tech · 24</span><span>Design · 5</span><span>News · 2</span><span>Longreads</span><span>Archive</span><span style="color:var(--accent)">⌕ Search</span>
+    </nav>
+
+    <main class="page">
+      <!-- Lead story -->
+      <div class="col lead">
+        <div class="kicker">Lead Story — The Rust Blog</div>
+        <h2>Rust 1.88 Arrives With Let-Chains, Ending a Seven-Year Papercut</h2>
+        <div class="std">The release folds one of the language's most-requested ergonomics into the 2024 edition, alongside naked functions and cargo improvements.</div>
+        <div class="byline">By <b>rust-lang.org</b> · 10:02 · 4 min read · unread</div>
+        <p>The Rust team is happy to announce a new version of Rust, 1.88.0. Rust is a programming language empowering everyone to build reliable and efficient software.</p>
+        <p>This release brings let-chains to the 2024 edition, naked functions, and a number of quality-of-life improvements to cargo. Let-chains allow you to combine multiple let bindings and boolean conditions in a single if expression, removing a long-standing papercut for pattern-heavy code.</p>
+        <p>As always, the release also includes stabilized APIs and performance improvements across the compiler.</p>
+        <span class="contread">Continue reading → (or press Enter)</span>
+        <div class="rule-h"></div>
+        <div class="kicker" style="color:var(--dim)">Also Above the Fold</div>
+        <div class="story">
+          <div class="src">Zed Blog · 18:44</div>
+          <h3><span class="dot">●</span> Zed's new agent panel is built entirely on the GPU</h3>
+          <p>Not a chat bolted onto the side, but threads that live alongside your buffers and splits.</p>
+        </div>
+      </div>
+
+      <!-- Tech column -->
+      <div class="col">
+        <div class="sechead"><span>Tech</span><span class="n">24 unread</span></div>
+        <div class="story">
+          <div class="src">Hacker News · 09:12</div>
+          <h3><span class="dot">●</span> SQLite as an application file format</h3>
+          <p>Why a single-file database beats a directory of JSON for desktop apps.</p>
+        </div>
+        <div class="story">
+          <div class="src">The Rust Blog · 07:31</div>
+          <h3><span class="dot">●</span> Async closures stabilized in the 2024 edition</h3>
+          <p>One of the most requested features lands on stable.</p>
+        </div>
+        <div class="story read">
+          <div class="src">Lobste.rs · Yesterday</div>
+          <h3>What we learned porting a 500k-line C++ codebase</h3>
+        </div>
+        <div class="story read">
+          <div class="src">Simon Willison · Yesterday</div>
+          <h3>Prompt injection is still unsolved — a 2026 survey</h3>
+        </div>
+        <div class="story">
+          <div class="src">Hacker News · 06:55</div>
+          <h3><span class="dot">●</span> cargo-script: single-file Rust programs merged</h3>
+        </div>
+      </div>
+
+      <!-- Design + briefs -->
+      <div class="col">
+        <div class="sechead"><span>Design</span><span class="n">5 unread</span></div>
+        <div class="story">
+          <div class="src">Frank Chimero · 08:20</div>
+          <h3><span class="dot">●</span> The web's grain, revisited</h3>
+          <p>Ten years later, what does it mean to design with the medium?</p>
+        </div>
+        <div class="story read">
+          <div class="src">Butterick's Practical Typography</div>
+          <h3>Line length is the invisible constraint</h3>
+        </div>
+        <div class="sechead" style="margin-top:20px"><span>The Wire</span><span class="n">briefs</span></div>
+        <div class="brief"><span class="b">●</span><span>Apple posts WWDC26 session videos in full. <span class="s">— Daring Fireball</span></span></div>
+        <div class="brief"><span class="b">●</span><span>Postgres 19 beta adds native columnar storage. <span class="s">— HN</span></span></div>
+        <div class="brief"><span class="b">○</span><span>Tailwind v5 roadmap published. <span class="s">— Lobste.rs</span></span></div>
+        <div class="brief"><span class="b">○</span><span>Deno merges Node compat layer rewrite. <span class="s">— HN</span></span></div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>J/K move · Enter read · M mark · A archive edition</span>
+      <span class="k">Mark today's edition as read →</span>
+      <span>Edition auto-composed hourly · Next: 13:04</span>
+    </footer>
+  </div>
+</body>
+</html>
