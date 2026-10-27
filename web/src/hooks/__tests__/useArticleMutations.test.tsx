@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, type InfiniteData } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { useSetRead, useRefresh } from '../useArticleMutations';
+import { useMarkRead, useSetRead, useRefresh } from '../useArticleMutations';
 import { api, type ArticleListResponse } from '../../api/client';
 import { makeArticle } from '../../test/factories';
 
@@ -111,5 +111,31 @@ describe('useRefresh', () => {
     expect(data.pages).toHaveLength(1);
     expect(data.pages[0].items.map((a) => a.id)).toEqual([9, 1]);
     expect(toastSpy).toHaveBeenCalledWith('1 件の新着');
+  });
+});
+
+describe('useMarkRead', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    toastSpy.mockClear();
+  });
+
+  it('optimistically marks every id read in every articles cache', async () => {
+    const { wrapper, isRead } = setup();
+    const spy = vi.spyOn(api, 'markRead').mockResolvedValue({ updated: 2 });
+    const { result } = renderHook(() => useMarkRead(), { wrapper });
+    act(() => result.current([1, 2]));
+    await waitFor(() => expect(isRead('', 1)).toBe(true));
+    expect(isRead('', 2)).toBe(true);
+    expect(isRead('q', 1)).toBe(true);
+    expect(spy).toHaveBeenCalledWith([1, 2]);
+  });
+
+  it('does nothing for an empty list', () => {
+    const { wrapper } = setup();
+    const spy = vi.spyOn(api, 'markRead');
+    const { result } = renderHook(() => useMarkRead(), { wrapper });
+    act(() => result.current([]));
+    expect(spy).not.toHaveBeenCalled();
   });
 });

@@ -17,7 +17,7 @@ export default function App() {
           ) : route.path === '/subscriptions' ? (
             <SubscriptionsPage />
           ) : (
-            <HomePage />
+            <HomePage params={route.params} />
           )}
         </main>
       </div>

@@ -256,6 +256,9 @@ func (d *DB) listArticlesNoSearch(filter ArticleFilter) (*ArticlesResult, error)
 		wheres = append(wheres, "a.feed_id = ?")
 		args = append(args, *filter.FeedID)
 	}
+	if filter.UnreadOnly {
+		wheres = append(wheres, "a.is_read = 0")
+	}
 
 	whereClause := ""
 	if len(wheres) > 0 {
@@ -333,6 +336,9 @@ func (d *DB) listArticlesFTS(filter ArticleFilter, q string) (*ArticlesResult, e
 		wheres = append(wheres, "a.feed_id = ?")
 		args = append(args, *filter.FeedID)
 	}
+	if filter.UnreadOnly {
+		wheres = append(wheres, "a.is_read = 0")
+	}
 
 	whereClause := "WHERE " + strings.Join(wheres, " AND ")
 
@@ -390,6 +396,9 @@ func (d *DB) listArticlesLike(filter ArticleFilter, q string) (*ArticlesResult, 
 	if filter.FeedID != nil {
 		wheres = append(wheres, "a.feed_id = ?")
 		args = append(args, *filter.FeedID)
+	}
+	if filter.UnreadOnly {
+		wheres = append(wheres, "a.is_read = 0")
 	}
 
 	whereClause := "WHERE " + strings.Join(wheres, " AND ")

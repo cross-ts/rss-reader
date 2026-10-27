@@ -2367,3 +2367,36 @@ func TestListArticles_SearchFTS_OrderByPublishedAtDesc(t *testing.T) {
 // Verify unused helper functions compile (suppress lint warnings).
 var _ = strings.Contains
 var _ = intPtr
+
+func TestListArticles_UnreadOnly(t *testing.T) {
+	d := openTestDB(t)
+	seedFeeds(t, d, nil, []FeedDef{
+		{Title: "Feed", URL: "https://example.com/feed"},
+	})
+	feed, _ := d.GetFeedByURL("https://example.com/feed")
+	seedArticles(t, d, feed.ID, []NewArticle{
+		{GUID: "1", Title: "Read", URL: "https://example.com/1", Content: "golang body", PublishedAt: strPtr("2024-01-02T00:00:00Z")},
+		{GUID: "2", Title: "Unread", URL: "https://example.com/2", Content: "golang body", PublishedAt: strPtr("2024-01-01T00:00:00Z")},
+	})
+	all, _ := d.ListArticles(ArticleFilter{Limit: 10})
+	var readID int
+	for _, a := range all.Items {
+		if a.Title == "Read" {
+			readID = a.ID
+		}
+	}
+	if _, err := d.MarkArticlesRead([]int{readID}, "2024-01-03T00:00:00Z"); err != nil {
+		t.Fatalf("mark read: %v", err)
+	}
+
+	for _, q := range []string{"", "golang", "go"} {
+		q := q
+		result, err := d.ListArticles(ArticleFilter{Limit: 10, Q: &q, UnreadOnly: true})
+		if err != nil {
+			t.Fatalf("q=%q: list articles: %v", q, err)
+		}
+		if result.Total != 1 || len(result.Items) != 1 || result.Items[0].Title != "Unread" {
+			t.Fatalf("q=%q: expected only Unread, got total=%d items=%+v", q, result.Total, result.Items)
+		}
+	}
+}

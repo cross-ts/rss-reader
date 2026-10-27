@@ -43,4 +43,20 @@ describe('useArticles', () => {
     expect(spy).toHaveBeenCalledWith({ q: undefined, limit: 30, offset: 0 });
     expect(result.current.hasNextPage).toBe(false);
   });
+
+  it('unreadOnly offsets by the loaded articles that are still unread', async () => {
+    const spy = vi
+      .spyOn(api, 'getArticles')
+      .mockResolvedValueOnce({ items: [makeArticle(1), makeArticle(2, { isRead: true }), makeArticle(3)], total: 5 })
+      .mockResolvedValueOnce({ items: [makeArticle(4)], total: 3 });
+    const { result } = renderHook(() => useArticles('', { unreadOnly: true }), { wrapper });
+    await waitFor(() => expect(result.current.articles).toHaveLength(3));
+    expect(spy).toHaveBeenLastCalledWith({ q: undefined, unreadOnly: true, limit: 30, offset: 0 });
+    act(() => {
+      void result.current.fetchNextPage();
+    });
+    await waitFor(() => expect(result.current.articles).toHaveLength(4));
+    // 2 は既読になってサーバーの未読リストから外れているので offset は 2
+    expect(spy).toHaveBeenLastCalledWith({ q: undefined, unreadOnly: true, limit: 30, offset: 2 });
+  });
 });
