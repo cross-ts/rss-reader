@@ -65,7 +65,7 @@ export const ArticleRow = memo(function ArticleRow({ article: a, onSetRead }: Pr
             </Text>
           )}
         </div>
-        <Heading level={2} weight={a.isRead ? 'medium' : 'semibold'} color={a.isRead ? 'secondary' : 'primary'} textWrap="pretty">
+        <Heading level={2} weight={a.isRead ? 'normal' : 'medium'} color={a.isRead ? 'secondary' : 'primary'} textWrap="pretty">
           <a
             href={href ?? undefined}
             target="_blank"

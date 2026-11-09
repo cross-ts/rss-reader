@@ -12,12 +12,52 @@
 @import "@astryxdesign/core/tailwind-theme.css";
 @import "tailwindcss/utilities.css" layer(utilities);
 
-/* 日本語の字形は Noto Sans JP にフォールバックさせる（Figtree は欧文のみ） */
+/*
+ * ブランド上書き（heydamir.design を参考にした、暖色のオフブラック × クリーム）。
+ * テーマは @scope ([data-astryx-theme="neutral"]) の :scope (0,1,0) で宣言するので、
+ * 同じレイヤー内で属性を重ねて (0,2,0) にし、確実に勝たせる。値は light-dark(ライト, ダーク)。
+ */
 @layer astryx-theme {
-  :root,
-  [data-astryx-theme] {
-    --font-family-body: Figtree, "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --font-family-heading: Figtree, "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  [data-astryx-theme][data-astryx-theme] {
+    --font-family-body: "Inter Tight", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+    --font-family-heading: "Inter Tight", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+
+    --color-background-body: light-dark(#f4f1eb, #151413);
+    --color-background-surface: light-dark(#f4f1eb, #151413);
+    --color-background-card: light-dark(#fbf9f5, #1d1b19);
+    --color-background-popover: light-dark(#fbf9f5, #1d1b19);
+    --color-background-muted: light-dark(#e9e4da, #262422);
+    --color-background-gray: light-dark(#e2dcd1, #302d2a);
+    --color-accent-muted: light-dark(#e9e4da, #302d2a);
+
+    --color-text-primary: light-dark(#1e1c1a, #efe9de);
+    --color-text-secondary: light-dark(#1e1c1aa3, #efe9dea3);
+    --color-icon-primary: light-dark(#1e1c1a, #efe9de);
+    --color-icon-secondary: light-dark(#1e1c1aa3, #efe9dea3);
+
+    --color-border: light-dark(#1e1c1a17, #efe9de17);
+    --color-border-emphasized: light-dark(#cdc5b8, #4a4641);
+    --color-overlay-hover: light-dark(#1e1c1a0d, #efe9de0f);
+
+    /* 主ボタンは地の反転色、文字のアクセントだけ暖色 */
+    --color-accent: light-dark(#1e1c1a, #efe9de);
+    --color-on-accent: light-dark(#f4f1eb, #151413);
+    --color-text-accent: light-dark(#a95c2c, #f2b48a);
+    --color-icon-accent: light-dark(#a95c2c, #f2b48a);
+
+    /* ピル型の操作要素、柔らかいコンテナ */
+    --radius-element: 9999px;
+    --radius-container: 1.25rem;
+  }
+}
+
+@layer components {
+  /* 見出しは中太 + 詰めた字間（Inter Tight の見え方に合わせる） */
+  :where(h1, h2, h3) {
+    letter-spacing: -0.012em;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-text-accent) 28%, transparent);
   }
 }
 

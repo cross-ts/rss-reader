@@ -38,7 +38,17 @@ export function HomePage() {
         </div>
         <PageHeader
           title="ホーム"
-          caption={unread.data ? (total > 0 ? `未読 ${total} 件` : 'すべて読みました') : ' '}
+          caption={
+            !unread.data ? (
+              '\u00a0'
+            ) : total > 0 ? (
+              <>
+                未読 <span className="font-medium text-[var(--color-text-accent)]">{total}</span> 件
+              </>
+            ) : (
+              'すべて読みました'
+            )
+          }
           actions={
             <Button
               label="更新"

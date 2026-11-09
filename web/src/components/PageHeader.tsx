@@ -7,7 +7,7 @@ export function PageHeader({ title, caption, actions }: { title: string; caption
   return (
     <header className="flex flex-wrap items-end gap-x-6 gap-y-4 pt-10 pb-6 sm:pt-16">
       <div className="min-w-0 grow basis-64">
-        <Heading level={1} type="display-2" weight="semibold">
+        <Heading level={1} type="display-2" weight="medium">
           {title}
         </Heading>
         {caption && (
