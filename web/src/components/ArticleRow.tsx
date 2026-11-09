@@ -44,7 +44,7 @@ export const ArticleRow = memo(function ArticleRow({ article: a, onSetRead }: Pr
   return (
     <article
       data-read={a.isRead || undefined}
-      className="group relative flex gap-6 border-b border-border py-6 first:border-t"
+      className="group relative isolate flex gap-6 border-b border-border py-6 first:border-t"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex min-w-0 items-center justify-between gap-3">
