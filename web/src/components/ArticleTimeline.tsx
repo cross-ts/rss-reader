@@ -1,14 +1,25 @@
 import { useEffect, useRef } from 'react';
+import { Button } from '@astryxdesign/core/Button';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Skeleton } from '@astryxdesign/core/Skeleton';
+import { Spinner } from '@astryxdesign/core/Spinner';
 import { useArticles } from '../hooks/useArticles';
 import { useSetRead } from '../hooks/useArticleMutations';
-import { ArticleCard } from './ArticleCard';
+import { ArticleRow } from './ArticleRow';
 
-const Spinner = () => (
-  <span className="mr-2 inline-block size-3.5 animate-spin rounded-full border-2 border-line border-t-accent align-[-2px]" />
-);
+function RowSkeleton({ index }: { index: number }) {
+  return (
+    <div className="flex flex-col gap-3 border-b border-border py-7 first:border-t" aria-hidden="true">
+      <Skeleton width={160} height={12} index={index} />
+      <Skeleton width="80%" height={22} index={index} />
+      <Skeleton width="95%" height={14} index={index} />
+    </div>
+  );
+}
 
-export function ArticleTimeline({ q, emptyText }: { q: string; emptyText: string }) {
-  const { articles, isPending, isError, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, refetch } = useArticles(q);
+export function ArticleTimeline({ q, emptyTitle, emptyDescription }: { q: string; emptyTitle: string; emptyDescription?: string }) {
+  const { articles, isPending, isError, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, refetch } =
+    useArticles(q);
   const setRead = useSetRead();
   const sentinel = useRef<HTMLDivElement>(null);
 
@@ -28,44 +39,48 @@ export function ArticleTimeline({ q, emptyText }: { q: string; emptyText: string
 
   if (isPending) {
     return (
-      <div className="py-8 text-center text-sm text-muted">
-        <Spinner />
-        Loading…
+      <div role="status" aria-label="読み込み中">
+        {[0, 1, 2, 3].map((i) => (
+          <RowSkeleton key={i} index={i} />
+        ))}
       </div>
     );
   }
   if (isError && articles.length === 0) {
     return (
-      <div className="px-5 py-16 text-center text-muted">
-        読み込みに失敗しました。
-        <button type="button" onClick={() => refetch()} className="ml-2 text-accent underline">
-          再試行
-        </button>
+      <div className="py-20">
+        <EmptyState
+          title="読み込みに失敗しました"
+          description="サーバーに接続できませんでした。"
+          actions={<Button label="再試行" onClick={() => refetch()} />}
+        />
       </div>
     );
   }
-  if (articles.length === 0) return <div className="px-5 py-16 text-center text-muted">{emptyText}</div>;
+  if (articles.length === 0) {
+    return (
+      <div className="py-20">
+        <EmptyState title={emptyTitle} description={emptyDescription} />
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div>
       {articles.map((a) => (
-        <ArticleCard key={a.id} article={a} onSetRead={setRead} />
+        <ArticleRow key={a.id} article={a} onSetRead={setRead} />
       ))}
       {hasNextPage && isFetchNextPageError && !isFetchingNextPage ? (
-        <div className="py-8 text-center text-sm text-muted">
-          読み込みに失敗しました。
-          <button type="button" onClick={() => fetchNextPage()} className="ml-2 text-accent underline">
-            再試行
-          </button>
+        <div className="flex justify-center py-10">
+          <Button label="続きを再読み込み" onClick={() => fetchNextPage()} />
         </div>
       ) : (
         hasNextPage && (
-          <div ref={sentinel} className="py-8 text-center text-sm text-muted">
-            <Spinner />
-            Loading more…
+          <div ref={sentinel} className="flex justify-center py-10">
+            <Spinner label="さらに読み込み中" />
           </div>
         )
       )}
-    </>
+    </div>
   );
 }

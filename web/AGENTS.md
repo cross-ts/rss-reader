@@ -1,17 +1,22 @@
 # AGENTS.md — web/（React + Vite フロントエンド）
 
-Substack 風のタイムライン SPA（Home / Subscriptions / Search）。バックエンド API（`/api/*`）を同一オリジンで叩く。記事本文の HTML は描画せず、テキスト抜粋と先頭画像・元記事リンク（http/https のみ）だけを表示する。
+Astryx（Meta のデザインシステム）で組んだ、静かな編集的レイアウトのタイムライン SPA（ホーム / 購読 / 検索）。バックエンド API（`/api/*`）を同一オリジンで叩く。記事本文の HTML は描画せず、テキスト抜粋と先頭画像・元記事リンク（http/https のみ）だけを表示する。
 
 ## スタック / コマンド
-- React 19 + Vite + TypeScript + `@tanstack/react-query` + Tailwind CSS v4。
+- React 19 + Vite + TypeScript + `@tanstack/react-query` + Tailwind CSS v4 + **Astryx**（`@astryxdesign/core` + `@astryxdesign/theme-neutral`、0.7.8）。
+- Astryx のコンポーネント API は推測しない。`pnpm -C web exec astryx component <Name>` / `astryx docs <topic>` で確認する。
+- `pnpm-workspace.yaml` の `minimumReleaseAge`（3 日）により、Astryx は公開後 3 日以上経った版しか入らない。`@astryxdesign/core` の postinstall（init 案内の表示のみ）は `allowBuilds` で拒否している。
 - **pnpm を使う（npm 禁止）**。`pnpm -C web install` / `pnpm -C web run build` / `pnpm -C web run dev`（:5173, `/api`→`http://localhost:3000` プロキシ）/ `pnpm -C web test`。
 - esbuild のビルドは `web/pnpm-workspace.yaml` の `allowBuilds: { esbuild: true }` で許可。pnpm 11 では package.json の `pnpm` フィールドではなくこちら。必要に応じ `pnpm -C web rebuild esbuild`。
 - ビルド成果物 `web/dist` は gitignore。GitHub Pages へは Actions でデプロイ予定。
 
-## スタイル
-- Tailwind v4 の CSS-first。`tailwind.config.js` は無い。`src/styles.css` に `@import "tailwindcss"`、`:root` の CSS 変数（`--bg --fg --muted --line --hover --panel --accent`、`prefers-color-scheme: light` で上書き）、`@theme inline` での色・フォント登録（`bg-bg` `text-muted` `border-line` `bg-accent` など）、`@layer base`。
-- 見た目は原則ユーティリティで書く。ブレークポイントは Tailwind 既定の `sm`=640 / `lg`=1024 / `xl`=1280 に一致（`sm` 未満: 下部タブバー、`lg` 未満: アイコンレール、`xl` 未満: 右カラム非表示）。
-- スクロールするのは window。左右カラムは `sticky top-0 h-screen`。
+## スタイル / デザイン
+- `src/styles.css` は Astryx の Tailwind ブリッジ構成。先頭の `@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;` は必須（無いと Astryx が Tailwind ユーティリティに勝つ）。
+- 色・余白・角丸は Astryx のトークン（Tailwind では `bg-surface` `text-secondary` `border-border` `bg-muted` など）。生の色値は書かない。ダークモードは `<Theme mode="system">` が OS 設定に追従。
+- フォントは Figtree + Noto Sans JP（`--font-family-body/heading` を上書き）。
+- シェルは `AppShell`（`height="auto"`、window がスクロール）+ `SideNav`。`lg` 未満では AppShell が上部バー + ドロワー（MobileNav）に切り替える。
+- 本文カラムは `components/PageHeader.tsx` の `Page`（最大 720px）。右パネル（最近更新）は `xl` 以上のみ。
+- 密なデータは Card ではなく行（List / Item / 罫線）で並べる。アイコンは Astryx のセマンティック名に無いものを `components/icons.tsx` の SVG コンポーネントで渡す。
 
 ## ルーティング
 - ライブラリ無しの自前ハッシュルーティング（`hooks/useHashRoute.ts`、`#/` `#/search?q=` `#/subscriptions`）。理由: GitHub Pages のサブパス配信には SPA フォールバックが無く、`base: './'` ではネストしたパスで相対アセットが解決できないため。ハッシュなら Pages / Go 静的配信 / Vite dev のどれでも変更なしで動く。
@@ -25,13 +30,13 @@ Substack 風のタイムライン SPA（Home / Subscriptions / Search）。バ�
 - フィードの「最終更新」は API に無いので表示しない。「最近更新されたフィード」は Home と同じ `['articles','']` の 1 ページ目から導出する。
 
 ## ファイル
-- `src/main.tsx` — エントリ（QueryClient、ToastProvider）。`src/App.tsx` — シェル（Sidebar / main / TabBar）。
+- `src/main.tsx` — エントリ（QueryClient、Astryx `Theme`）。`src/App.tsx` — `AppShell` + `SideNav`。
 - `src/api/client.ts` — 型と api 関数。
 - `src/pages/` — HomePage / SearchPage / SubscriptionsPage。
-- `src/components/` — Sidebar, TabBar, Columns, SearchBox, ArticleCard, ArticleTimeline（無限スクロール）, RecentFeedsPanel, Avatar, Icon, Toast, Modal（Modal/ConfirmDialog/PromptDialog）, Menu, AddFeedModal。
-- `src/hooks/` — useHashRoute, useArticles, useArticleMutations（useSetRead / useRefresh）, usePullToRefresh（touch・マウスドラッグ・wheel、Home 専用）, useSubscriptionMutations, useDebounce。
-- `src/utils/` — time（formatDate）, thumbnail, decodeEntities, avatar, url（safeHttpUrl）, subscriptions（buildSections）, recentFeeds。
-- `src/test/` — setup（IntersectionObserver スタブ、clipboard モック）、テスト用ヘルパー。
+- `src/components/` — PageHeader（Page / PageHeader）, ArticleRow, ArticleTimeline（無限スクロール）, RecentFeedsPanel, Dialogs（FormDialog / PromptDialog）, AddFeedDialog, folderOptions, icons, Toast（Astryx `useToast` の文字列ラッパ）。
+- `src/hooks/` — useHashRoute, useArticles, useArticleMutations（useSetRead / useRefresh）, usePullToRefresh（Home 専用）, useSubscriptionMutations, useDebounce。
+- `src/utils/` — time（formatDate）, thumbnail, decodeEntities, url（safeHttpUrl）, subscriptions（buildSections）, recentFeeds。
+- `src/test/` — setup（IntersectionObserver / `<dialog>` スタブ、clipboard モック）、テスト用ヘルパー。
 
 ## 設定
 - `vite.config.ts`: `base: './'`（Pages とローカルプロキシ双方で解決）。dev の `/api` プロキシは維持。

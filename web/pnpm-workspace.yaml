@@ -1,4 +1,5 @@
 ---
 minimumReleaseAge: 4320
 allowBuilds:
+  "@astryxdesign/core": false
   esbuild: true
