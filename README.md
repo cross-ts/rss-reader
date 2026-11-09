@@ -5,7 +5,7 @@
 - バックエンド: Go（標準ライブラリ中心 / `net/http` `ServeMux`）
 - ストレージ: SQLite（`modernc.org/sqlite` + FTS5 による全文検索）
 - 全文検索: SQLite FTS5 の **trigram トークナイザ**（BM25 ランキング）
-- フロントエンド: React + Vite（SPA、Substack 風タイムライン: Home / Subscriptions / Search、ハッシュルーティング）
+- フロントエンド: React + Vite + [Astryx](https://github.com/meta/astryx)（SPA、ホーム / 購読 / 検索、ハッシュルーティング）
 - フィード定義: `feeds.opml` を **SSOT（単一の正本）** とし、SQLiteはそこから再構築される派生キャッシュ
 
 ## 必要環境

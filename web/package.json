@@ -12,11 +12,15 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@astryxdesign/core": "0.7.8",
+    "@astryxdesign/theme-neutral": "0.7.8",
+    "@stylexjs/stylex": "^0.19.1",
     "@tanstack/react-query": "^5.62.7",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@astryxdesign/cli": "0.7.8",
     "@tailwindcss/postcss": "^4.3.2",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
