@@ -16,6 +16,7 @@ Astryx（Meta のデザインシステム）で組んだ、静かな編集的レ
 - フォントは Figtree + Noto Sans JP（`--font-family-body/heading` を上書き）。
 - シェルは `AppShell`（`height="auto"`、window がスクロール）+ `SideNav`。`lg` 未満では AppShell が上部バー + ドロワー（MobileNav）に切り替える。
 - 本文カラムは `components/PageHeader.tsx` の `Page`（最大 720px）。右パネル（最近更新）は `xl` 以上のみ。
+- 余白は Astryx の `docs layout/layout-spacing` に従う: padding はコンテナ（`Page` / 行 / ダイアログ）だけが持ち、子は margin を持たない（間隔は親の `gap`）。内側は狭い gap（1–2）、ブロック間は広い gap（`Page` は 8）で強弱を付ける。領域ごとに文字の左端線を 1 本に揃え、List/Item のように内側余白を持つ部品は `edge="flush"` で線を合わせる。内側の余白はトークン（Tailwind の数値クラス = `--spacing-1` 基準）のみ、生の px は構造上の幅だけ。
 - 密なデータは Card ではなく行（List / Item / 罫線）で並べる。アイコンは Astryx のセマンティック名に無いものを `components/icons.tsx` の SVG コンポーネントで渡す。
 
 ## ルーティング

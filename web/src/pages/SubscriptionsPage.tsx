@@ -7,7 +7,7 @@ import { DropdownMenu } from '@astryxdesign/core/DropdownMenu';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Icon } from '@astryxdesign/core/Icon';
 import { IconButton } from '@astryxdesign/core/IconButton';
-import { Item } from '@astryxdesign/core/Item';
+import { List, ListItem } from '@astryxdesign/core/List';
 import { Link } from '@astryxdesign/core/Link';
 import { Skeleton } from '@astryxdesign/core/Skeleton';
 import { Text } from '@astryxdesign/core/Text';
@@ -50,7 +50,7 @@ function FeedRow(props: {
   const site = safeHttpUrl(f.siteUrl);
   const title = decodeEntities(f.title);
   return (
-    <div
+    <ListItem
       draggable
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
@@ -58,64 +58,62 @@ function FeedRow(props: {
         props.onDragStart();
       }}
       onDragEnd={props.onDragEnd}
-      className={`group cursor-grab border-b border-border py-1 active:cursor-grabbing ${props.dragging ? 'opacity-40' : ''}`}
-    >
-      <Item
-        density="balanced"
-        startContent={<Avatar name={title} size="md" shape="rounded" tooltip={false} />}
-        label={title}
-        description={
-          site ? (
-            <Link href={site} isExternalLink color="secondary" size="sm">
-              {domainOf(site)}
-            </Link>
-          ) : (
-            domainOf(f.url)
-          )
-        }
-        endContent={
-          <div className="flex items-center gap-3">
-            <div className="text-right whitespace-nowrap">
-              <Text type="supporting" hasTabularNumbers>
-                {f.articleCount} 件
+      className={`group cursor-grab active:cursor-grabbing ${props.dragging ? 'opacity-40' : ''}`}
+      startContent={<Avatar name={title} size="md" shape="rounded" tooltip={false} />}
+      label={title}
+      description={
+        site ? (
+          <Link href={site} isExternalLink color="secondary" size="sm">
+            {domainOf(site)}
+          </Link>
+        ) : (
+          domainOf(f.url)
+        )
+      }
+      endContent={
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end">
+            <Text type="supporting" hasTabularNumbers>
+              {f.articleCount} 件
+            </Text>
+            {unread > 0 && (
+              <Text type="supporting" color="accent" weight="semibold" hasTabularNumbers>
+                未読 {unread}
               </Text>
-              {unread > 0 && (
-                <div>
-                  <Text type="supporting" color="accent" weight="semibold" hasTabularNumbers>
-                    未読 {unread}
-                  </Text>
-                </div>
-              )}
-            </div>
-            <div className={reveal}>
-              <IconButton size="sm" variant="ghost" label="名前を変更" tooltip="名前を変更" icon={<Icon icon={PencilIcon} />} onClick={props.onRename} />
-              <DropdownMenu
-                renderTrigger={(t) => (
-                  <IconButton {...t} size="sm" variant="ghost" label="フォルダへ移動" tooltip="フォルダへ移動" icon={<Icon icon={FolderIcon} />} />
-                )}
-                alignment="end"
-                items={folderOptions(props.folders).map((o) => ({
-                  label: o.label,
-                  isDisabled: (f.folder ?? '') === o.value,
-                  onClick: () => props.onMove(o.value || null),
-                }))}
-              />
-              <IconButton size="sm" variant="ghost" label="削除" tooltip="削除" icon={<Icon icon={TrashIcon} />} onClick={props.onDelete} />
-            </div>
+            )}
           </div>
-        }
-      />
-    </div>
+          <div className={reveal}>
+            <IconButton size="sm" variant="ghost" label="名前を変更" tooltip="名前を変更" icon={<Icon icon={PencilIcon} />} onClick={props.onRename} />
+            <DropdownMenu
+              renderTrigger={(t) => (
+                <IconButton {...t} size="sm" variant="ghost" label="フォルダへ移動" tooltip="フォルダへ移動" icon={<Icon icon={FolderIcon} />} />
+              )}
+              alignment="end"
+              items={folderOptions(props.folders).map((o) => ({
+                label: o.label,
+                isDisabled: (f.folder ?? '') === o.value,
+                onClick: () => props.onMove(o.value || null),
+              }))}
+            />
+            <IconButton size="sm" variant="ghost" label="削除" tooltip="削除" icon={<Icon icon={TrashIcon} />} onClick={props.onDelete} />
+          </div>
+        </div>
+      }
+    />
   );
 }
+
+/** フォルダ階層の字下げ。spacing トークン（5 = 20px）を段数倍する。 */
+const indent = (depth: number) => ({ paddingInlineStart: `calc(var(--spacing-5) * ${depth})` });
 
 function FolderHeader(props: { section: Section; open: boolean; over: boolean; onToggle: () => void; onRename: () => void; onDelete: () => void }) {
   const s = props.section;
   return (
     <div
-      style={{ paddingInlineStart: `${s.depth * 20}px` }}
-      className={`group flex min-w-0 items-center gap-2 rounded-md pt-8 pb-2 ${props.over ? 'outline-2 outline-offset-2 outline-accent outline-dashed' : ''}`}
+      style={indent(s.depth)}
+      className={`group flex min-w-0 items-center justify-between gap-2 rounded-md ${props.over ? 'outline-2 outline-offset-4 outline-accent outline-dashed' : ''}`}
     >
+      <div className="flex min-w-0 items-center gap-2">
       <button
         type="button"
         aria-expanded={props.open}
@@ -132,8 +130,9 @@ function FolderHeader(props: { section: Section; open: boolean; over: boolean; o
       <Text type="supporting" textWrap="nowrap" hasTabularNumbers>
         {s.total} フィード{s.unread > 0 ? ` · 未読 ${s.unread}` : ''}
       </Text>
+      </div>
       {s.folder && (
-        <span className={`ml-auto ${reveal}`}>
+        <span className={reveal}>
           <IconButton size="sm" variant="ghost" label="フォルダ名を変更" tooltip="フォルダ名を変更" icon={<Icon icon={PencilIcon} />} onClick={props.onRename} />
           <IconButton size="sm" variant="ghost" label="フォルダを削除" tooltip="フォルダを削除" icon={<Icon icon={TrashIcon} />} onClick={props.onDelete} />
         </span>
@@ -196,7 +195,7 @@ export function SubscriptionsPage() {
       />
 
       {(feeds.isPending || folders.isPending) && (
-        <div className="mt-8 flex flex-col gap-4" role="status" aria-label="読み込み中">
+        <div className="flex flex-col gap-4" role="status" aria-label="読み込み中">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} height={56} index={i} />
           ))}
@@ -218,13 +217,15 @@ export function SubscriptionsPage() {
           />
         </div>
       )}
-      {ready &&
-        sections.map((s) => {
+      {ready && sections.length > 0 && (
+        <div className="flex flex-col gap-8">
+          {sections.map((s) => {
           const open = filtering || !collapsed[s.key];
           return (
             <section
               key={s.key}
               aria-label={s.folder?.name ?? '未分類'}
+              className="flex flex-col gap-3"
               onDragOver={(e) => {
                 if (dragId == null) return;
                 e.preventDefault();
@@ -247,27 +248,29 @@ export function SubscriptionsPage() {
                 onDelete={() => setDialog({ type: 'deleteFolder', folder: s.folder! })}
               />
               {open && (
-                <div style={{ paddingInlineStart: `${s.depth * 20}px` }} className="border-t border-border">
+                <div style={indent(s.depth)} className="border-t border-border">
                   {s.feeds.length > 0 ? (
-                    s.feeds.map((f) => (
-                      <FeedRow
-                        key={f.id}
-                        feed={f}
-                        unread={unread.data?.feeds[String(f.id)] ?? 0}
-                        dragging={dragId === f.id}
-                        folders={folderList}
-                        onMove={(folder) => move(f, folder)}
-                        onRename={() => setDialog({ type: 'renameFeed', feed: f })}
-                        onDelete={() => setDialog({ type: 'deleteFeed', feed: f })}
-                        onDragStart={() => setDragId(f.id)}
-                        onDragEnd={() => {
-                          setDragId(null);
-                          setOver(null);
-                        }}
-                      />
-                    ))
+                    <List edge="flush" hasDividers density="balanced">
+                      {s.feeds.map((f) => (
+                        <FeedRow
+                          key={f.id}
+                          feed={f}
+                          unread={unread.data?.feeds[String(f.id)] ?? 0}
+                          dragging={dragId === f.id}
+                          folders={folderList}
+                          onMove={(folder) => move(f, folder)}
+                          onRename={() => setDialog({ type: 'renameFeed', feed: f })}
+                          onDelete={() => setDialog({ type: 'deleteFeed', feed: f })}
+                          onDragStart={() => setDragId(f.id)}
+                          onDragEnd={() => {
+                            setDragId(null);
+                            setOver(null);
+                          }}
+                        />
+                      ))}
+                    </List>
                   ) : (
-                    <div className="border-b border-border py-4">
+                    <div className="py-4">
                       <Text type="supporting">フィードなし（ここへドラッグして移動）</Text>
                     </div>
                   )}
@@ -276,6 +279,8 @@ export function SubscriptionsPage() {
             </section>
           );
         })}
+        </div>
+      )}
 
       {dialog?.type === 'addFeed' && <AddFeedDialog folders={folderList} onClose={close} />}
       {dialog?.type === 'newFolder' && (

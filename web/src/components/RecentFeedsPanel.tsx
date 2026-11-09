@@ -15,8 +15,8 @@ export function RecentFeedsPanel() {
   const rows = useMemo(() => recentFeeds(articles), [articles]);
   if (rows.length === 0) return null;
   return (
-    <section aria-labelledby="recent-feeds">
-      <div className="mb-3 flex items-baseline justify-between">
+    <section aria-labelledby="recent-feeds" className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between">
         <Heading level={2} id="recent-feeds" weight="semibold">
           最近更新
         </Heading>

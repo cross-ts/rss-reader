@@ -95,10 +95,8 @@ export function AddFeedDialog({ folders, onClose }: { folders: Folder[]; onClose
           </Text>
         )}
         {cands && cands.length > 0 && (
-          <div>
-            <div className="mb-1">
-              <Text type="label">検出されたフィード</Text>
-            </div>
+          <div className="flex flex-col gap-1">
+            <Text type="label">検出されたフィード</Text>
             <List edge="flush" hasDividers>
               {cands.map((c) => (
                 <ListItem

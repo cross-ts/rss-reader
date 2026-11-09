@@ -1,7 +1,6 @@
 import { memo, useMemo } from 'react';
 import { Heading } from '@astryxdesign/core/Heading';
 import { Text } from '@astryxdesign/core/Text';
-import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Icon } from '@astryxdesign/core/Icon';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
@@ -45,25 +44,36 @@ export const ArticleRow = memo(function ArticleRow({ article: a, onSetRead }: Pr
   return (
     <article
       data-read={a.isRead || undefined}
-      className="group relative flex gap-6 border-b border-border py-7 transition-colors first:border-t"
+      className="group relative flex gap-6 border-b border-border py-6 first:border-t"
     >
-      <div className="min-w-0 flex-1">
-        <div className="mb-2 flex min-w-0 items-center gap-2">
-          {!a.isRead && <StatusDot variant="accent" label="未読" />}
-          <Text type="label" weight="semibold" maxLines={1} hasTruncateTooltip={false}>
-            {feedTitle}
-          </Text>
-          <Text type="supporting" color="secondary">
-            ·
-          </Text>
-          <Text type="supporting" color="secondary" textWrap="nowrap">
-            {formatDate(a.publishedAt)}
-          </Text>
-          {a.author && (
-            <Text type="supporting" color="secondary" maxLines={1} hasTruncateTooltip={false}>
-              {decodeEntities(a.author)}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {!a.isRead && <StatusDot variant="accent" label="未読" />}
+            <Text type="label" weight="semibold" maxLines={1} hasTruncateTooltip={false}>
+              {feedTitle}
             </Text>
-          )}
+            <Text type="supporting" color="secondary" textWrap="nowrap">
+              {formatDate(a.publishedAt)}
+            </Text>
+            {a.author && (
+              <Text type="supporting" color="secondary" maxLines={1} hasTruncateTooltip={false}>
+                {decodeEntities(a.author)}
+              </Text>
+            )}
+          </div>
+          {/* 行全体のリンク（::after）より上に重ねる操作。行の高さを増やさないよう見出し行の右端に置く */}
+          <div className="relative z-[2] flex flex-none items-center gap-1">
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label={a.isRead ? '未読にする' : '既読にする'}
+              tooltip={a.isRead ? '未読にする' : '既読にする'}
+              icon={<Icon icon={a.isRead ? CircleIcon : 'check'} />}
+              onClick={() => onSetRead(a.id, !a.isRead)}
+            />
+            <IconButton size="sm" variant="ghost" label="リンクをコピー" tooltip="リンクをコピー" icon={<Icon icon={LinkIcon} />} onClick={copy} />
+          </div>
         </div>
         <Heading level={2} weight={a.isRead ? 'normal' : 'medium'} color={a.isRead ? 'secondary' : 'primary'} textWrap="pretty">
           <a
@@ -78,22 +88,10 @@ export const ArticleRow = memo(function ArticleRow({ article: a, onSetRead }: Pr
           </a>
         </Heading>
         {excerpt && (
-          <div className="mt-2">
-            <Text type="body" color="secondary" as="p" display="block" maxLines={2} hasTruncateTooltip={false} wordBreak="break-word">
-              {excerpt}
-            </Text>
-          </div>
+          <Text type="body" color="secondary" as="p" display="block" maxLines={2} hasTruncateTooltip={false} wordBreak="break-word">
+            {excerpt}
+          </Text>
         )}
-        <div className="relative z-[2] mt-4 -ml-2 flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            label={a.isRead ? '未読にする' : '既読にする'}
-            icon={<Icon icon={a.isRead ? CircleIcon : 'check'} />}
-            onClick={() => onSetRead(a.id, !a.isRead)}
-          />
-          <IconButton size="sm" variant="ghost" label="リンクをコピー" tooltip="リンクをコピー" icon={<Icon icon={LinkIcon} />} onClick={copy} />
-        </div>
       </div>
       {thumb && (
         <img
@@ -101,7 +99,7 @@ export const ArticleRow = memo(function ArticleRow({ article: a, onSetRead }: Pr
           alt=""
           loading="lazy"
           referrerPolicy="no-referrer"
-          className="mt-1 hidden aspect-[4/3] w-32 flex-none self-start rounded-lg bg-muted object-cover sm:block"
+          className="hidden aspect-[4/3] w-32 flex-none self-center rounded-lg bg-muted object-cover sm:block"
         />
       )}
     </article>

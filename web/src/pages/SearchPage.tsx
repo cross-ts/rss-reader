@@ -92,7 +92,7 @@ export function SearchPage() {
           <Tab value="feeds" label="フィード" />
         </TabList>
       </div>
-      <div className="mt-2">
+      <div>
         {tab === 'articles' ? (
           <ArticleTimeline q={debounced.trim()} emptyTitle="一致する記事がありません" emptyDescription="別のキーワードで試してください。" />
         ) : (

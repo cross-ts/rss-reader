@@ -36,6 +36,7 @@ export function HomePage() {
             </>
           )}
         </div>
+        <div className="flex flex-col gap-8">
         <PageHeader
           title="ホーム"
           caption={
@@ -59,6 +60,7 @@ export function HomePage() {
           }
         />
         <ArticleTimeline q="" emptyTitle="まだ記事がありません" emptyDescription="購読からフィードを追加すると、ここに新着が並びます。" />
+        </div>
       </div>
     </Page>
   );
