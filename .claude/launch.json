@@ -8,12 +8,6 @@
       "port": 3000
     },
     {
-      "name": "mockup",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "docs/mockups"],
-      "port": 8765
-    },
-    {
       "name": "web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["-C", "web", "run", "dev"],
