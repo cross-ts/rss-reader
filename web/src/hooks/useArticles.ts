@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { api, type Article } from '../api/client';
+import { api } from '../api/client';
+import { dedupeById } from '../utils/articles';
 
 export const PAGE_SIZE = 30;
 
@@ -16,19 +17,7 @@ export function useArticles(q: string) {
     },
   });
 
-  const articles = useMemo(() => {
-    const seen = new Set<number>();
-    const out: Article[] = [];
-    for (const page of query.data?.pages ?? []) {
-      for (const a of page.items) {
-        if (!seen.has(a.id)) {
-          seen.add(a.id);
-          out.push(a);
-        }
-      }
-    }
-    return out;
-  }, [query.data]);
+  const articles = useMemo(() => dedupeById(query.data?.pages ?? []), [query.data]);
 
   return { ...query, articles };
 }
