@@ -2,11 +2,11 @@
 <rss version="2.0">
   <channel>
     <title>Fixture RSS 2</title>
-    <link>/site.html</link>
+    <link>{{BASE}}/site.html</link>
     <description>Second fixture feed (RSS)</description>
     <item>
       <title>Second feed article quince</title>
-      <link>/item/4.html</link>
+      <link>{{BASE}}/item/4.html</link>
       <guid isPermaLink="false">fixture-4</guid>
       <pubDate>Thu, 08 Jan 2026 09:00:00 GMT</pubDate>
       <description>Article from the second RSS feed.</description>

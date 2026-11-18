@@ -3,11 +3,11 @@
   <title>Fixture Atom 2</title>
   <id>fixture-atom-2</id>
   <updated>2026-01-09T09:00:00Z</updated>
-  <link href="/site.html"/>
+  <link href="{{BASE}}/site.html"/>
   <entry>
     <title>Atom feed article persimmon</title>
     <id>fixture-5</id>
-    <link href="/item/5.html"/>
+    <link href="{{BASE}}/item/5.html"/>
     <updated>2026-01-09T09:00:00Z</updated>
     <summary>Article from the Atom feed.</summary>
   </entry>

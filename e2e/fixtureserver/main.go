@@ -4,14 +4,18 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"io/fs"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
+	"strings"
 	"syscall"
 )
 
@@ -27,7 +31,23 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	srv := &http.Server{Handler: http.FileServer(http.FS(root))}
+	files := http.FileServer(http.FS(root))
+	base := "http://" + ln.Addr().String()
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ext := path.Ext(r.URL.Path)
+		if ext != ".xml" && ext != ".atom" && ext != ".html" {
+			files.ServeHTTP(w, r)
+			return
+		}
+		// The app stores item links verbatim and the UI rejects relative URLs, so links must be absolute.
+		b, err := fs.ReadFile(root, strings.TrimPrefix(path.Clean(r.URL.Path), "/"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", mime.TypeByExtension(ext))
+		w.Write(bytes.ReplaceAll(b, []byte("{{BASE}}"), []byte(base)))
+	})}
 	go func() {
 		if err := srv.Serve(ln); err != http.ErrServerClosed {
 			log.Fatal(err)
