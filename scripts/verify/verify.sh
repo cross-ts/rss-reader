@@ -41,6 +41,16 @@ teardown() {
 
 report_failure() {
   local f
+  if [ -f "$RUN/results.json" ]; then
+    echo "--- failing tests" >&2
+    jq -r '
+      .. | objects | select(has("specs")) | .specs[] | select(.ok == false)
+      | "FAIL \(.title)  (\(.file):\(.line))",
+        (.tests[].results[-1].steps // [] | map(select(.error != null)) | first // empty
+         | "  step: \(.title)",
+           "  error: \(.error.message | gsub("\u001b\\[[0-9;]*m"; "") | split("\n")[0])")
+    ' "$RUN/results.json" >&2 || true
+  fi
   if [ -d "$RUN/test-results" ]; then
     find "$RUN/test-results" -name '*.png' 2>/dev/null | sed 's/^/screenshot: /' >&2
     find "$RUN/test-results" -name 'trace.zip' 2>/dev/null | while read -r f; do
@@ -81,9 +91,7 @@ if [ "$MODE" = all ]; then
   step "go vet"; go vet ./...
   step "go test"; go test -race -count=1 ./...
   step "go vet (e2e tags)"; go vet -tags e2e ./...
-  if [ -x scripts/verify/check-feature-map.sh ]; then
-    step "feature map"; scripts/verify/check-feature-map.sh
-  fi
+  step "feature map"; scripts/verify/check-feature-map.sh
 fi
 
 step "build web"; pnpm -C web run build
@@ -162,14 +170,10 @@ MSG
 fi
 
 step "e2e"
-if [ -f web/playwright.config.ts ]; then
-  BASE_URL=$BASE_URL FIXTURE_URL=$FIXTURE_URL FEEDS_PATH=$RUN/feeds.opml RUN_DIR=$RUN \
-    pnpm -C web exec playwright test
-  alive "$APP_PID" || fail "app died during e2e"
-  alive "$FIX_PID" || fail "fixture server died during e2e"
-else
-  echo "skipped: web/playwright.config.ts not present yet"
-fi
+BASE_URL=$BASE_URL FIXTURE_URL=$FIXTURE_URL FEEDS_PATH=$RUN/feeds.opml RUN_DIR=$RUN \
+  pnpm -C web exec playwright test
+alive "$APP_PID" || fail "app died during e2e"
+alive "$FIX_PID" || fail "fixture server died during e2e"
 
 step "marker"
 tree_after=$(worktree_tree)

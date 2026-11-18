@@ -6,6 +6,8 @@ Substack 風のタイムライン SPA（Home / Subscriptions / Search）。バ�
 - React 19 + Vite + TypeScript + `@tanstack/react-query` + Tailwind CSS v4。
 - **pnpm を使う（npm 禁止）**。`pnpm -C web install` / `pnpm -C web run build` / `pnpm -C web run dev`（:5173, `/api`→`http://localhost:3000` プロキシ）/ `pnpm -C web test`。
 - esbuild のビルドは `web/pnpm-workspace.yaml` の `allowBuilds: { esbuild: true }` で許可。pnpm 11 では package.json の `pnpm` フィールドではなくこちら。必要に応じ `pnpm -C web rebuild esbuild`。
+- E2E（Playwright, `web/e2e/`）はリポジトリルートの `scripts/verify/verify.sh e2e`（E2E のみ）/ `all`（tsc・unit・Go・feature map・E2E）/ `up`（フィクスチャ付きでアプリを起動したまま待機。`BASE_URL` 等を表示）で実行する。`playwright test` 単体は `BASE_URL` / `RUN_DIR` が必須で、ハーネス経由でないと動かない。失敗時は実行ログに `[F-…]` テスト名・ステップ名・スクリーンショット・trace のパスが出る（`pnpm -C web exec playwright show-trace <trace.zip>`）。
+- 機能一覧は `web/e2e/FEATURES.md`。行の ID と spec のテストタイトル先頭 `[F-…]` は 1 対 1 で対応させ（`scripts/verify/check-feature-map.sh` が検査）、UI の挙動を変えたら行も更新する。spec は role / label / text のロケータと web-first assertion のみ。sleep・retry・skip を入れない。vitest は `src/**/*.test.{ts,tsx}` だけを拾うので E2E spec とは干渉しない。
 - ビルド成果物 `web/dist` は gitignore。GitHub Pages へは Actions でデプロイ予定。
 
 ## スタイル
