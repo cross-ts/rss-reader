@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 
@@ -80,8 +81,12 @@ func run() error {
 	mux := server.NewServeMux(state)
 	handler := server.CORSMiddleware(server.OPMLSyncMiddleware(syncer, mux))
 
-	slog.Info("Listening", "addr", "http://"+bindAddr)
-	if err := http.ListenAndServe(bindAddr, handler); err != nil {
+	ln, err := net.Listen("tcp", bindAddr)
+	if err != nil {
+		return fmt.Errorf("http server: %w", err)
+	}
+	slog.Info("Listening", "addr", "http://"+ln.Addr().String())
+	if err := http.Serve(ln, handler); err != nil {
 		return fmt.Errorf("http server: %w", err)
 	}
 	return nil

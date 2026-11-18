@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Fixture Feed</title>
+    <link>{{BASE}}/site.html</link>
+    <description>Fixture feed for E2E</description>
+    <item>
+      <title>Fixture article ゆずポンズ</title>
+      <link>{{BASE}}/item/1.html</link>
+      <guid isPermaLink="false">fixture-1</guid>
+      <pubDate>Mon, 05 Jan 2026 09:00:00 GMT</pubDate>
+      <description>First fixture article about ゆずポンズ.</description>
+    </item>
+    <item>
+      <title>Fixture article kumquat</title>
+      <link>{{BASE}}/item/2.html</link>
+      <guid isPermaLink="false">fixture-2</guid>
+      <pubDate>Tue, 06 Jan 2026 09:00:00 GMT</pubDate>
+      <description>Second fixture article about kumquat.</description>
+    </item>
+    <item>
+      <title>Fixture article rhubarb</title>
+      <link>{{BASE}}/item/3.html</link>
+      <guid isPermaLink="false">fixture-3</guid>
+      <pubDate>Wed, 07 Jan 2026 09:00:00 GMT</pubDate>
+      <description>Third fixture article about rhubarb.</description>
+    </item>
+  </channel>
+</rss>

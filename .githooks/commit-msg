@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Stamps the commit with what verified its tree. Never blocks a commit.
+# write-tree here sees the tree being committed, including `commit -a` (git exports a temporary index to hooks).
+
+top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+source "$top/scripts/verify/lib.sh" 2>/dev/null || exit 0
+
+tree=$(git write-tree 2>/dev/null) || exit 0
+dir="$(state_dir)/verified"
+
+kinds=()
+[ -e "$dir/$tree.verify" ] && kinds+=(verify)
+[ -e "$dir/$tree.code-review" ] && kinds+=(code-review)
+if [ "${#kinds[@]}" -eq 0 ]; then
+  value=none
+else
+  value=$(printf '%s, ' "${kinds[@]}")
+  value=${value%, }
+fi
+
+git interpret-trailers --in-place --if-exists replace \
+  --trailer "Verified-By: $value (tree ${tree:0:12})" "$1" 2>/dev/null
+exit 0

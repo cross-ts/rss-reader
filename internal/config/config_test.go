@@ -54,6 +54,28 @@ func TestParseDefaults(t *testing.T) {
 	}
 }
 
+func TestParsePortZeroIsEphemeral(t *testing.T) {
+	saveRestoreArgs(t)
+
+	tmpDir := t.TempDir()
+	os.Args = []string{"test",
+		"-port", "0",
+		"-db", filepath.Join(tmpDir, "test.db"),
+		"-feeds", filepath.Join(tmpDir, "feeds.opml"),
+	}
+
+	cfg, err := Parse()
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.Port != 0 {
+		t.Fatalf("expected port 0, got %d", cfg.Port)
+	}
+	if cfg.Sources["port"] != SourceFlag {
+		t.Fatalf("expected port source flag, got %q", cfg.Sources["port"])
+	}
+}
+
 func TestParseCustomValues(t *testing.T) {
 	saveRestoreArgs(t)
 

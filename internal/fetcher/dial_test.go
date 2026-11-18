@@ -30,6 +30,7 @@ func canceledContext() context.Context {
 }
 
 func TestSafeDialContext_IPLiteralLoopbackRejected(t *testing.T) {
+	skipIfLoopbackAllowed(t, "loopback")
 	called := false
 	withFakeLookup(t, func(ctx context.Context, host string) ([]net.IPAddr, error) {
 		called = true

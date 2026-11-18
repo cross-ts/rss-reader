@@ -116,8 +116,8 @@ func Parse() (*Config, error) {
 	if resolvedHost == "" {
 		return nil, fmt.Errorf("host must not be empty")
 	}
-	if resolvedPort < 1 || resolvedPort > 65535 {
-		return nil, fmt.Errorf("port must be between 1 and 65535, got %d", resolvedPort)
+	if resolvedPort < 0 || resolvedPort > 65535 {
+		return nil, fmt.Errorf("port must be between 0 and 65535, got %d", resolvedPort)
 	}
 	if resolvedPollInterval < 1 || resolvedPollInterval > MaxPollIntervalMinutes {
 		return nil, fmt.Errorf("poll interval minutes must be between 1 and %d, got %d", MaxPollIntervalMinutes, resolvedPollInterval)
