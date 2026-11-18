@@ -174,7 +174,7 @@ func checkIPv4(ip net.IP) error {
 	}
 
 	// Loopback: 127.0.0.0/8
-	if ip[0] == 127 {
+	if ip[0] == 127 && !allowLoopback {
 		return fmt.Errorf("ループバックアドレスへのアクセスは拒否されています: %s", ip)
 	}
 

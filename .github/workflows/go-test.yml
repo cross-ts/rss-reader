@@ -41,3 +41,9 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: go test -race -count=1 ./...
+
+      - name: Vet (e2e tag)
+        run: go vet -tags e2e ./...
+
+      - name: Test fetcher (e2e tag)
+        run: go test -tags e2e -count=1 ./internal/fetcher/

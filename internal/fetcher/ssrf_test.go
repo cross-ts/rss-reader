@@ -2,8 +2,18 @@ package fetcher
 
 import (
 	"net"
+	"strings"
 	"testing"
 )
+
+// Under the e2e tag 127.0.0.0/8 is deliberately allowed; loopback-rejection
+// cases are covered by the untagged build.
+func skipIfLoopbackAllowed(t *testing.T, name string) {
+	t.Helper()
+	if allowLoopback && strings.Contains(name, "loopback") && !strings.Contains(name, "ipv6 loopback") {
+		t.Skip("loopback allowed in e2e build")
+	}
+}
 
 func TestNormalizeURL(t *testing.T) {
 	tests := []struct {
@@ -119,6 +129,7 @@ func TestValidateFeedURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			skipIfLoopbackAllowed(t, tt.name)
 			err := ValidateFeedURL(tt.url)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateFeedURL(%q) error = %v, wantErr = %v", tt.url, err, tt.wantErr)
@@ -147,6 +158,7 @@ func TestValidateFeedURLStatic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			skipIfLoopbackAllowed(t, tt.name)
 			err := ValidateFeedURLStatic(tt.url)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateFeedURLStatic(%q) error = %v, wantErr = %v", tt.url, err, tt.wantErr)
@@ -226,6 +238,7 @@ func TestCheckIPv4(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			skipIfLoopbackAllowed(t, tt.name)
 			ip := net.ParseIP(tt.ip).To4()
 			if ip == nil {
 				t.Fatalf("failed to parse IP: %s", tt.ip)
@@ -278,6 +291,7 @@ func TestCheckIPv6(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			skipIfLoopbackAllowed(t, tt.name)
 			ip := net.ParseIP(tt.ip)
 			if ip == nil {
 				t.Fatalf("failed to parse IP: %s", tt.ip)
