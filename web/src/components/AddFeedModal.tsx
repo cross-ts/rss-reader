@@ -44,9 +44,12 @@ export function AddFeedModal({ folders, onClose }: { folders: Folder[]; onClose:
 
   return (
     <Modal title="フィードを追加" onClose={onClose}>
-      <label className="mb-1.5 block text-[13px] text-muted">URL</label>
+      <label className="mb-1.5 block text-[13px] text-muted" htmlFor="add-feed-url">
+        URL
+      </label>
       <div className="flex gap-2">
         <input
+          id="add-feed-url"
           type="text"
           value={url}
           onChange={(e) => {
